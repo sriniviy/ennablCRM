@@ -38,6 +38,7 @@ import type {
   DealWithRelations,
   ErrorResponse,
   GetDashboardActivityFeedParams,
+  GlobalSearchParams,
   HealthStatus,
   ImportContactsInput,
   ImportResult,
@@ -57,6 +58,7 @@ import type {
   PaginatedContacts,
   PaginatedTasks,
   PipelineColumn,
+  SearchResults,
   SendCampaignInput,
   TaskWithRelations,
   TrackEmailClickParams,
@@ -3024,6 +3026,91 @@ export function useListAudit<TData = Awaited<ReturnType<typeof listAudit>>, TErr
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListAuditQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGlobalSearchUrl = (params: GlobalSearchParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/search?${stringifiedParams}` : `/api/search`
+}
+
+/**
+ * Returns up to a handful of matches per object type. Matches contact names and emails, company names and domains, deal titles, activity titles and email subjects/bodies, and task titles.
+ * @summary Global type-ahead search across all object types
+ */
+export const globalSearch = async (params: GlobalSearchParams, options?: RequestInit): Promise<SearchResults> => {
+
+  return customFetch<SearchResults>(getGlobalSearchUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGlobalSearchQueryKey = (params?: GlobalSearchParams,) => {
+    return [
+    `/api/search`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGlobalSearchQueryOptions = <TData = Awaited<ReturnType<typeof globalSearch>>, TError = ErrorType<UnauthorizedResponse>>(params: GlobalSearchParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof globalSearch>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGlobalSearchQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof globalSearch>>> = ({ signal }) => globalSearch(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof globalSearch>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GlobalSearchQueryResult = NonNullable<Awaited<ReturnType<typeof globalSearch>>>
+export type GlobalSearchQueryError = ErrorType<UnauthorizedResponse>
+
+
+/**
+ * @summary Global type-ahead search across all object types
+ */
+
+export function useGlobalSearch<TData = Awaited<ReturnType<typeof globalSearch>>, TError = ErrorType<UnauthorizedResponse>>(
+ params: GlobalSearchParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof globalSearch>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGlobalSearchQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

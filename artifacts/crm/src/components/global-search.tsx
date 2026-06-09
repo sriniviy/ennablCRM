@@ -12,13 +12,22 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
-import { Users, Building2, CircleDollarSign, CheckSquare, Search } from "lucide-react";
+import { Users, Building2, CircleDollarSign, CheckSquare, Activity, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface SearchResults {
   contacts: Array<{ id: string; firstName: string; lastName: string; email: string }>;
-  companies: Array<{ id: string; name: string }>;
+  companies: Array<{ id: string; name: string; domain: string | null; domains: string[] }>;
   deals: Array<{ id: string; title: string; value: number | null }>;
+  activities: Array<{
+    id: string;
+    type: string;
+    title: string;
+    emailSubject: string | null;
+    contactId: string | null;
+    companyId: string | null;
+    dealId: string | null;
+  }>;
   tasks: Array<{ id: string; title: string; completed: boolean }>;
 }
 
@@ -66,6 +75,7 @@ export function GlobalSearch({ collapsed }: GlobalSearchProps) {
     (data.contacts.length > 0 ||
       data.companies.length > 0 ||
       data.deals.length > 0 ||
+      data.activities.length > 0 ||
       data.tasks.length > 0);
 
   const handleOpenChange = useCallback((val: boolean) => {
@@ -154,6 +164,7 @@ export function GlobalSearch({ collapsed }: GlobalSearchProps) {
               </CommandGroup>
               {(data.companies.length > 0 ||
                 data.deals.length > 0 ||
+                data.activities.length > 0 ||
                 data.tasks.length > 0) && <CommandSeparator />}
             </>
           )}
@@ -169,11 +180,23 @@ export function GlobalSearch({ collapsed }: GlobalSearchProps) {
                     className="cursor-pointer"
                   >
                     <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="truncate">{c.name}</span>
+                    <div className="flex flex-col min-w-0">
+                      <span className="truncate">{c.name}</span>
+                      {(c.domain || c.domains.length > 0) && (
+                        <span className="text-xs text-muted-foreground truncate">
+                          {[c.domain, ...c.domains]
+                            .filter((d): d is string => !!d)
+                            .filter((d, i, arr) => arr.indexOf(d) === i)
+                            .join(", ")}
+                        </span>
+                      )}
+                    </div>
                   </CommandItem>
                 ))}
               </CommandGroup>
-              {(data.deals.length > 0 || data.tasks.length > 0) && <CommandSeparator />}
+              {(data.deals.length > 0 ||
+                data.activities.length > 0 ||
+                data.tasks.length > 0) && <CommandSeparator />}
             </>
           )}
 
@@ -191,6 +214,42 @@ export function GlobalSearch({ collapsed }: GlobalSearchProps) {
                     <span className="truncate">{d.title}</span>
                   </CommandItem>
                 ))}
+              </CommandGroup>
+              {(data.activities.length > 0 || data.tasks.length > 0) && <CommandSeparator />}
+            </>
+          )}
+
+          {data && debouncedQuery.trim().length > 0 && data.activities.length > 0 && (
+            <>
+              <CommandGroup heading="Activities">
+                {data.activities.map((a) => {
+                  const href = a.contactId
+                    ? `/contacts/${a.contactId}`
+                    : a.companyId
+                      ? `/companies/${a.companyId}`
+                      : a.dealId
+                        ? `/deals?open=${a.dealId}`
+                        : null;
+                  return (
+                    <CommandItem
+                      key={a.id}
+                      value={`activity-${a.id}-${a.title}`}
+                      onSelect={() => href && go(href)}
+                      disabled={!href}
+                      className="cursor-pointer"
+                    >
+                      <Activity className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <div className="flex flex-col min-w-0">
+                        <span className="truncate">{a.title}</span>
+                        {a.emailSubject && (
+                          <span className="text-xs text-muted-foreground truncate">
+                            {a.emailSubject}
+                          </span>
+                        )}
+                      </div>
+                    </CommandItem>
+                  );
+                })}
               </CommandGroup>
               {data.tasks.length > 0 && <CommandSeparator />}
             </>

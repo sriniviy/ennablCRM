@@ -1375,3 +1375,46 @@ export const ListAuditResponse = zod.object({
 })
 
 
+/**
+ * Returns up to a handful of matches per object type. Matches contact names and emails, company names and domains, deal titles, activity titles and email subjects/bodies, and task titles.
+ * @summary Global type-ahead search across all object types
+ */
+export const GlobalSearchQueryParams = zod.object({
+  "q": zod.coerce.string()
+})
+
+export const GlobalSearchResponse = zod.object({
+  "contacts": zod.array(zod.object({
+  "id": zod.string(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "email": zod.string()
+})),
+  "companies": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "domain": zod.string().nullable(),
+  "domains": zod.array(zod.string())
+})),
+  "deals": zod.array(zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "value": zod.number().nullable()
+})),
+  "activities": zod.array(zod.object({
+  "id": zod.string(),
+  "type": zod.string(),
+  "title": zod.string(),
+  "emailSubject": zod.string().nullable(),
+  "contactId": zod.string().nullable(),
+  "companyId": zod.string().nullable(),
+  "dealId": zod.string().nullable()
+})),
+  "tasks": zod.array(zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "completed": zod.boolean()
+}))
+})
+
+

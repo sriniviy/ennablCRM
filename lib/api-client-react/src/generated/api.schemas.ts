@@ -396,6 +396,50 @@ export interface PaginatedAuditLog {
   hasMore: boolean;
 }
 
+export type SearchResultsContactsItem = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+};
+
+export type SearchResultsCompaniesItem = {
+  id: string;
+  name: string;
+  domain: string | null;
+  domains: string[];
+};
+
+export type SearchResultsDealsItem = {
+  id: string;
+  title: string;
+  value: number | null;
+};
+
+export type SearchResultsActivitiesItem = {
+  id: string;
+  type: string;
+  title: string;
+  emailSubject: string | null;
+  contactId: string | null;
+  companyId: string | null;
+  dealId: string | null;
+};
+
+export type SearchResultsTasksItem = {
+  id: string;
+  title: string;
+  completed: boolean;
+};
+
+export interface SearchResults {
+  contacts: SearchResultsContactsItem[];
+  companies: SearchResultsCompaniesItem[];
+  deals: SearchResultsDealsItem[];
+  activities: SearchResultsActivitiesItem[];
+  tasks: SearchResultsTasksItem[];
+}
+
 export interface CreateContactInput {
   firstName: string;
   lastName: string;
@@ -658,5 +702,9 @@ dateFrom?: string;
 dateTo?: string;
 page?: number;
 pageSize?: number;
+};
+
+export type GlobalSearchParams = {
+q: string;
 };
 

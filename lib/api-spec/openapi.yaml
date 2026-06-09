@@ -29,6 +29,8 @@ tags:
     description: Email tracking
   - name: audit
     description: Audit log operations
+  - name: search
+    description: Global search operations
 
 paths:
   /healthz:
@@ -940,6 +942,33 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  # ── Search ─────────────────────────────────────────────────────────────────
+
+  /search:
+    get:
+      operationId: globalSearch
+      tags: [search]
+      summary: Global type-ahead search across all object types
+      description: >-
+        Returns up to a handful of matches per object type. Matches contact
+        names and emails, company names and domains, deal titles, activity
+        titles and email subjects/bodies, and task titles.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Grouped search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResults"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
 components:
   parameters:
     IdParam:
@@ -1690,6 +1719,91 @@ components:
         hasMore:
           type: boolean
       required: [data, total, page, pageSize, hasMore]
+
+    SearchResults:
+      type: object
+      properties:
+        contacts:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              firstName:
+                type: string
+              lastName:
+                type: string
+              email:
+                type: string
+            required: [id, firstName, lastName, email]
+        companies:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              domain:
+                type: string
+                nullable: true
+              domains:
+                type: array
+                items:
+                  type: string
+            required: [id, name, domain, domains]
+        deals:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              title:
+                type: string
+              value:
+                type: number
+                nullable: true
+            required: [id, title, value]
+        activities:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              type:
+                type: string
+              title:
+                type: string
+              emailSubject:
+                type: string
+                nullable: true
+              contactId:
+                type: string
+                nullable: true
+              companyId:
+                type: string
+                nullable: true
+              dealId:
+                type: string
+                nullable: true
+            required: [id, type, title, emailSubject, contactId, companyId, dealId]
+        tasks:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              title:
+                type: string
+              completed:
+                type: boolean
+            required: [id, title, completed]
+      required: [contacts, companies, deals, activities, tasks]
 
     # ── Input schemas ──────────────────────────────────────────────────────
 
