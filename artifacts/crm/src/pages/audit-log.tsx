@@ -33,6 +33,7 @@ import {
   OBJECT_TYPE_LABELS,
   changeSummary,
 } from "@/components/audit/audit-utils";
+import { useTeamMembers } from "@/hooks/use-team-members";
 
 const PAGE_SIZE = 50;
 const ALL = "__all__";
@@ -40,9 +41,11 @@ const ALL = "__all__";
 export function AuditLogPage() {
   const { data: me } = useGetMe();
   const isAdmin = me?.role === "ADMIN";
+  const { data: teamMembers = [] } = useTeamMembers();
 
   const [objectType, setObjectType] = useState<string>(ALL);
   const [action, setAction] = useState<string>(ALL);
+  const [actorId, setActorId] = useState<string>(ALL);
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
   const [page, setPage] = useState(1);
@@ -50,6 +53,7 @@ export function AuditLogPage() {
   const params = {
     objectType: objectType === ALL ? undefined : objectType,
     action: action === ALL ? undefined : (action as AuditAction),
+    actorId: actorId === ALL ? undefined : actorId,
     dateFrom: dateFrom || undefined,
     dateTo: dateTo || undefined,
     page,
@@ -60,6 +64,7 @@ export function AuditLogPage() {
   });
 
   const resetPage = () => setPage(1);
+  const hasFilters = objectType !== ALL || action !== ALL || actorId !== ALL || !!dateFrom || !!dateTo;
 
   if (me && !isAdmin) {
     return (
@@ -141,6 +146,29 @@ export function AuditLogPage() {
             </div>
 
             <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">User</label>
+              <Select
+                value={actorId}
+                onValueChange={(v) => {
+                  setActorId(v);
+                  resetPage();
+                }}
+              >
+                <SelectTrigger className="w-44" data-testid="filter-actor">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>All users</SelectItem>
+                  {teamMembers.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.name ?? m.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">From</label>
               <Input
                 type="date"
@@ -168,12 +196,13 @@ export function AuditLogPage() {
               />
             </div>
 
-            {(objectType !== ALL || action !== ALL || dateFrom || dateTo) && (
+            {hasFilters && (
               <Button
                 variant="ghost"
                 onClick={() => {
                   setObjectType(ALL);
                   setAction(ALL);
+                  setActorId(ALL);
                   setDateFrom("");
                   setDateTo("");
                   resetPage();
