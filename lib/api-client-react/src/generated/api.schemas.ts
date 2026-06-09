@@ -637,6 +637,8 @@ export type NotFoundResponse = ErrorResponse;
 export type ListContactsParams = {
 search?: string;
 status?: ContactStatus;
+reviewStatus?: ReviewStatus;
+assigneeId?: string;
 tag?: string;
 companyId?: string;
 page?: number;
@@ -645,12 +647,16 @@ pageSize?: number;
 
 export type ListCompaniesParams = {
 search?: string;
+status?: CompanyStatus;
+memberOf?: string;
 page?: number;
 pageSize?: number;
 };
 
 export type ListDealsParams = {
+search?: string;
 stageId?: string;
+assigneeId?: string;
 contactId?: string;
 companyId?: string;
 };
@@ -675,6 +681,9 @@ export type ListActivitiesParams = {
 contactId?: string;
 dealId?: string;
 companyId?: string;
+type?: ActivityType;
+dateFrom?: string;
+dateTo?: string;
 page?: number;
 pageSize?: number;
 };

@@ -1,1 +1,2 @@
 - [Better Auth migration](better-auth-migration.md) — drizzle-orm dual-variant TS conflict; kysely must be in lib/db deps too; @opentelemetry/semantic-conventions needed at runtime.
+- [API codegen pitfalls](api-codegen-pitfalls.md) — after orval codegen reset api-zod barrel to only `./generated/api`; use NonNullable<> casting nullable enum cols in eq().

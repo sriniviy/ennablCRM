@@ -5,9 +5,12 @@
  * MyCRM API specification
  * OpenAPI spec version: 0.2.0
  */
+import type { CompanyStatus } from './companyStatus';
 
 export type ListCompaniesParams = {
 search?: string;
+status?: CompanyStatus;
+memberOf?: string;
 page?: number;
 pageSize?: number;
 };

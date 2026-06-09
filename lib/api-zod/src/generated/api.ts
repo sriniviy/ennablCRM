@@ -39,6 +39,8 @@ export const listContactsQueryPageSizeDefault = 25;
 export const ListContactsQueryParams = zod.object({
   "search": zod.coerce.string().optional(),
   "status": zod.enum(['LEAD', 'PROSPECT', 'CUSTOMER', 'CHURNED', 'UNQUALIFIED']).optional(),
+  "reviewStatus": zod.enum(['AUTO_CREATED', 'REVIEWED', 'SUPPRESSED']).optional(),
+  "assigneeId": zod.coerce.string().optional(),
   "tag": zod.coerce.string().optional(),
   "companyId": zod.coerce.string().optional(),
   "page": zod.coerce.number().default(listContactsQueryPageDefault),
@@ -337,6 +339,8 @@ export const listCompaniesQueryPageSizeDefault = 25;
 
 export const ListCompaniesQueryParams = zod.object({
   "search": zod.coerce.string().optional(),
+  "status": zod.enum(['PROSPECT', 'ACTIVE_CUSTOMER', 'CHURNED', 'DISQUALIFIED']).optional(),
+  "memberOf": zod.coerce.string().optional(),
   "page": zod.coerce.number().default(listCompaniesQueryPageDefault),
   "pageSize": zod.coerce.number().default(listCompaniesQueryPageSizeDefault)
 })
@@ -547,7 +551,9 @@ export const ListDealStagesResponse = zod.array(ListDealStagesResponseItem)
  * @summary List deals grouped into pipeline columns
  */
 export const ListDealsQueryParams = zod.object({
+  "search": zod.coerce.string().optional(),
   "stageId": zod.coerce.string().optional(),
+  "assigneeId": zod.coerce.string().optional(),
   "contactId": zod.coerce.string().optional(),
   "companyId": zod.coerce.string().optional()
 })
@@ -1023,6 +1029,9 @@ export const ListActivitiesQueryParams = zod.object({
   "contactId": zod.coerce.string().optional(),
   "dealId": zod.coerce.string().optional(),
   "companyId": zod.coerce.string().optional(),
+  "type": zod.enum(['NOTE', 'CALL', 'EMAIL_SENT', 'EMAIL_OPENED', 'EMAIL_CLICKED', 'DEAL_CREATED', 'DEAL_MOVED', 'DEAL_WON', 'DEAL_LOST', 'TASK_CREATED', 'TASK_COMPLETED', 'CONTACT_CREATED', 'MEETING']).optional(),
+  "dateFrom": zod.coerce.string().optional(),
+  "dateTo": zod.coerce.string().optional(),
   "page": zod.coerce.number().default(listActivitiesQueryPageDefault),
   "pageSize": zod.coerce.number().default(listActivitiesQueryPageSizeDefault)
 })

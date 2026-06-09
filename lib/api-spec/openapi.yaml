@@ -79,6 +79,14 @@ paths:
           in: query
           schema:
             $ref: "#/components/schemas/ContactStatus"
+        - name: reviewStatus
+          in: query
+          schema:
+            $ref: "#/components/schemas/ReviewStatus"
+        - name: assigneeId
+          in: query
+          schema:
+            type: string
         - name: tag
           in: query
           schema:
@@ -214,6 +222,14 @@ paths:
           in: query
           schema:
             type: string
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/CompanyStatus"
+        - name: memberOf
+          in: query
+          schema:
+            type: string
         - name: page
           in: query
           schema:
@@ -335,7 +351,15 @@ paths:
       tags: [deals]
       summary: List deals grouped into pipeline columns
       parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
         - name: stageId
+          in: query
+          schema:
+            type: string
+        - name: assigneeId
           in: query
           schema:
             type: string
@@ -623,6 +647,18 @@ paths:
           schema:
             type: string
         - name: companyId
+          in: query
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            $ref: "#/components/schemas/ActivityType"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+        - name: dateTo
           in: query
           schema:
             type: string

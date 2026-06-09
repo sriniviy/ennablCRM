@@ -9,9 +9,10 @@ const router = Router();
 
 router.get("/", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { search, contactId, companyId, assigneeId } = req.query as Record<string, string>;
+    const { search, stageId, contactId, companyId, assigneeId } = req.query as Record<string, string>;
 
     const conditions = [];
+    if (stageId) conditions.push(eq(dealsTable.stageId, stageId));
     if (contactId) conditions.push(eq(dealsTable.contactId, contactId));
     if (companyId) conditions.push(eq(dealsTable.companyId, companyId));
     if (assigneeId) conditions.push(eq(dealsTable.assigneeId, assigneeId));

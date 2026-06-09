@@ -5,11 +5,15 @@
  * MyCRM API specification
  * OpenAPI spec version: 0.2.0
  */
+import type { ActivityType } from './activityType';
 
 export type ListActivitiesParams = {
 contactId?: string;
 dealId?: string;
 companyId?: string;
+type?: ActivityType;
+dateFrom?: string;
+dateTo?: string;
 page?: number;
 pageSize?: number;
 };

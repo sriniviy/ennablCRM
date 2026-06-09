@@ -1,8 +1,8 @@
 import { useSessionToken } from "@/hooks/use-session-token";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-import { useListContacts, ContactStatus, type ContactWithRelations } from "@workspace/api-client-react";
+import { useListContacts, ContactStatus, ReviewStatus, type ContactWithRelations } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -14,14 +14,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Search, Plus, Upload, Download } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useUrlFilters } from "@/hooks/use-url-filters";
+import { useTeamMembers } from "@/hooks/use-team-members";
 import { ContactDialog } from "@/components/contacts/contact-dialog";
 import { CsvImportDialog } from "@/components/contacts/csv-import-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { ExportColumnsDialog, type ColumnDef } from "@/components/export-columns-dialog";
+import { ViewToggle, type ViewMode } from "@/components/view-toggle";
+import { RecordCardGrid, type CardField } from "@/components/record-card-grid";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 const STATUSES = ["ALL", ...Object.values(ContactStatus)];
+const REVIEW_STATUSES = ["ALL", ...Object.values(ReviewStatus)];
 
 const STATUS_COLORS: Record<string, string> = {
   CUSTOMER: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
@@ -45,12 +50,34 @@ const CONTACT_COLUMNS: ColumnDef[] = [
   { key: "createdAt", label: "Created At" },
 ];
 
+const dash = (v: unknown) => (v === null || v === undefined || v === "" ? "—" : String(v));
+
+const CARD_FIELDS: CardField<ContactWithRelations>[] = [
+  { label: "Email", render: c => dash(c.email) },
+  { label: "Phone", render: c => dash(c.phone) },
+  { label: "Title", render: c => dash(c.title) },
+  { label: "Status", render: c => dash(c.status) },
+  { label: "Review", render: c => (c.reviewStatus ? c.reviewStatus.replace(/_/g, " ") : "—") },
+  { label: "Company", render: c => dash(c.company?.name) },
+  { label: "Owner", render: c => dash(c.assignee?.name) },
+  { label: "Tags", render: c => (c.tags && c.tags.length ? c.tags.join(", ") : "—") },
+  { label: "LinkedIn", render: c => dash(c.linkedIn) },
+  { label: "Created", render: c => (c.createdAt ? new Date(c.createdAt).toLocaleDateString() : "—") },
+];
+
 export function ContactsPage() {
   const getToken = useSessionToken();
   const { toast } = useToast();
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("ALL");
-  const [tagFilter, setTagFilter] = useState("");
+  const { get, set } = useUrlFilters();
+  const { data: members } = useTeamMembers();
+
+  const [search, setSearch] = useState(() => get("search"));
+  const [statusFilter, setStatusFilter] = useState(() => get("status") || "ALL");
+  const [reviewFilter, setReviewFilter] = useState(() => get("reviewStatus") || "ALL");
+  const [ownerFilter, setOwnerFilter] = useState(() => get("assigneeId") || "ALL");
+  const [tagFilter, setTagFilter] = useState(() => get("tag"));
+  const [view, setView] = useState<ViewMode>(() => (get("view") === "cards" ? "cards" : "table"));
+
   const debouncedSearch = useDebounce(search, 400);
   const debouncedTag = useDebounce(tagFilter, 400);
 
@@ -59,6 +86,17 @@ export function ContactsPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+
+  useEffect(() => {
+    set({
+      search: debouncedSearch,
+      status: statusFilter,
+      reviewStatus: reviewFilter,
+      assigneeId: ownerFilter,
+      tag: debouncedTag,
+      view: view === "cards" ? "cards" : undefined,
+    });
+  }, [debouncedSearch, statusFilter, reviewFilter, ownerFilter, debouncedTag, view, set]);
 
   const handleExport = async (fields: string[]) => {
     setExporting(true);
@@ -93,6 +131,8 @@ export function ContactsPage() {
   const { data, isLoading } = useListContacts({
     search: debouncedSearch || undefined,
     status: statusFilter !== "ALL" ? statusFilter as typeof ContactStatus[keyof typeof ContactStatus] : undefined,
+    reviewStatus: reviewFilter !== "ALL" ? reviewFilter as typeof ReviewStatus[keyof typeof ReviewStatus] : undefined,
+    assigneeId: ownerFilter !== "ALL" ? ownerFilter : undefined,
     tag: debouncedTag || undefined,
     page: 1,
     pageSize: 50,
@@ -100,6 +140,8 @@ export function ContactsPage() {
 
   const openNew = () => { setEditContact(undefined); setDialogOpen(true); };
   const openEdit = (c: ContactWithRelations) => { setEditContact(c); setDialogOpen(true); };
+
+  const contacts = data?.data ?? [];
 
   return (
     <SidebarLayout>
@@ -135,93 +177,128 @@ export function ContactsPage() {
             />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-36"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectTrigger className="w-36" data-testid="select-contact-status"><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
               {STATUSES.map(s => <SelectItem key={s} value={s}>{s === "ALL" ? "All statuses" : s}</SelectItem>)}
             </SelectContent>
           </Select>
-          <div className="relative">
-            <Input
-              placeholder="Filter by tag…"
-              className="w-36"
-              value={tagFilter}
-              onChange={e => setTagFilter(e.target.value)}
-            />
+          <Select value={reviewFilter} onValueChange={setReviewFilter}>
+            <SelectTrigger className="w-40" data-testid="select-contact-review"><SelectValue placeholder="Review" /></SelectTrigger>
+            <SelectContent>
+              {REVIEW_STATUSES.map(s => <SelectItem key={s} value={s}>{s === "ALL" ? "All reviews" : s.replace(/_/g, " ")}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+            <SelectTrigger className="w-40" data-testid="select-contact-owner"><SelectValue placeholder="Owner" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All owners</SelectItem>
+              {(members ?? []).map(m => <SelectItem key={m.id} value={m.id}>{m.name ?? "Unknown"}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Input
+            placeholder="Filter by tag…"
+            className="w-36"
+            value={tagFilter}
+            onChange={e => setTagFilter(e.target.value)}
+          />
+          <div className="ml-auto">
+            <ViewToggle value={view} onChange={setView} />
           </div>
         </div>
 
-        <div className="rounded-md border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Company</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Review</TableHead>
-                <TableHead>Tags</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                [...Array(5)].map((_, i) => (
-                  <TableRow key={i}>
-                    {[...Array(6)].map((__, j) => <TableCell key={j}><Skeleton className="h-4 w-24" /></TableCell>)}
-                  </TableRow>
-                ))
-              ) : data?.data && data.data.length > 0 ? (
-                data.data.map(contact => (
-                  <TableRow
-                    key={contact.id}
-                    className="cursor-pointer hover:bg-muted/40"
-                    onClick={() => openEdit(contact)}
-                  >
-                    <TableCell className="font-medium">
-                      <Link
-                        href={`/contacts/${contact.id}`}
-                        className="hover:underline text-primary"
-                        onClick={e => e.stopPropagation()}
-                      >
-                        {contact.firstName} {contact.lastName}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{contact.email ?? "—"}</TableCell>
-                    <TableCell>
-                      {contact.company ? (
-                        <Link href={`/companies/${contact.company.id}`} className="hover:underline" onClick={e => e.stopPropagation()}>
-                          {contact.company.name}
-                        </Link>
-                      ) : <span className="text-muted-foreground">—</span>}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={`font-normal border-0 ${STATUS_COLORS[contact.status] ?? ""}`}>
-                        {contact.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {contact.reviewStatus ? (
-                        <Badge variant="outline" className="font-normal">{contact.reviewStatus.replace(/_/g, " ")}</Badge>
-                      ) : <span className="text-muted-foreground">—</span>}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {(contact.tags ?? []).slice(0, 3).map(tag => (
-                          <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                    No contacts found.
-                  </TableCell>
-                </TableRow>
+        {view === "cards" ? (
+          isLoading ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-64 w-full" />)}
+            </div>
+          ) : (
+            <RecordCardGrid
+              items={contacts}
+              getKey={c => c.id}
+              getTitle={c => (
+                <Link href={`/contacts/${c.id}`} className="hover:underline text-primary" onClick={e => e.stopPropagation()}>
+                  {c.firstName} {c.lastName}
+                </Link>
               )}
-            </TableBody>
-          </Table>
-        </div>
+              fields={CARD_FIELDS}
+              onItemClick={openEdit}
+              emptyMessage="No contacts found."
+            />
+          )
+        ) : (
+          <div className="rounded-md border bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Company</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Review</TableHead>
+                  <TableHead>Tags</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  [...Array(5)].map((_, i) => (
+                    <TableRow key={i}>
+                      {[...Array(6)].map((__, j) => <TableCell key={j}><Skeleton className="h-4 w-24" /></TableCell>)}
+                    </TableRow>
+                  ))
+                ) : contacts.length > 0 ? (
+                  contacts.map(contact => (
+                    <TableRow
+                      key={contact.id}
+                      className="cursor-pointer hover:bg-muted/40"
+                      onClick={() => openEdit(contact)}
+                    >
+                      <TableCell className="font-medium">
+                        <Link
+                          href={`/contacts/${contact.id}`}
+                          className="hover:underline text-primary"
+                          onClick={e => e.stopPropagation()}
+                        >
+                          {contact.firstName} {contact.lastName}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{contact.email ?? "—"}</TableCell>
+                      <TableCell>
+                        {contact.company ? (
+                          <Link href={`/companies/${contact.company.id}`} className="hover:underline" onClick={e => e.stopPropagation()}>
+                            {contact.company.name}
+                          </Link>
+                        ) : <span className="text-muted-foreground">—</span>}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={`font-normal border-0 ${STATUS_COLORS[contact.status] ?? ""}`}>
+                          {contact.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {contact.reviewStatus ? (
+                          <Badge variant="outline" className="font-normal">{contact.reviewStatus.replace(/_/g, " ")}</Badge>
+                        ) : <span className="text-muted-foreground">—</span>}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {(contact.tags ?? []).slice(0, 3).map(tag => (
+                            <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
+                          ))}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                      No contacts found.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </div>
 
       <ContactDialog open={dialogOpen} onOpenChange={setDialogOpen} contact={editContact} />

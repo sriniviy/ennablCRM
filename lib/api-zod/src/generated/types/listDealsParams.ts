@@ -7,7 +7,9 @@
  */
 
 export type ListDealsParams = {
+search?: string;
 stageId?: string;
+assigneeId?: string;
 contactId?: string;
 companyId?: string;
 };

@@ -2,9 +2,10 @@ import { useSessionToken } from "@/hooks/use-session-token";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useRef, useState, useEffect } from "react";
 
-import { useListDeals, useMoveDeal, getListDealsQueryKey, type PipelineColumn, type DealWithRelations } from "@workspace/api-client-react";
+import { useListDeals, useMoveDeal, useListDealStages, getListDealsQueryKey, type PipelineColumn, type DealWithRelations } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -13,6 +14,10 @@ import { formatCurrency } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { DealDialog } from "@/components/deals/deal-dialog";
 import { ExportColumnsDialog, type ColumnDef } from "@/components/export-columns-dialog";
+import { useUrlFilters } from "@/hooks/use-url-filters";
+import { useTeamMembers } from "@/hooks/use-team-members";
+import { ViewToggle, type ViewMode } from "@/components/view-toggle";
+import { RecordCardGrid, type CardField } from "@/components/record-card-grid";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -29,10 +34,35 @@ const DEAL_COLUMNS: ColumnDef[] = [
   { key: "createdAt", label: "Created At" },
 ];
 
+const dash = (v: unknown) => (v === null || v === undefined || v === "" ? "—" : String(v));
+
+const CARD_FIELDS: CardField<DealWithRelations>[] = [
+  { label: "Stage", render: d => dash(d.stage?.name) },
+  { label: "Value", render: d => formatCurrency(d.value || 0) },
+  { label: "Currency", render: d => dash(d.currency) },
+  { label: "Probability", render: d => `${d.probability ?? 0}%` },
+  { label: "Close Date", render: d => (d.closeDate ? new Date(d.closeDate).toLocaleDateString() : "—") },
+  { label: "Contact", render: d => (d.contact ? `${d.contact.firstName ?? ""} ${d.contact.lastName ?? ""}`.trim() || "—" : "—") },
+  { label: "Company", render: d => dash(d.company?.name) },
+  { label: "Owner", render: d => dash(d.assignee?.name) },
+  { label: "Created", render: d => (d.createdAt ? new Date(d.createdAt).toLocaleDateString() : "—") },
+];
+
 export function DealsPage() {
   const getToken = useSessionToken();
   const { toast } = useToast();
-  const { data: columns, isLoading: dealsLoading } = useListDeals();
+  const { get, set } = useUrlFilters();
+  const { data: members } = useTeamMembers();
+  const { data: stages } = useListDealStages();
+
+  const [stageFilter, setStageFilter] = useState(() => get("stageId") || "ALL");
+  const [ownerFilter, setOwnerFilter] = useState(() => get("assigneeId") || "ALL");
+  const [view, setView] = useState<ViewMode>(() => (get("view") === "cards" ? "cards" : "table"));
+
+  const { data: columns, isLoading: dealsLoading } = useListDeals({
+    stageId: stageFilter !== "ALL" ? stageFilter : undefined,
+    assigneeId: ownerFilter !== "ALL" ? ownerFilter : undefined,
+  });
   const moveDeal = useMoveDeal();
   const queryClient = useQueryClient();
 
@@ -41,6 +71,14 @@ export function DealsPage() {
   const [defaultStageId, setDefaultStageId] = useState<string | undefined>();
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+
+  useEffect(() => {
+    set({
+      stageId: stageFilter,
+      assigneeId: ownerFilter,
+      view: view === "cards" ? "cards" : undefined,
+    });
+  }, [stageFilter, ownerFilter, view, set]);
 
   const handleExport = async (fields: string[]) => {
     setExporting(true);
@@ -72,6 +110,11 @@ export function DealsPage() {
   const moveDealMutate = useRef(moveDeal.mutate);
   moveDealMutate.current = moveDeal.mutate;
 
+  const queryKey = getListDealsQueryKey({
+    stageId: stageFilter !== "ALL" ? stageFilter : undefined,
+    assigneeId: ownerFilter !== "ALL" ? ownerFilter : undefined,
+  });
+
   const handleDragEnd = (result: DropResult) => {
     const { source, destination, draggableId } = result;
     if (!destination) return;
@@ -80,7 +123,7 @@ export function DealsPage() {
     const destStageId = destination.droppableId;
     const destIndex = destination.index;
 
-    queryClient.setQueryData(getListDealsQueryKey(), (old: PipelineColumn[] | undefined) => {
+    queryClient.setQueryData(queryKey, (old: PipelineColumn[] | undefined) => {
       if (!old) return old;
       const deal = old.flatMap(c => c.deals).find(d => d.id === draggableId);
       if (!deal) return old;
@@ -118,8 +161,12 @@ export function DealsPage() {
     if (!openId) return;
     const deal = columns.flatMap((c) => c.deals).find((d) => d.id === openId);
     if (deal) openEdit(deal as DealWithRelations);
-    window.history.replaceState({}, "", window.location.pathname);
+    params.delete("open");
+    const qs = params.toString();
+    window.history.replaceState({}, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
   }, [columns]);
+
+  const allDeals = (columns ?? []).flatMap(c => c.deals) as DealWithRelations[];
 
   return (
     <SidebarLayout>
@@ -140,7 +187,44 @@ export function DealsPage() {
           </div>
         </div>
 
-        {dealsLoading ? (
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <Select value={stageFilter} onValueChange={setStageFilter}>
+            <SelectTrigger className="w-44" data-testid="select-deal-stage"><SelectValue placeholder="Stage" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All stages</SelectItem>
+              {(stages ?? []).map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+            <SelectTrigger className="w-44" data-testid="select-deal-owner"><SelectValue placeholder="Owner" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All owners</SelectItem>
+              {(members ?? []).map(m => <SelectItem key={m.id} value={m.id}>{m.name ?? "Unknown"}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <div className="ml-auto">
+            <ViewToggle value={view} onChange={setView} tableLabel="Pipeline view" />
+          </div>
+        </div>
+
+        {view === "cards" ? (
+          dealsLoading ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-64 w-full" />)}
+            </div>
+          ) : (
+            <div className="flex-1 overflow-y-auto">
+              <RecordCardGrid
+                items={allDeals}
+                getKey={d => d.id}
+                getTitle={d => d.title}
+                fields={CARD_FIELDS}
+                onItemClick={openEdit}
+                emptyMessage="No deals found."
+              />
+            </div>
+          )
+        ) : dealsLoading ? (
           <div className="flex gap-6 overflow-x-auto pb-4">
             {[...Array(4)].map((_, i) => (
               <div key={i} className="w-80 shrink-0 space-y-4">

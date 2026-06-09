@@ -8,12 +8,16 @@ const router = Router();
 
 router.get("/", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { search, page = "1", pageSize = "50" } = req.query as Record<string, string>;
+    const { search, status, memberOf, page = "1", pageSize = "50" } = req.query as Record<string, string>;
     const ps = parseInt(pageSize);
     const pg = parseInt(page);
     const offset = (pg - 1) * ps;
 
-    const where = search ? ilike(companiesTable.name, `%${search}%`) : undefined;
+    const conditions = [];
+    if (search) conditions.push(ilike(companiesTable.name, `%${search}%`));
+    if (status) conditions.push(eq(companiesTable.status, status as NonNullable<typeof companiesTable.$inferSelect["status"]>));
+    if (memberOf) conditions.push(sql`${companiesTable.memberOf} @> ARRAY[${memberOf}]::text[]`);
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
 
     const [companies, [{ count }]] = await Promise.all([
       db

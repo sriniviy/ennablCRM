@@ -6,10 +6,13 @@
  * OpenAPI spec version: 0.2.0
  */
 import type { ContactStatus } from './contactStatus';
+import type { ReviewStatus } from './reviewStatus';
 
 export type ListContactsParams = {
 search?: string;
 status?: ContactStatus;
+reviewStatus?: ReviewStatus;
+assigneeId?: string;
 tag?: string;
 companyId?: string;
 page?: number;

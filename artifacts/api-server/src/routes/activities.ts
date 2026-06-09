@@ -6,6 +6,11 @@ import { logAudit } from "../lib/audit";
 
 const router = Router();
 
+const parseValidDate = (s: string) => {
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+};
+
 router.get("/export", requireAuth, async (req: Request, res: Response) => {
   try {
     const { contactId, dealId, companyId, type, assigneeId, dateFrom, dateTo } = req.query as Record<string, string>;
@@ -16,9 +21,14 @@ router.get("/export", requireAuth, async (req: Request, res: Response) => {
     if (companyId) conditions.push(eq(activitiesTable.companyId, companyId));
     if (type) conditions.push(eq(activitiesTable.type, type as typeof activitiesTable.$inferSelect["type"]));
     if (assigneeId) conditions.push(eq(activitiesTable.userId, assigneeId));
-    if (dateFrom) conditions.push(gte(activitiesTable.createdAt, new Date(dateFrom)));
+    if (dateFrom) {
+      const from = parseValidDate(dateFrom);
+      if (!from) { res.status(400).json({ error: "Invalid dateFrom" }); return; }
+      conditions.push(gte(activitiesTable.createdAt, from));
+    }
     if (dateTo) {
-      const end = new Date(dateTo);
+      const end = parseValidDate(dateTo);
+      if (!end) { res.status(400).json({ error: "Invalid dateTo" }); return; }
       end.setHours(23, 59, 59, 999);
       conditions.push(lte(activitiesTable.createdAt, end));
     }
@@ -65,7 +75,7 @@ router.get("/export", requireAuth, async (req: Request, res: Response) => {
 
 router.get("/", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { contactId, dealId, companyId, type, page = "1", pageSize = "50" } = req.query as Record<string, string>;
+    const { contactId, dealId, companyId, type, dateFrom, dateTo, page = "1", pageSize = "50" } = req.query as Record<string, string>;
     const ps = parseInt(pageSize);
     const pg = parseInt(page);
     const offset = (pg - 1) * ps;
@@ -75,6 +85,17 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
     if (dealId) conditions.push(eq(activitiesTable.dealId, dealId));
     if (companyId) conditions.push(eq(activitiesTable.companyId, companyId));
     if (type) conditions.push(eq(activitiesTable.type, type as typeof activitiesTable.$inferSelect["type"]));
+    if (dateFrom) {
+      const from = parseValidDate(dateFrom);
+      if (!from) { res.status(400).json({ error: "Invalid dateFrom" }); return; }
+      conditions.push(gte(activitiesTable.createdAt, from));
+    }
+    if (dateTo) {
+      const end = parseValidDate(dateTo);
+      if (!end) { res.status(400).json({ error: "Invalid dateTo" }); return; }
+      end.setHours(23, 59, 59, 999);
+      conditions.push(lte(activitiesTable.createdAt, end));
+    }
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 

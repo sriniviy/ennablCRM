@@ -9,7 +9,7 @@ const router = Router();
 
 router.get("/", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { search, status, companyId, tag, page = "1", pageSize = "50" } = req.query as Record<string, string>;
+    const { search, status, reviewStatus, assigneeId, companyId, tag, page = "1", pageSize = "50" } = req.query as Record<string, string>;
     const ps = parseInt(pageSize);
     const pg = parseInt(page);
     const offset = (pg - 1) * ps;
@@ -26,6 +26,12 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
     }
     if (status) {
       conditions.push(eq(contactsTable.status, status as typeof contactsTable.$inferSelect["status"]));
+    }
+    if (reviewStatus) {
+      conditions.push(eq(contactsTable.reviewStatus, reviewStatus as typeof contactsTable.$inferSelect["reviewStatus"]));
+    }
+    if (assigneeId) {
+      conditions.push(eq(contactsTable.assigneeId, assigneeId));
     }
     if (companyId) {
       conditions.push(eq(contactsTable.companyId, companyId));
