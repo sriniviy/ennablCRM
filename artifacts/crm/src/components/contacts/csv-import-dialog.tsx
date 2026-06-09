@@ -3,11 +3,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useImportContacts, getListContactsQueryKey } from "@workspace/api-client-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Upload, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Upload, AlertCircle, CheckCircle2, ChevronDown, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface CsvImportDialogProps {
@@ -26,10 +24,14 @@ const CONTACT_FIELDS = [
 
 type Step = "upload" | "map" | "done";
 
+interface SkippedRow {
+  row: number;
+  reason: string;
+}
+
 interface ImportResult {
-  created: number;
-  skipped: number;
-  errors: string[];
+  imported: number;
+  skipped: SkippedRow[];
 }
 
 export function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
@@ -42,6 +44,7 @@ export function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [skippedOpen, setSkippedOpen] = useState(false);
 
   const importMutation = useImportContacts();
 
@@ -118,7 +121,8 @@ export function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
 
     importMutation.mutate({ data: { rows, mapping: activeMapping } }, {
       onSuccess: (data) => {
-        setResult(data);
+        setResult(data as ImportResult);
+        setSkippedOpen(false);
         setStep("done");
         qc.invalidateQueries({ queryKey: getListContactsQueryKey() });
       },
@@ -134,6 +138,7 @@ export function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
       setRows([]);
       setMapping({});
       setResult(null);
+      setSkippedOpen(false);
       if (fileRef.current) fileRef.current.value = "";
     }, 300);
   };
@@ -231,24 +236,49 @@ export function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
 
         {step === "done" && result && (
           <div className="py-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <CheckCircle2 className="h-8 w-8 text-green-500 shrink-0" />
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="h-8 w-8 text-green-500 shrink-0 mt-0.5" />
               <div>
                 <p className="font-semibold">Import complete</p>
                 <p className="text-sm text-muted-foreground">
-                  <span className="text-green-600 font-medium">{result.created} created</span>
-                  {result.skipped > 0 && <>, <span className="text-amber-600 font-medium">{result.skipped} skipped</span> (duplicate emails)</>}
+                  <span className="text-green-600 font-medium">{result.imported} imported</span>
+                  {result.skipped.length > 0 && (
+                    <>, <span className="text-amber-600 font-medium">{result.skipped.length} skipped</span></>
+                  )}
                 </p>
               </div>
             </div>
-            {result.errors.length > 0 && (
-              <div className="rounded-md bg-destructive/10 p-3 space-y-1">
-                <div className="flex items-center gap-2 text-sm font-medium text-destructive">
-                  <AlertCircle className="h-4 w-4" /> {result.errors.length} rows had errors
-                </div>
-                {result.errors.slice(0, 5).map((e, i) => (
-                  <p key={i} className="text-xs text-muted-foreground ml-6">{e}</p>
-                ))}
+
+            {result.skipped.length > 0 && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20 overflow-hidden">
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+                  onClick={() => setSkippedOpen(o => !o)}
+                >
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span className="flex-1 text-left">
+                    {result.skipped.length} {result.skipped.length === 1 ? "row was" : "rows were"} skipped — click to see details
+                  </span>
+                  {skippedOpen
+                    ? <ChevronDown className="h-4 w-4 shrink-0" />
+                    : <ChevronRight className="h-4 w-4 shrink-0" />
+                  }
+                </button>
+
+                {skippedOpen && (
+                  <div className="border-t border-amber-200 dark:border-amber-900/50 max-h-48 overflow-y-auto">
+                    {result.skipped.map((s, i) => (
+                      <div
+                        key={i}
+                        className="flex gap-3 px-3 py-2 text-xs border-b border-amber-100 dark:border-amber-900/30 last:border-0"
+                      >
+                        <span className="font-medium text-amber-700 dark:text-amber-400 shrink-0">Row {s.row}</span>
+                        <span className="text-muted-foreground">{s.reason}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -371,10 +371,14 @@ export interface ImportContactsInput {
   mapping: ImportContactsInputMapping;
 }
 
+export interface ImportResultSkippedItem {
+  row: number;
+  reason: string;
+}
+
 export interface ImportResult {
-  created: number;
-  skipped: number;
-  errors: string[];
+  imported: number;
+  skipped: ImportResultSkippedItem[];
 }
 
 export interface CreateCompanyInput {

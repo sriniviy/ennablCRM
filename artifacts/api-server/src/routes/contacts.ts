@@ -102,8 +102,7 @@ router.post("/import", requireAuth, async (req: Request, res: Response) => {
     const existingEmails = new Set(existingRows.map((c) => c.email?.toLowerCase()));
 
     const toInsert: Array<typeof contactsTable.$inferInsert> = [];
-    const errors: string[] = [];
-    let skipped = 0;
+    const skipped: Array<{ row: number; reason: string }> = [];
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
@@ -115,13 +114,13 @@ router.post("/import", requireAuth, async (req: Request, res: Response) => {
       const firstName = mapped["firstName"] || "";
       const lastName = mapped["lastName"] || "";
       if (!firstName && !lastName) {
-        errors.push(`Row ${i + 1}: missing firstName and lastName`);
+        skipped.push({ row: i + 2, reason: "Missing first and last name" });
         continue;
       }
 
       const email = mapped["email"] ? mapped["email"].toLowerCase() : null;
       if (email && existingEmails.has(email)) {
-        skipped++;
+        skipped.push({ row: i + 2, reason: `Email address already exists (${mapped["email"]})` });
         continue;
       }
 
@@ -137,18 +136,18 @@ router.post("/import", requireAuth, async (req: Request, res: Response) => {
       if (email) existingEmails.add(email);
     }
 
-    let created = 0;
+    let imported = 0;
     if (toInsert.length > 0) {
       const inserted = await db.insert(contactsTable).values(toInsert).returning();
-      created = inserted.length;
+      imported = inserted.length;
       await logActivity({
         type: "CONTACT_CREATED",
-        title: `Imported ${created} contacts`,
+        title: `Imported ${imported} contacts`,
         userId: dbUser.id,
       });
     }
 
-    res.status(200).json({ created, skipped, errors });
+    res.status(200).json({ imported, skipped });
   } catch {
     res.status(500).json({ error: "Failed to import contacts" });
   }
