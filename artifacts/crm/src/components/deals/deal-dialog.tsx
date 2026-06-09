@@ -8,6 +8,7 @@ import {
 } from "@workspace/api-client-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { NotesFeed } from "@/components/notes/notes-feed";
 
 interface DealDialogProps {
   open: boolean;
@@ -101,74 +103,149 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[560px]">
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{isEdit ? "Edit Deal" : "New Deal"}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="d-title">Deal Title *</Label>
-              <Input id="d-title" value={title} onChange={e => setTitle(e.target.value)} required />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Stage *</Label>
-              <Select value={stageId || "none"} onValueChange={v => setStageId(v === "none" ? "" : v)}>
-                <SelectTrigger><SelectValue placeholder="Select stage…" /></SelectTrigger>
-                <SelectContent>
-                  {stages?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
+          {isEdit ? (
+            <Tabs defaultValue="details" className="pt-1">
+              <TabsList className="w-full justify-start border-b rounded-none bg-transparent h-auto p-0 mb-4">
+                <TabsTrigger value="details" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-2 pt-1">
+                  Details
+                </TabsTrigger>
+                <TabsTrigger value="notes" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-2 pt-1">
+                  Notes
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="details">
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="d-title">Deal Title *</Label>
+                    <Input id="d-title" value={title} onChange={e => setTitle(e.target.value)} required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Stage *</Label>
+                    <Select value={stageId || "none"} onValueChange={v => setStageId(v === "none" ? "" : v)}>
+                      <SelectTrigger><SelectValue placeholder="Select stage…" /></SelectTrigger>
+                      <SelectContent>
+                        {stages?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="d-value">Value ($)</Label>
+                      <Input id="d-value" type="number" min="0" step="0.01" value={value} onChange={e => setValue(e.target.value)} placeholder="0.00" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="d-prob">Probability (%)</Label>
+                      <Input id="d-prob" type="number" min="0" max="100" value={probability} onChange={e => setProbability(e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="d-close">Close Date</Label>
+                    <Input id="d-close" type="date" value={closeDate} onChange={e => setCloseDate(e.target.value)} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label>Contact</Label>
+                      <Select value={contactId || "none"} onValueChange={v => setContactId(v === "none" ? "" : v)}>
+                        <SelectTrigger><SelectValue placeholder="No contact" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No contact</SelectItem>
+                          {contacts?.data?.map(c => <SelectItem key={c.id} value={c.id}>{c.firstName} {c.lastName}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Company</Label>
+                      <Select value={companyId || "none"} onValueChange={v => setCompanyId(v === "none" ? "" : v)}>
+                        <SelectTrigger><SelectValue placeholder="No company" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No company</SelectItem>
+                          {companies?.data?.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="d-notes">Deal Notes</Label>
+                    <Textarea id="d-notes" value={notes} onChange={e => setNotes(e.target.value)} rows={2} />
+                  </div>
+                  <DialogFooter className="gap-2 sm:gap-0">
+                    <Button type="button" variant="destructive" size="icon" className="mr-auto" onClick={() => setShowDelete(true)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                    <Button type="submit" disabled={isPending}>{isPending ? "Saving…" : "Save Changes"}</Button>
+                  </DialogFooter>
+                </form>
+              </TabsContent>
+              <TabsContent value="notes">
+                <NotesFeed entityType="deal" entityId={deal.id} />
+              </TabsContent>
+            </Tabs>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4 pt-2">
               <div className="space-y-1.5">
-                <Label htmlFor="d-value">Value ($)</Label>
-                <Input id="d-value" type="number" min="0" step="0.01" value={value} onChange={e => setValue(e.target.value)} placeholder="0.00" />
+                <Label htmlFor="d-title">Deal Title *</Label>
+                <Input id="d-title" value={title} onChange={e => setTitle(e.target.value)} required />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="d-prob">Probability (%)</Label>
-                <Input id="d-prob" type="number" min="0" max="100" value={probability} onChange={e => setProbability(e.target.value)} />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="d-close">Close Date</Label>
-              <Input id="d-close" type="date" value={closeDate} onChange={e => setCloseDate(e.target.value)} />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Contact</Label>
-                <Select value={contactId || "none"} onValueChange={v => setContactId(v === "none" ? "" : v)}>
-                  <SelectTrigger><SelectValue placeholder="No contact" /></SelectTrigger>
+                <Label>Stage *</Label>
+                <Select value={stageId || "none"} onValueChange={v => setStageId(v === "none" ? "" : v)}>
+                  <SelectTrigger><SelectValue placeholder="Select stage…" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">No contact</SelectItem>
-                    {contacts?.data?.map(c => <SelectItem key={c.id} value={c.id}>{c.firstName} {c.lastName}</SelectItem>)}
+                    {stages?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1.5">
-                <Label>Company</Label>
-                <Select value={companyId || "none"} onValueChange={v => setCompanyId(v === "none" ? "" : v)}>
-                  <SelectTrigger><SelectValue placeholder="No company" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No company</SelectItem>
-                    {companies?.data?.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="d-value">Value ($)</Label>
+                  <Input id="d-value" type="number" min="0" step="0.01" value={value} onChange={e => setValue(e.target.value)} placeholder="0.00" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="d-prob">Probability (%)</Label>
+                  <Input id="d-prob" type="number" min="0" max="100" value={probability} onChange={e => setProbability(e.target.value)} />
+                </div>
               </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="d-notes">Notes</Label>
-              <Textarea id="d-notes" value={notes} onChange={e => setNotes(e.target.value)} rows={2} />
-            </div>
-            <DialogFooter className="gap-2 sm:gap-0">
-              {isEdit && (
-                <Button type="button" variant="destructive" size="icon" className="mr-auto" onClick={() => setShowDelete(true)}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              )}
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit" disabled={isPending}>{isPending ? "Saving…" : isEdit ? "Save Changes" : "Create Deal"}</Button>
-            </DialogFooter>
-          </form>
+              <div className="space-y-1.5">
+                <Label htmlFor="d-close">Close Date</Label>
+                <Input id="d-close" type="date" value={closeDate} onChange={e => setCloseDate(e.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Contact</Label>
+                  <Select value={contactId || "none"} onValueChange={v => setContactId(v === "none" ? "" : v)}>
+                    <SelectTrigger><SelectValue placeholder="No contact" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No contact</SelectItem>
+                      {contacts?.data?.map(c => <SelectItem key={c.id} value={c.id}>{c.firstName} {c.lastName}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Company</Label>
+                  <Select value={companyId || "none"} onValueChange={v => setCompanyId(v === "none" ? "" : v)}>
+                    <SelectTrigger><SelectValue placeholder="No company" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No company</SelectItem>
+                      {companies?.data?.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="d-notes">Deal Notes</Label>
+                <Textarea id="d-notes" value={notes} onChange={e => setNotes(e.target.value)} rows={2} />
+              </div>
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                <Button type="submit" disabled={isPending}>{isPending ? "Saving…" : "Create Deal"}</Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
 

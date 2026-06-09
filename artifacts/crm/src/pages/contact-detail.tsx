@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Mail, Phone, Building2, Briefcase, Calendar, MessageSquare, Linkedin, Send, CheckSquare } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Building2, Calendar, MessageSquare, Linkedin, CheckSquare } from "lucide-react";
+import { NotesFeed } from "@/components/notes/notes-feed";
 import { formatCurrency } from "@/lib/utils";
 import { useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -156,6 +157,9 @@ export function ContactDetailPage() {
                 <TabsTrigger value="activity" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   Activity
                 </TabsTrigger>
+                <TabsTrigger value="notes" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
+                  Notes
+                </TabsTrigger>
                 <TabsTrigger value="deals" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   Deals ({contact.deals?.length || 0})
                 </TabsTrigger>
@@ -212,6 +216,10 @@ export function ContactDetailPage() {
                     <p className="text-muted-foreground text-sm">No activity recorded yet.</p>
                   )}
                 </div>
+              </TabsContent>
+
+              <TabsContent value="notes" className="pt-6">
+                <NotesFeed entityType="contact" entityId={id} />
               </TabsContent>
 
               <TabsContent value="deals" className="pt-6">

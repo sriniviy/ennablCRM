@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Globe, MapPin, Phone, Users, Briefcase } from "lucide-react";
+import { NotesFeed } from "@/components/notes/notes-feed";
 import { formatCurrency } from "@/lib/utils";
 
 export function CompanyDetailPage() {
@@ -124,6 +125,9 @@ export function CompanyDetailPage() {
                 <TabsTrigger value="deals" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   Deals ({company.deals?.length || 0})
                 </TabsTrigger>
+                <TabsTrigger value="notes" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
+                  Notes
+                </TabsTrigger>
               </TabsList>
               
               <TabsContent value="contacts" className="pt-6">
@@ -174,6 +178,9 @@ export function CompanyDetailPage() {
                 ) : (
                   <p className="text-muted-foreground text-sm">No deals associated with this company.</p>
                 )}
+              </TabsContent>
+              <TabsContent value="notes" className="pt-6">
+                <NotesFeed entityType="company" entityId={id} />
               </TabsContent>
             </Tabs>
           </div>
