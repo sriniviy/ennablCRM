@@ -15,6 +15,7 @@ import notesRouter from "./notes";
 import reportsRouter from "./reports";
 import teamRouter from "./team";
 import sequencesRouter from "./sequences";
+import scheduledExportsRouter from "./scheduled-exports";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use("/notes", notesRouter);
 router.use("/reports", reportsRouter);
 router.use("/team", teamRouter);
 router.use("/sequences", sequencesRouter);
+router.use("/scheduled-exports", scheduledExportsRouter);
 
 export default router;
