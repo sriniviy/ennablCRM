@@ -146,6 +146,19 @@ router.post("/import", requireAuth, async (req: Request, res: Response) => {
         title: `Imported ${imported} contacts`,
         userId: dbUser.id,
       });
+      await Promise.all(
+        inserted.map((contact) =>
+          logAudit({
+            action: "CREATE",
+            objectType: "contact",
+            objectId: contact.id,
+            objectLabel: `${contact.firstName} ${contact.lastName}`.trim(),
+            actorId: dbUser.id,
+            actorName: dbUser.name,
+            after: contact as Record<string, unknown>,
+          }),
+        ),
+      );
     }
 
     res.status(200).json({ imported, skipped });

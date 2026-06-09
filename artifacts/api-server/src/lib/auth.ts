@@ -16,8 +16,13 @@ const baseURL = domain
   ? `https://${domain}/api/auth`
   : `http://localhost:${port}/api/auth`;
 
+const authSecret = process.env.BETTER_AUTH_SECRET;
+if (!authSecret && process.env.NODE_ENV !== "development") {
+  throw new Error("BETTER_AUTH_SECRET environment variable is required in non-development environments");
+}
+
 export const auth = betterAuth({
-  secret: process.env.BETTER_AUTH_SECRET ?? "dev-secret-replace-in-production",
+  secret: authSecret ?? "dev-secret-local-only",
   baseURL,
   database: drizzleAdapter(db, {
     provider: "pg",
