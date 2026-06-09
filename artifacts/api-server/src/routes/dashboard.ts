@@ -103,7 +103,7 @@ router.get("/stats", requireAuth, async (_req: Request, res: Response) => {
       newContactsThisMonth,
       totalCompanies,
       openDeals,
-      openPipelineValue: pipelineValue,
+      pipelineValue,
       wonDealsThisMonth: dealsWonThisMonth,
       wonValueThisMonth: dealsWonValue,
       tasksOverdue: overdueTasks,

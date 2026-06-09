@@ -216,7 +216,7 @@ router.post("/:id/send", requireAuth, async (req: Request, res: Response) => {
     for (const contact of validContacts) {
       if (!contact.email) continue;
 
-      const trackingPixelUrl = `${process.env.API_BASE_URL ?? ""}/api/tracking/open/${id}?cid=${contact.id}`;
+      const trackingPixelUrl = `${process.env.API_BASE_URL ?? ""}/api/track/open/${id}?cid=${contact.id}`;
       const htmlWithTracking = campaign.htmlContent.replace(
         "</body>",
         `<img src="${trackingPixelUrl}" width="1" height="1" style="display:none" alt="" /></body>`,
@@ -259,16 +259,32 @@ router.post("/:id/send", requireAuth, async (req: Request, res: Response) => {
       }
     }
 
-    await db
+    const [updatedCampaign] = await db
       .update(emailCampaignsTable)
       .set({ status: "SENT", sentAt: new Date(), updatedAt: new Date() })
-      .where(eq(emailCampaignsTable.id, id));
+      .where(eq(emailCampaignsTable.id, id))
+      .returning();
+
+    const [{ total: statTotal, sent: statSent, opened: statOpened, clicked: statClicked }] = await db
+      .select({
+        total: sql<number>`count(*)::int`,
+        sent: sql<number>`count(case when ${campaignContactsTable.status} != 'PENDING' then 1 end)::int`,
+        opened: sql<number>`count(case when ${campaignContactsTable.openedAt} is not null then 1 end)::int`,
+        clicked: sql<number>`count(case when ${campaignContactsTable.clickedAt} is not null then 1 end)::int`,
+      })
+      .from(campaignContactsTable)
+      .where(eq(campaignContactsTable.campaignId, id));
 
     res.json({
-      success: true,
-      sent: sentCount,
-      total: validContacts.length,
-      emailEnabled: !!resend,
+      ...updatedCampaign,
+      stats: {
+        total: statTotal,
+        sent: statSent,
+        opened: statOpened,
+        clicked: statClicked,
+        openRate: statSent > 0 ? Math.round((statOpened / statSent) * 100) : 0,
+        clickRate: statSent > 0 ? Math.round((statClicked / statSent) * 100) : 0,
+      },
     });
   } catch {
     res.status(500).json({ error: "Failed to send campaign" });

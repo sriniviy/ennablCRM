@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { db, contactsTable, companiesTable, usersTable } from "@workspace/db";
-import { eq, ilike, and, or, sql, asc, desc } from "drizzle-orm";
+import { eq, ilike, and, or, sql, asc, desc, isNotNull } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 import { logActivity } from "../lib/activity";
 
@@ -78,56 +78,75 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
 router.post("/import", requireAuth, async (req: Request, res: Response) => {
   try {
     const { dbUser } = req as AuthRequest;
-    const { csv } = req.body as { csv: string };
-    if (!csv) {
-      res.status(400).json({ error: "csv field is required" });
+    const { rows, mapping } = req.body as {
+      rows: Record<string, string>[];
+      mapping: Record<string, string>;
+    };
+
+    if (!rows || !Array.isArray(rows) || rows.length === 0) {
+      res.status(400).json({ error: "rows array is required" });
+      return;
+    }
+    if (!mapping || typeof mapping !== "object") {
+      res.status(400).json({ error: "mapping object is required" });
       return;
     }
 
-    const lines = csv.trim().split("\n");
-    if (lines.length < 2) {
-      res.status(400).json({ error: "CSV must have a header row and at least one data row" });
-      return;
-    }
+    const existingRows = await db
+      .select({ email: contactsTable.email })
+      .from(contactsTable)
+      .where(isNotNull(contactsTable.email));
+    const existingEmails = new Set(existingRows.map((c) => c.email?.toLowerCase()));
 
-    const headers = lines[0].split(",").map((h) => h.trim().toLowerCase().replace(/\s+/g, ""));
-    const rows = lines.slice(1);
+    const toInsert: Array<typeof contactsTable.$inferInsert> = [];
+    const errors: string[] = [];
+    let skipped = 0;
 
-    const contacts: Array<typeof contactsTable.$inferInsert> = [];
-    for (const row of rows) {
-      const cols = row.split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
-      const obj: Record<string, string> = {};
-      headers.forEach((h, i) => { obj[h] = cols[i] ?? ""; });
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const mapped: Record<string, string> = {};
+      for (const [col, field] of Object.entries(mapping)) {
+        mapped[field] = row[col] ?? "";
+      }
 
-      const firstName = obj["firstname"] || obj["first_name"] || "";
-      const lastName = obj["lastname"] || obj["last_name"] || "";
-      if (!firstName && !lastName) continue;
+      const firstName = mapped["firstName"] || "";
+      const lastName = mapped["lastName"] || "";
+      if (!firstName && !lastName) {
+        errors.push(`Row ${i + 1}: missing firstName and lastName`);
+        continue;
+      }
 
-      contacts.push({
+      const email = mapped["email"] ? mapped["email"].toLowerCase() : null;
+      if (email && existingEmails.has(email)) {
+        skipped++;
+        continue;
+      }
+
+      toInsert.push({
         firstName: firstName || "Unknown",
         lastName: lastName || "",
-        email: obj["email"] || null,
-        phone: obj["phone"] || null,
-        title: obj["title"] || obj["jobtitle"] || null,
+        email: email || null,
+        phone: mapped["phone"] || null,
+        title: mapped["title"] || null,
         status: "LEAD",
+      });
+
+      if (email) existingEmails.add(email);
+    }
+
+    let created = 0;
+    if (toInsert.length > 0) {
+      const inserted = await db.insert(contactsTable).values(toInsert).returning();
+      created = inserted.length;
+      await logActivity({
+        type: "CONTACT_CREATED",
+        title: `Imported ${created} contacts`,
+        userId: dbUser.id,
       });
     }
 
-    if (contacts.length === 0) {
-      res.status(400).json({ error: "No valid contacts found in CSV" });
-      return;
-    }
-
-    const inserted = await db.insert(contactsTable).values(contacts).returning();
-
-    await logActivity({
-      type: "CONTACT_CREATED",
-      title: `Imported ${inserted.length} contacts`,
-      userId: dbUser.id,
-    });
-
-    res.status(201).json({ imported: inserted.length, contacts: inserted });
-  } catch (err) {
+    res.status(201).json({ created, skipped, errors });
+  } catch {
     res.status(500).json({ error: "Failed to import contacts" });
   }
 });
