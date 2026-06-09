@@ -10,6 +10,7 @@ import activitiesRouter from "./activities";
 import campaignsRouter from "./campaigns";
 import dashboardRouter from "./dashboard";
 import trackingRouter from "./tracking";
+import searchRouter from "./search";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use("/activities", activitiesRouter);
 router.use("/campaigns", campaignsRouter);
 router.use("/dashboard", dashboardRouter);
 router.use("/track", trackingRouter);
+router.use("/search", searchRouter);
 
 export default router;

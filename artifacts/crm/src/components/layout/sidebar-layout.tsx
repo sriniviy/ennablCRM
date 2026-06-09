@@ -15,6 +15,7 @@ import {
   Sun,
   Moon,
 } from "lucide-react";
+import { GlobalSearch } from "@/components/global-search";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -161,6 +162,9 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
               <span className="text-xl font-bold">MyCRM</span>
             </div>
             <MobileNavLinks />
+            <div className="mt-4">
+              <GlobalSearch collapsed={false} />
+            </div>
             <div className="mt-auto pt-4 flex items-center justify-between border-t">
               <Tooltip delayDuration={0}>
                 <TooltipTrigger asChild>
@@ -242,6 +246,11 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         <DesktopNavLinks />
+
+        {/* Search */}
+        <div className="mt-3 mb-1">
+          <GlobalSearch collapsed={collapsed} />
+        </div>
 
         {/* Footer: user menu */}
         <div className="mt-auto border-t pt-4">
