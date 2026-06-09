@@ -5,6 +5,7 @@ import { useListCompanies, type Company } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -111,6 +112,7 @@ export function CompaniesPage() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Domain</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Industry</TableHead>
                 <TableHead>Size</TableHead>
                 <TableHead>Contacts</TableHead>
@@ -121,7 +123,7 @@ export function CompaniesPage() {
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
                   <TableRow key={i}>
-                    {[...Array(6)].map((__, j) => <TableCell key={j}><Skeleton className="h-4 w-20" /></TableCell>)}
+                    {[...Array(7)].map((__, j) => <TableCell key={j}><Skeleton className="h-4 w-20" /></TableCell>)}
                   </TableRow>
                 ))
               ) : data?.data && data.data.length > 0 ? (
@@ -152,6 +154,11 @@ export function CompaniesPage() {
                         </a>
                       ) : <span className="text-muted-foreground">—</span>}
                     </TableCell>
+                    <TableCell>
+                      {company.status ? (
+                        <Badge variant="outline" className="font-normal">{company.status.replace(/_/g, " ")}</Badge>
+                      ) : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">{company.industry ?? "—"}</TableCell>
                     <TableCell className="text-muted-foreground">{company.size ?? "—"}</TableCell>
                     <TableCell className="text-muted-foreground">—</TableCell>
@@ -160,7 +167,7 @@ export function CompaniesPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                     No companies found.
                   </TableCell>
                 </TableRow>

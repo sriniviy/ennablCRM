@@ -5,15 +5,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Globe, MapPin, Phone, Users, Briefcase, Pencil } from "lucide-react";
 import { NotesFeed } from "@/components/notes/notes-feed";
 import { formatCurrency } from "@/lib/utils";
 import { useState } from "react";
 import { CompanyDialog } from "@/components/companies/company-dialog";
+import { useTeamMembers } from "@/hooks/use-team-members";
 
 export function CompanyDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: company, isLoading } = useGetCompany(id);
+  const { data: teamMembers = [] } = useTeamMembers();
   const [editOpen, setEditOpen] = useState(false);
 
   if (isLoading) {
@@ -46,6 +49,9 @@ export function CompanyDetailPage() {
       </SidebarLayout>
     );
   }
+
+  const csm = teamMembers.find(m => m.id === company.assignedCsmId);
+  const csmName = csm ? (csm.name || csm.email) : null;
 
   return (
     <>
@@ -105,6 +111,65 @@ export function CompanyDetailPage() {
                     </div>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Details</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                {company.status ? (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Status</span>
+                    <Badge variant="outline">{company.status.replace(/_/g, " ")}</Badge>
+                  </div>
+                ) : null}
+                {csmName ? (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Assigned CSM</span>
+                    <span className="font-medium">{csmName}</span>
+                  </div>
+                ) : null}
+                {company.estimatedAnnualRevenue != null ? (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Est. Annual Revenue</span>
+                    <span className="font-medium">{formatCurrency(company.estimatedAnnualRevenue)}</span>
+                  </div>
+                ) : null}
+                {company.numberOfEmployees != null ? (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Employees</span>
+                    <span className="font-medium">{company.numberOfEmployees}</span>
+                  </div>
+                ) : null}
+                {company.domains && company.domains.length > 0 ? (
+                  <div>
+                    <span className="text-muted-foreground">Domains</span>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {company.domains.map(d => <Badge key={d} variant="secondary" className="text-xs">{d}</Badge>)}
+                    </div>
+                  </div>
+                ) : null}
+                {company.productLicensed && company.productLicensed.length > 0 ? (
+                  <div>
+                    <span className="text-muted-foreground">Products Licensed</span>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {company.productLicensed.map(p => <Badge key={p} variant="secondary" className="text-xs">{p}</Badge>)}
+                    </div>
+                  </div>
+                ) : null}
+                {company.memberOf && company.memberOf.length > 0 ? (
+                  <div>
+                    <span className="text-muted-foreground">Member Of</span>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {company.memberOf.map(m => <Badge key={m} variant="secondary" className="text-xs">{m}</Badge>)}
+                    </div>
+                  </div>
+                ) : null}
+                {!company.status && !csmName && company.estimatedAnnualRevenue == null && company.numberOfEmployees == null && !(company.domains?.length) && !(company.productLicensed?.length) && !(company.memberOf?.length) ? (
+                  <p className="text-muted-foreground">No additional details.</p>
+                ) : null}
               </CardContent>
             </Card>
 

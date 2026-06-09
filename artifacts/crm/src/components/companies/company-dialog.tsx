@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useTeamMembers } from "@/hooks/use-team-members";
 
 const STATUSES = Object.values(CompanyStatus);
 const toList = (s: string) => s.split(",").map(v => v.trim()).filter(Boolean);
@@ -43,8 +44,10 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
   const [phone, setPhone] = useState("");
   const [city, setCity] = useState("");
   const [country, setCountry] = useState("");
+  const [assignedCsmId, setAssignedCsmId] = useState<string>("none");
   const [showDelete, setShowDelete] = useState(false);
 
+  const { data: teamMembers = [] } = useTeamMembers();
   const create = useCreateCompany();
   const update = useUpdateCompany();
   const remove = useDeleteCompany();
@@ -65,6 +68,7 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
       setPhone(company?.phone ?? "");
       setCity(company?.city ?? "");
       setCountry(company?.country ?? "");
+      setAssignedCsmId(company?.assignedCsmId ?? "none");
     }
   }, [open, company]);
 
@@ -90,9 +94,11 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
       phone: phone || undefined,
       city: city || undefined,
       country: country || undefined,
+      assignedCsmId: assignedCsmId === "none" ? undefined : assignedCsmId,
     };
     if (isEdit) {
-      update.mutate({ id: company.id, data }, {
+      const updateData = { ...data, assignedCsmId: assignedCsmId === "none" ? null : assignedCsmId };
+      update.mutate({ id: company.id, data: updateData }, {
         onSuccess: () => { toast({ title: "Company updated" }); invalidate(); onOpenChange(false); },
         onError: () => toast({ title: "Error", description: "Failed to update company", variant: "destructive" }),
       });
@@ -169,6 +175,18 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
               <div className="space-y-1.5">
                 <Label htmlFor="co-employees">Number of Employees</Label>
                 <Input id="co-employees" type="number" value={numberOfEmployees} onChange={e => setNumberOfEmployees(e.target.value)} placeholder="250" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Assigned CSM</Label>
+                <Select value={assignedCsmId} onValueChange={setAssignedCsmId}>
+                  <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Unassigned</SelectItem>
+                    {teamMembers.map(m => <SelectItem key={m.id} value={m.id}>{m.name || m.email}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">

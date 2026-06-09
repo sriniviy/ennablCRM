@@ -1,12 +1,15 @@
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useParams, Link } from "wouter";
-import { useGetContact, useCreateActivity, getGetContactQueryKey } from "@workspace/api-client-react";
+import { useGetContact, useCreateActivity, getGetContactQueryKey, type ActivityType } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Mail, Phone, Building2, Calendar, MessageSquare, Linkedin, CheckSquare, Pencil } from "lucide-react";
 import { NotesFeed } from "@/components/notes/notes-feed";
 import { formatCurrency } from "@/lib/utils";
@@ -19,30 +22,54 @@ export function ContactDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: contact, isLoading } = useGetContact(id);
   const [editOpen, setEditOpen] = useState(false);
+  const [actType, setActType] = useState<string>("NOTE");
+  const [actTitle, setActTitle] = useState("");
   const [note, setNote] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [aiSummary, setAiSummary] = useState("");
   const createActivity = useCreateActivity();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  const isEmailType = actType.startsWith("EMAIL");
+
   const createActivityMutate = useRef(createActivity.mutateAsync);
   createActivityMutate.current = createActivity.mutateAsync;
 
-  const handleAddNote = async () => {
-    if (!note.trim()) return;
+  const resetActivityForm = () => {
+    setActType("NOTE"); setActTitle(""); setNote(""); setEndDate("");
+    setEmailSubject(""); setEmailBody(""); setAiSummary("");
+  };
+
+  const canLog = !!(note.trim() || actTitle.trim() || emailSubject.trim());
+
+  const handleLogActivity = async () => {
+    if (!canLog) return;
+    const title =
+      actTitle.trim() ||
+      (isEmailType ? emailSubject.trim() : "") ||
+      note.trim().slice(0, 60) ||
+      "Activity logged";
     try {
       await createActivityMutate.current({
         data: {
-          type: "NOTE",
-          title: "Note added",
-          description: note,
+          type: actType as ActivityType,
+          title,
+          description: note.trim() || undefined,
+          endDate: endDate ? new Date(endDate).toISOString() : undefined,
+          emailSubject: emailSubject.trim() || undefined,
+          emailBody: emailBody.trim() || undefined,
+          aiSummary: aiSummary.trim() || undefined,
           contactId: id,
         }
       });
-      setNote("");
+      resetActivityForm();
       queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) });
-      toast({ title: "Note added" });
+      toast({ title: "Activity logged" });
     } catch (e) {
-      toast({ title: "Error", description: "Could not save note", variant: "destructive" });
+      toast({ title: "Error", description: "Could not save activity", variant: "destructive" });
     }
   };
 
@@ -138,6 +165,18 @@ export function ContactDetailPage() {
                     <a href={contact.linkedIn} target="_blank" rel="noreferrer" className="hover:underline text-blue-600">LinkedIn Profile</a>
                   </div>
                 )}
+                <div className="flex items-center justify-between text-sm pt-3 border-t">
+                  <span className="text-muted-foreground">Review status</span>
+                  <Badge variant="outline" className="font-normal">{(contact.reviewStatus ?? "REVIEWED").replace(/_/g, " ")}</Badge>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Ennabl user</span>
+                  <span className="font-medium">{contact.ennablUser ? "Yes" : "No"}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Email marketing</span>
+                  <span className="font-medium">{contact.emailMarketingContact ? "Subscribed" : "No"}</span>
+                </div>
               </CardContent>
             </Card>
 
@@ -180,18 +219,61 @@ export function ContactDetailPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
-                      <Textarea 
-                        placeholder="Leave a note about this contact..." 
-                        value={note}
-                        onChange={(e) => setNote(e.target.value)}
-                        className="resize-none"
-                      />
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label>Type</Label>
+                          <Select value={actType} onValueChange={setActType}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {["NOTE", "CALL", "EMAIL_SENT", "MEETING"].map(t => (
+                                <SelectItem key={t} value={t}>
+                                  {t.replace(/_/g, " ").toLowerCase().replace(/^./, c => c.toUpperCase())}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="act-end">End date</Label>
+                          <Input id="act-end" type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="act-title">Title</Label>
+                        <Input id="act-title" placeholder="Short title (optional)" value={actTitle} onChange={e => setActTitle(e.target.value)} />
+                      </div>
+                      {isEmailType && (
+                        <>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="act-subj">Email subject</Label>
+                            <Input id="act-subj" value={emailSubject} onChange={e => setEmailSubject(e.target.value)} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="act-body">Email body</Label>
+                            <Textarea id="act-body" value={emailBody} onChange={e => setEmailBody(e.target.value)} className="resize-none" />
+                          </div>
+                        </>
+                      )}
+                      <div className="space-y-1.5">
+                        <Label htmlFor="act-note">Notes</Label>
+                        <Textarea 
+                          id="act-note"
+                          placeholder="Details about this activity..." 
+                          value={note}
+                          onChange={(e) => setNote(e.target.value)}
+                          className="resize-none"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="act-ai">AI summary</Label>
+                        <Textarea id="act-ai" placeholder="Optional summary" value={aiSummary} onChange={e => setAiSummary(e.target.value)} className="resize-none" />
+                      </div>
                       <div className="flex justify-end">
                         <Button 
-                          onClick={handleAddNote} 
-                          disabled={!note.trim() || createActivity.isPending}
+                          onClick={handleLogActivity} 
+                          disabled={!canLog || createActivity.isPending}
                         >
-                          {createActivity.isPending ? "Saving..." : "Save Note"}
+                          {createActivity.isPending ? "Saving..." : "Log Activity"}
                         </Button>
                       </div>
                     </div>
@@ -209,10 +291,22 @@ export function ContactDetailPage() {
                              activity.type === 'CALL' ? <Phone className="h-5 w-5 text-green-500" /> :
                              <Calendar className="h-5 w-5 text-muted-foreground" />}
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <p className="font-medium">{activity.title}</p>
+                            {activity.emailSubject && (
+                              <p className="text-sm mt-1"><span className="text-muted-foreground">Subject: </span>{activity.emailSubject}</p>
+                            )}
                             {activity.description && <p className="text-sm mt-1 text-muted-foreground">{activity.description}</p>}
-                            <p className="text-xs text-muted-foreground mt-2">{new Date(activity.createdAt).toLocaleString()}</p>
+                            {activity.emailBody && (
+                              <p className="text-sm mt-1 text-muted-foreground whitespace-pre-wrap">{activity.emailBody}</p>
+                            )}
+                            {activity.aiSummary && (
+                              <p className="text-sm mt-2 rounded bg-muted px-2 py-1"><span className="font-medium">AI summary: </span>{activity.aiSummary}</p>
+                            )}
+                            <p className="text-xs text-muted-foreground mt-2">
+                              {new Date(activity.createdAt).toLocaleString()}
+                              {activity.endDate ? ` · ends ${new Date(activity.endDate).toLocaleString()}` : ""}
+                            </p>
                           </div>
                         </div>
                       ))}

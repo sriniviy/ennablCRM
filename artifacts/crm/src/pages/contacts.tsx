@@ -157,6 +157,7 @@ export function ContactsPage() {
                 <TableHead>Email</TableHead>
                 <TableHead>Company</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Review</TableHead>
                 <TableHead>Tags</TableHead>
               </TableRow>
             </TableHeader>
@@ -164,7 +165,7 @@ export function ContactsPage() {
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
                   <TableRow key={i}>
-                    {[...Array(5)].map((__, j) => <TableCell key={j}><Skeleton className="h-4 w-24" /></TableCell>)}
+                    {[...Array(6)].map((__, j) => <TableCell key={j}><Skeleton className="h-4 w-24" /></TableCell>)}
                   </TableRow>
                 ))
               ) : data?.data && data.data.length > 0 ? (
@@ -197,6 +198,11 @@ export function ContactsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>
+                      {contact.reviewStatus ? (
+                        <Badge variant="outline" className="font-normal">{contact.reviewStatus.replace(/_/g, " ")}</Badge>
+                      ) : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {(contact.tags ?? []).slice(0, 3).map(tag => (
                           <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
@@ -207,7 +213,7 @@ export function ContactsPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                     No contacts found.
                   </TableCell>
                 </TableRow>
