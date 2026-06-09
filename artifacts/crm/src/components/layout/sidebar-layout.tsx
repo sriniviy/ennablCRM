@@ -187,71 +187,64 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
           collapsed ? "w-16 px-2" : "w-64 px-4"
         }`}
       >
-        {/* Logo */}
+        {/* Header: logo + title + controls */}
         <div
-          className={`mb-8 flex items-center gap-2 ${
-            collapsed ? "justify-center px-0" : "px-2"
+          className={`mb-8 flex items-center ${
+            collapsed ? "flex-col gap-2 px-0" : "gap-2 px-2"
           }`}
         >
           <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold shrink-0">
             M
           </div>
+
           {!collapsed && (
-            <span className="text-xl font-bold tracking-tight">MyCRM</span>
+            <>
+              <span className="text-xl font-bold tracking-tight flex-1 min-w-0">MyCRM</span>
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" onClick={toggleTheme} className="h-7 w-7 shrink-0">
+                    {theme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">{theme === "dark" ? "Light mode" : "Dark mode"}</TooltipContent>
+              </Tooltip>
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" onClick={() => setCollapsed(true)} className="h-7 w-7 shrink-0">
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Collapse sidebar</TooltipContent>
+              </Tooltip>
+            </>
+          )}
+
+          {collapsed && (
+            <>
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" onClick={toggleTheme} className="h-7 w-7">
+                    {theme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">{theme === "dark" ? "Light mode" : "Dark mode"}</TooltipContent>
+              </Tooltip>
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" onClick={() => setCollapsed(false)} className="h-7 w-7">
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">Expand sidebar</TooltipContent>
+              </Tooltip>
+            </>
           )}
         </div>
 
         <DesktopNavLinks />
 
-        {/* Footer: user + theme + collapse */}
-        <div className="mt-auto border-t pt-4 space-y-2">
-          {/* Theme toggle + collapse toggle row */}
-          <div
-            className={`flex items-center ${
-              collapsed ? "flex-col gap-2" : "justify-between"
-            }`}
-          >
-            <Tooltip delayDuration={0}>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={toggleTheme}
-                  className="shrink-0"
-                >
-                  {theme === "dark" ? (
-                    <Sun className="h-4 w-4" />
-                  ) : (
-                    <Moon className="h-4 w-4" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                {theme === "dark" ? "Light mode" : "Dark mode"}
-              </TooltipContent>
-            </Tooltip>
-
-            <Tooltip delayDuration={0}>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setCollapsed((c) => !c)}
-                  className="shrink-0"
-                >
-                  {collapsed ? (
-                    <ChevronRight className="h-4 w-4" />
-                  ) : (
-                    <ChevronLeft className="h-4 w-4" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                {collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              </TooltipContent>
-            </Tooltip>
-          </div>
-
+        {/* Footer: user menu */}
+        <div className="mt-auto border-t pt-4">
           {/* User menu */}
           {user && (
             <DropdownMenu>
