@@ -1,22 +1,39 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
-  version: 0.1.0
-  description: API specification
+  version: 0.2.0
+  description: MyCRM API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: users
+    description: User operations
+  - name: contacts
+    description: Contact operations
+  - name: companies
+    description: Company operations
+  - name: deals
+    description: Deal pipeline operations
+  - name: tasks
+    description: Task operations
+  - name: activities
+    description: Activity log operations
+  - name: campaigns
+    description: Email campaign operations
+  - name: dashboard
+    description: Dashboard and stats
+  - name: tracking
+    description: Email tracking
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +41,1794 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ── Users ──────────────────────────────────────────────────────────────────
+
+  /users/me:
+    get:
+      operationId: getMe
+      tags: [users]
+      summary: Get current authenticated user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Contacts ───────────────────────────────────────────────────────────────
+
+  /contacts:
+    get:
+      operationId: listContacts
+      tags: [contacts]
+      summary: List contacts with optional filtering
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/ContactStatus"
+        - name: tag
+          in: query
+          schema:
+            type: string
+        - name: companyId
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 25
+      responses:
+        "200":
+          description: Paginated contact list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedContacts"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createContact
+      tags: [contacts]
+      summary: Create a new contact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateContactInput"
+      responses:
+        "201":
+          description: Created contact
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactWithRelations"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /contacts/import:
+    post:
+      operationId: importContacts
+      tags: [contacts]
+      summary: Bulk import contacts from CSV data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportContactsInput"
+      responses:
+        "200":
+          description: Import result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /contacts/{id}:
+    get:
+      operationId: getContact
+      tags: [contacts]
+      summary: Get a contact with full relations
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Contact detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    patch:
+      operationId: updateContact
+      tags: [contacts]
+      summary: Update a contact
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateContactInput"
+      responses:
+        "200":
+          description: Updated contact
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactWithRelations"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    delete:
+      operationId: deleteContact
+      tags: [contacts]
+      summary: Delete a contact
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Companies ──────────────────────────────────────────────────────────────
+
+  /companies:
+    get:
+      operationId: listCompanies
+      tags: [companies]
+      summary: List companies
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 25
+      responses:
+        "200":
+          description: Paginated company list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedCompanies"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createCompany
+      tags: [companies]
+      summary: Create a new company
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCompanyInput"
+      responses:
+        "201":
+          description: Created company
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /companies/{id}:
+    get:
+      operationId: getCompany
+      tags: [companies]
+      summary: Get a company with contacts and deals
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Company detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanyDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    patch:
+      operationId: updateCompany
+      tags: [companies]
+      summary: Update a company
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCompanyInput"
+      responses:
+        "200":
+          description: Updated company
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    delete:
+      operationId: deleteCompany
+      tags: [companies]
+      summary: Delete a company
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Deal Stages ────────────────────────────────────────────────────────────
+
+  /deal-stages:
+    get:
+      operationId: listDealStages
+      tags: [deals]
+      summary: List all deal stages ordered by position
+      responses:
+        "200":
+          description: Deal stages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DealStage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Deals ──────────────────────────────────────────────────────────────────
+
+  /deals:
+    get:
+      operationId: listDeals
+      tags: [deals]
+      summary: List deals grouped into pipeline columns
+      parameters:
+        - name: stageId
+          in: query
+          schema:
+            type: string
+        - name: contactId
+          in: query
+          schema:
+            type: string
+        - name: companyId
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Pipeline columns with deals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PipelineColumn"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createDeal
+      tags: [deals]
+      summary: Create a new deal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDealInput"
+      responses:
+        "201":
+          description: Created deal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DealWithRelations"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /deals/{id}:
+    get:
+      operationId: getDeal
+      tags: [deals]
+      summary: Get a deal with relations
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Deal detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DealWithRelations"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    patch:
+      operationId: updateDeal
+      tags: [deals]
+      summary: Update a deal
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDealInput"
+      responses:
+        "200":
+          description: Updated deal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DealWithRelations"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    delete:
+      operationId: deleteDeal
+      tags: [deals]
+      summary: Delete a deal
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /deals/{id}/move:
+    patch:
+      operationId: moveDeal
+      tags: [deals]
+      summary: Move a deal to a different stage
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveDealInput"
+      responses:
+        "200":
+          description: Moved deal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DealWithRelations"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Tasks ──────────────────────────────────────────────────────────────────
+
+  /tasks:
+    get:
+      operationId: listTasks
+      tags: [tasks]
+      summary: List tasks with optional filtering
+      parameters:
+        - name: filter
+          in: query
+          description: "overdue | due_today | open | completed"
+          schema:
+            type: string
+        - name: contactId
+          in: query
+          schema:
+            type: string
+        - name: dealId
+          in: query
+          schema:
+            type: string
+        - name: assigneeId
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Paginated task list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedTasks"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createTask
+      tags: [tasks]
+      summary: Create a new task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTaskInput"
+      responses:
+        "201":
+          description: Created task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskWithRelations"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /tasks/{id}:
+    get:
+      operationId: getTask
+      tags: [tasks]
+      summary: Get a task
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskWithRelations"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    patch:
+      operationId: updateTask
+      tags: [tasks]
+      summary: Update a task
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTaskInput"
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskWithRelations"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    delete:
+      operationId: deleteTask
+      tags: [tasks]
+      summary: Delete a task
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /tasks/{id}/complete:
+    patch:
+      operationId: completeTask
+      tags: [tasks]
+      summary: Toggle task completion
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                completed:
+                  type: boolean
+              required: [completed]
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskWithRelations"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Activities ─────────────────────────────────────────────────────────────
+
+  /activities:
+    get:
+      operationId: listActivities
+      tags: [activities]
+      summary: List activities with optional filtering
+      parameters:
+        - name: contactId
+          in: query
+          schema:
+            type: string
+        - name: dealId
+          in: query
+          schema:
+            type: string
+        - name: companyId
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Paginated activity list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedActivities"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createActivity
+      tags: [activities]
+      summary: Manually log an activity (note, call, meeting)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateActivityInput"
+      responses:
+        "201":
+          description: Created activity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityWithRelations"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Campaigns ──────────────────────────────────────────────────────────────
+
+  /campaigns:
+    get:
+      operationId: listCampaigns
+      tags: [campaigns]
+      summary: List email campaigns
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/CampaignStatus"
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Paginated campaign list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedCampaigns"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createCampaign
+      tags: [campaigns]
+      summary: Create an email campaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCampaignInput"
+      responses:
+        "201":
+          description: Created campaign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignWithStats"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /campaigns/{id}:
+    get:
+      operationId: getCampaign
+      tags: [campaigns]
+      summary: Get a campaign with stats
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Campaign detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignWithStats"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    patch:
+      operationId: updateCampaign
+      tags: [campaigns]
+      summary: Update or send a campaign
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCampaignInput"
+      responses:
+        "200":
+          description: Updated campaign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignWithStats"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    delete:
+      operationId: deleteCampaign
+      tags: [campaigns]
+      summary: Delete a campaign
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /campaigns/{id}/send:
+    post:
+      operationId: sendCampaign
+      tags: [campaigns]
+      summary: Send a campaign to its recipients
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendCampaignInput"
+      responses:
+        "200":
+          description: Sending result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignWithStats"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Dashboard ──────────────────────────────────────────────────────────────
+
+  /dashboard/stats:
+    get:
+      operationId: getDashboardStats
+      tags: [dashboard]
+      summary: Get CRM overview stats for dashboard
+      responses:
+        "200":
+          description: Dashboard statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /dashboard/activity-feed:
+    get:
+      operationId: getDashboardActivityFeed
+      tags: [dashboard]
+      summary: Get recent activity feed for the dashboard
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Recent activities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityWithRelations"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Email Tracking ─────────────────────────────────────────────────────────
+
+  /track/open/{id}:
+    get:
+      operationId: trackEmailOpen
+      tags: [tracking]
+      summary: Email open tracking pixel
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 1x1 transparent GIF
+          content:
+            image/gif:
+              schema:
+                type: string
+                format: binary
+
+  /track/click/{id}:
+    get:
+      operationId: trackEmailClick
+      tags: [tracking]
+      summary: Email link click tracking redirect
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: url
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to target URL
+
 components:
+  parameters:
+    IdParam:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
   schemas:
     HealthStatus:
       type: object
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+
+    # ── Enums ──────────────────────────────────────────────────────────────
+
+    ContactStatus:
+      type: string
+      enum: [LEAD, PROSPECT, CUSTOMER, CHURNED, UNQUALIFIED]
+
+    UserRole:
+      type: string
+      enum: [ADMIN, MEMBER]
+
+    Priority:
+      type: string
+      enum: [LOW, MEDIUM, HIGH, URGENT]
+
+    TaskType:
+      type: string
+      enum: [TODO, CALL, EMAIL, MEETING, FOLLOW_UP]
+
+    ActivityType:
+      type: string
+      enum:
+        [
+          NOTE,
+          CALL,
+          EMAIL_SENT,
+          EMAIL_OPENED,
+          EMAIL_CLICKED,
+          DEAL_CREATED,
+          DEAL_MOVED,
+          DEAL_WON,
+          DEAL_LOST,
+          TASK_CREATED,
+          TASK_COMPLETED,
+          CONTACT_CREATED,
+          MEETING,
+        ]
+
+    CampaignStatus:
+      type: string
+      enum: [DRAFT, SCHEDULED, SENDING, SENT, CANCELLED]
+
+    SendStatus:
+      type: string
+      enum: [PENDING, SENT, OPENED, CLICKED, BOUNCED, UNSUBSCRIBED]
+
+    # ── Core models ────────────────────────────────────────────────────────
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        clerkId:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
+        role:
+          $ref: "#/components/schemas/UserRole"
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, clerkId, email, role, createdAt]
+
+    UserSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
+      required: [id]
+
+    Company:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        domain:
+          type: string
+          nullable: true
+        industry:
+          type: string
+          nullable: true
+        size:
+          type: string
+          nullable: true
+        website:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, name, createdAt, updatedAt]
+
+    CompanySummary:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+      required: [id, name]
+
+    CompanyDetail:
+      allOf:
+        - $ref: "#/components/schemas/Company"
+        - type: object
+          properties:
+            contacts:
+              type: array
+              items:
+                $ref: "#/components/schemas/ContactSummary"
+            deals:
+              type: array
+              items:
+                $ref: "#/components/schemas/DealWithRelations"
+            openPipelineValue:
+              type: number
+          required: [contacts, deals, openPipelineValue]
+
+    ContactSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        status:
+          $ref: "#/components/schemas/ContactStatus"
+      required: [id, firstName, lastName, status]
+
+    ContactWithRelations:
+      type: object
+      properties:
+        id:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        status:
+          $ref: "#/components/schemas/ContactStatus"
+        tags:
+          type: array
+          items:
+            type: string
+        notes:
+          type: string
+          nullable: true
+        linkedIn:
+          type: string
+          nullable: true
+        assigneeId:
+          type: string
+          nullable: true
+        companyId:
+          type: string
+          nullable: true
+        company:
+          $ref: "#/components/schemas/CompanySummary"
+          nullable: true
+        assignee:
+          $ref: "#/components/schemas/UserSummary"
+          nullable: true
+        dealCount:
+          type: integer
+        taskCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        [
+          id,
+          firstName,
+          lastName,
+          status,
+          tags,
+          dealCount,
+          taskCount,
+          createdAt,
+          updatedAt,
+        ]
+
+    ContactDetail:
+      allOf:
+        - $ref: "#/components/schemas/ContactWithRelations"
+        - type: object
+          properties:
+            deals:
+              type: array
+              items:
+                $ref: "#/components/schemas/DealWithRelations"
+            tasks:
+              type: array
+              items:
+                $ref: "#/components/schemas/TaskWithRelations"
+            activities:
+              type: array
+              items:
+                $ref: "#/components/schemas/ActivityWithRelations"
+          required: [deals, tasks, activities]
+
+    DealStage:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        order:
+          type: integer
+        color:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, order, color, createdAt]
+
+    DealWithRelations:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        value:
+          type: number
+          nullable: true
+        currency:
+          type: string
+        probability:
+          type: integer
+          nullable: true
+        closeDate:
+          type: string
+          format: date-time
+          nullable: true
+        stageId:
+          type: string
+        stage:
+          $ref: "#/components/schemas/DealStage"
+        contactId:
+          type: string
+          nullable: true
+        contact:
+          $ref: "#/components/schemas/ContactSummary"
+          nullable: true
+        companyId:
+          type: string
+          nullable: true
+        company:
+          $ref: "#/components/schemas/CompanySummary"
+          nullable: true
+        assigneeId:
+          type: string
+          nullable: true
+        assignee:
+          $ref: "#/components/schemas/UserSummary"
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        order:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, title, currency, stageId, stage, order, createdAt, updatedAt]
+
+    PipelineColumn:
+      type: object
+      properties:
+        stage:
+          $ref: "#/components/schemas/DealStage"
+        deals:
+          type: array
+          items:
+            $ref: "#/components/schemas/DealWithRelations"
+        totalValue:
+          type: number
+      required: [stage, deals, totalValue]
+
+    TaskWithRelations:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        dueDate:
+          type: string
+          format: date-time
+          nullable: true
+        completed:
+          type: boolean
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        priority:
+          $ref: "#/components/schemas/Priority"
+        type:
+          $ref: "#/components/schemas/TaskType"
+        contactId:
+          type: string
+          nullable: true
+        contact:
+          $ref: "#/components/schemas/ContactSummary"
+          nullable: true
+        dealId:
+          type: string
+          nullable: true
+        deal:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+            title:
+              type: string
+          required: [id, title]
+        assigneeId:
+          type: string
+          nullable: true
+        assignee:
+          $ref: "#/components/schemas/UserSummary"
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, title, completed, priority, type, createdAt, updatedAt]
+
+    ActivityWithRelations:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          $ref: "#/components/schemas/ActivityType"
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          nullable: true
+          additionalProperties: true
+        userId:
+          type: string
+          nullable: true
+        user:
+          $ref: "#/components/schemas/UserSummary"
+          nullable: true
+        contactId:
+          type: string
+          nullable: true
+        contact:
+          $ref: "#/components/schemas/ContactSummary"
+          nullable: true
+        dealId:
+          type: string
+          nullable: true
+        deal:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+            title:
+              type: string
+          required: [id, title]
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, type, title, createdAt]
+
+    CampaignStats:
+      type: object
+      properties:
+        total:
+          type: integer
+        sent:
+          type: integer
+        opened:
+          type: integer
+        clicked:
+          type: integer
+        openRate:
+          type: number
+        clickRate:
+          type: number
+      required: [total, sent, opened, clicked, openRate, clickRate]
+
+    CampaignWithStats:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        subject:
+          type: string
+        fromName:
+          type: string
+        fromEmail:
+          type: string
+        htmlContent:
+          type: string
+        textContent:
+          type: string
+          nullable: true
+        status:
+          $ref: "#/components/schemas/CampaignStatus"
+        scheduledAt:
+          type: string
+          format: date-time
+          nullable: true
+        sentAt:
+          type: string
+          format: date-time
+          nullable: true
+        stats:
+          $ref: "#/components/schemas/CampaignStats"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        [id, name, subject, fromName, fromEmail, htmlContent, status, stats, createdAt, updatedAt]
+
+    DashboardStats:
+      type: object
+      properties:
+        totalContacts:
+          type: integer
+        totalCompanies:
+          type: integer
+        openDeals:
+          type: integer
+        pipelineValue:
+          type: number
+        tasksOverdue:
+          type: integer
+        tasksDueToday:
+          type: integer
+        wonDealsThisMonth:
+          type: integer
+        wonValueThisMonth:
+          type: number
+      required:
+        [
+          totalContacts,
+          totalCompanies,
+          openDeals,
+          pipelineValue,
+          tasksOverdue,
+          tasksDueToday,
+          wonDealsThisMonth,
+          wonValueThisMonth,
+        ]
+
+    # ── Paginated responses ────────────────────────────────────────────────
+
+    PaginatedContacts:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContactWithRelations"
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        hasMore:
+          type: boolean
+      required: [data, total, page, pageSize, hasMore]
+
+    PaginatedCompanies:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Company"
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        hasMore:
+          type: boolean
+      required: [data, total, page, pageSize, hasMore]
+
+    PaginatedTasks:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaskWithRelations"
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        hasMore:
+          type: boolean
+      required: [data, total, page, pageSize, hasMore]
+
+    PaginatedActivities:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityWithRelations"
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        hasMore:
+          type: boolean
+      required: [data, total, page, pageSize, hasMore]
+
+    PaginatedCampaigns:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/CampaignWithStats"
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        hasMore:
+          type: boolean
+      required: [data, total, page, pageSize, hasMore]
+
+    # ── Input schemas ──────────────────────────────────────────────────────
+
+    CreateContactInput:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        title:
+          type: string
+        status:
+          $ref: "#/components/schemas/ContactStatus"
+        companyId:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        notes:
+          type: string
+        linkedIn:
+          type: string
+        assigneeId:
+          type: string
+      required: [firstName, lastName]
+
+    UpdateContactInput:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        title:
+          type: string
+        status:
+          $ref: "#/components/schemas/ContactStatus"
+        companyId:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+        notes:
+          type: string
+        linkedIn:
+          type: string
+        assigneeId:
+          type: string
+          nullable: true
+
+    ImportContactsInput:
+      type: object
+      properties:
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties:
+              type: string
+        mapping:
+          type: object
+          description: Maps CSV column names to contact field names
+          additionalProperties:
+            type: string
+      required: [rows, mapping]
+
+    ImportResult:
+      type: object
+      properties:
+        created:
+          type: integer
+        skipped:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: string
+      required: [created, skipped, errors]
+
+    CreateCompanyInput:
+      type: object
+      properties:
+        name:
+          type: string
+        domain:
+          type: string
+        industry:
+          type: string
+        size:
+          type: string
+        website:
+          type: string
+        phone:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        country:
+          type: string
+      required: [name]
+
+    UpdateCompanyInput:
+      type: object
+      properties:
+        name:
+          type: string
+        domain:
+          type: string
+        industry:
+          type: string
+        size:
+          type: string
+        website:
+          type: string
+        phone:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        country:
+          type: string
+
+    CreateDealInput:
+      type: object
+      properties:
+        title:
+          type: string
+        value:
+          type: number
+        currency:
+          type: string
+          default: USD
+        probability:
+          type: integer
+        closeDate:
+          type: string
+          format: date-time
+        stageId:
+          type: string
+        contactId:
+          type: string
+        companyId:
+          type: string
+        assigneeId:
+          type: string
+        notes:
+          type: string
+      required: [title, stageId]
+
+    UpdateDealInput:
+      type: object
+      properties:
+        title:
+          type: string
+        value:
+          type: number
+          nullable: true
+        currency:
+          type: string
+        probability:
+          type: integer
+          nullable: true
+        closeDate:
+          type: string
+          format: date-time
+          nullable: true
+        stageId:
+          type: string
+        contactId:
+          type: string
+          nullable: true
+        companyId:
+          type: string
+          nullable: true
+        assigneeId:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+
+    MoveDealInput:
+      type: object
+      properties:
+        stageId:
+          type: string
+        order:
+          type: integer
+      required: [stageId]
+
+    CreateTaskInput:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        dueDate:
+          type: string
+          format: date-time
+        priority:
+          $ref: "#/components/schemas/Priority"
+        type:
+          $ref: "#/components/schemas/TaskType"
+        contactId:
+          type: string
+        dealId:
+          type: string
+        assigneeId:
+          type: string
+      required: [title]
+
+    UpdateTaskInput:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        dueDate:
+          type: string
+          format: date-time
+          nullable: true
+        priority:
+          $ref: "#/components/schemas/Priority"
+        type:
+          $ref: "#/components/schemas/TaskType"
+        contactId:
+          type: string
+          nullable: true
+        dealId:
+          type: string
+          nullable: true
+        assigneeId:
+          type: string
+          nullable: true
+
+    CreateActivityInput:
+      type: object
+      properties:
+        type:
+          $ref: "#/components/schemas/ActivityType"
+        title:
+          type: string
+        description:
+          type: string
+        contactId:
+          type: string
+        dealId:
+          type: string
+        companyId:
+          type: string
+      required: [type, title]
+
+    CreateCampaignInput:
+      type: object
+      properties:
+        name:
+          type: string
+        subject:
+          type: string
+        fromName:
+          type: string
+        fromEmail:
+          type: string
+        htmlContent:
+          type: string
+        textContent:
+          type: string
+        recipientContactIds:
+          type: array
+          items:
+            type: string
+      required: [name, subject, fromName, fromEmail, htmlContent]
+
+    UpdateCampaignInput:
+      type: object
+      properties:
+        name:
+          type: string
+        subject:
+          type: string
+        fromName:
+          type: string
+        fromEmail:
+          type: string
+        htmlContent:
+          type: string
+        textContent:
+          type: string
+
+    SendCampaignInput:
+      type: object
+      properties:
+        recipientContactIds:
+          type: array
+          items:
+            type: string

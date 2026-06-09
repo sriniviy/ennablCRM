@@ -1,0 +1,154 @@
+import { SidebarLayout } from "@/components/layout/sidebar-layout";
+import { useRef } from "react";
+import { useListDeals, useMoveDeal, getListDealsQueryKey } from "@workspace/api-client-react";
+import type { PipelineColumn } from "@workspace/api-client-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Plus } from "lucide-react";
+import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
+import { formatCurrency } from "@/lib/utils";
+import { useQueryClient } from "@tanstack/react-query";
+
+export function DealsPage() {
+  const { data: columns, isLoading: dealsLoading } = useListDeals();
+  const moveDeal = useMoveDeal();
+  const queryClient = useQueryClient();
+
+  const moveDealMutate = useRef(moveDeal.mutate);
+  moveDealMutate.current = moveDeal.mutate;
+
+  const handleDragEnd = (result: DropResult) => {
+    const { source, destination, draggableId } = result;
+
+    if (!destination) return;
+    if (
+      source.droppableId === destination.droppableId &&
+      source.index === destination.index
+    ) return;
+
+    const destStageId = destination.droppableId;
+    const destIndex = destination.index;
+
+    // Optimistic update — move deal between PipelineColumn[] entries
+    queryClient.setQueryData(getListDealsQueryKey(), (old: PipelineColumn[] | undefined) => {
+      if (!old) return old;
+      const deal = old.flatMap(c => c.deals).find(d => d.id === draggableId);
+      if (!deal) return old;
+      const updatedDeal = { ...deal, stageId: destStageId };
+      return old.map(col => {
+        const withoutDeal = col.deals.filter(d => d.id !== draggableId);
+        if (col.stage.id === destStageId) {
+          const inserted = [...withoutDeal];
+          inserted.splice(destIndex, 0, updatedDeal);
+          return { ...col, deals: inserted };
+        }
+        return { ...col, deals: withoutDeal };
+      });
+    });
+
+    moveDealMutate.current({
+      id: draggableId,
+      data: { stageId: destStageId, order: destIndex }
+    });
+  };
+
+  return (
+    <SidebarLayout>
+      <div className="space-y-6 h-full flex flex-col min-h-0">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Deals Pipeline</h1>
+            <p className="text-muted-foreground">Manage and track your active opportunities.</p>
+          </div>
+          <Button data-testid="btn-new-deal">
+            <Plus className="mr-2 h-4 w-4" /> Add Deal
+          </Button>
+        </div>
+
+        {dealsLoading ? (
+          <div className="flex gap-6 overflow-x-auto pb-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="w-80 shrink-0 space-y-4">
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-32 w-full" />
+                <Skeleton className="h-32 w-full" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex-1 overflow-x-auto pb-4">
+            <DragDropContext onDragEnd={handleDragEnd}>
+              <div className="flex gap-6 h-full min-h-[500px] items-start">
+                {(columns ?? []).map(column => (
+                  <div key={column.stage.id} className="w-80 shrink-0 flex flex-col h-full max-h-full">
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between mb-1">
+                        <h3 className="font-semibold text-sm flex items-center gap-2">
+                          <span 
+                            className="w-3 h-3 rounded-full inline-block" 
+                            style={{ backgroundColor: column.stage.color || 'var(--primary)' }}
+                          />
+                          {column.stage.name}
+                          <span className="text-muted-foreground font-normal ml-1">
+                            ({column.deals.length})
+                          </span>
+                        </h3>
+                      </div>
+                      <p className="text-sm font-medium text-muted-foreground">
+                        {formatCurrency(column.totalValue)}
+                      </p>
+                    </div>
+
+                    <Droppable droppableId={column.stage.id}>
+                      {(provided, snapshot) => (
+                        <div
+                          {...provided.droppableProps}
+                          ref={provided.innerRef}
+                          className={`flex-1 rounded-xl p-2 min-h-[150px] transition-colors ${
+                            snapshot.isDraggingOver ? "bg-muted" : "bg-muted/30"
+                          }`}
+                        >
+                          <div className="space-y-3">
+                            {column.deals.map((deal, index) => (
+                              <Draggable key={deal.id} draggableId={deal.id} index={index}>
+                                {(provided, snapshot) => (
+                                  <div
+                                    ref={provided.innerRef}
+                                    {...provided.draggableProps}
+                                    {...provided.dragHandleProps}
+                                    style={{
+                                      ...provided.draggableProps.style,
+                                    }}
+                                  >
+                                    <Card className={`shadow-sm border border-border/50 ${snapshot.isDragging ? "shadow-lg ring-1 ring-primary/20" : ""}`}>
+                                      <CardContent className="p-4">
+                                        <div className="font-medium mb-1 line-clamp-2">{deal.title}</div>
+                                        <div className="text-lg font-bold text-primary mb-2">
+                                          {formatCurrency(deal.value || 0)}
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                          <span>{deal.company?.name || deal.contact?.firstName || 'No account'}</span>
+                                          <span className="bg-muted px-2 py-0.5 rounded">{deal.probability}%</span>
+                                        </div>
+                                      </CardContent>
+                                    </Card>
+                                  </div>
+                                )}
+                              </Draggable>
+                            ))}
+                            {provided.placeholder}
+                          </div>
+                        </div>
+                      )}
+                    </Droppable>
+                  </div>
+                ))}
+              </div>
+            </DragDropContext>
+          </div>
+        )}
+      </div>
+    </SidebarLayout>
+  );
+}
