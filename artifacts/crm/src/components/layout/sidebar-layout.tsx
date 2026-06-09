@@ -8,6 +8,7 @@ import {
   CircleDollarSign,
   CheckSquare,
   Mail,
+  BarChart2,
   LogOut,
   Menu,
   ChevronLeft,
@@ -42,6 +43,7 @@ const navItems = [
   { name: "Deals", href: "/deals", icon: CircleDollarSign },
   { name: "Tasks", href: "/tasks", icon: CheckSquare },
   { name: "Campaigns", href: "/campaigns", icon: Mail },
+  { name: "Reports", href: "/reports", icon: BarChart2 },
 ];
 
 function getInitialCollapsed(): boolean {

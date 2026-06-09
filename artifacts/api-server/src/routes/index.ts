@@ -12,6 +12,7 @@ import dashboardRouter from "./dashboard";
 import trackingRouter from "./tracking";
 import searchRouter from "./search";
 import notesRouter from "./notes";
+import reportsRouter from "./reports";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use("/dashboard", dashboardRouter);
 router.use("/track", trackingRouter);
 router.use("/search", searchRouter);
 router.use("/notes", notesRouter);
+router.use("/reports", reportsRouter);
 
 export default router;
