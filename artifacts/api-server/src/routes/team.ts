@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, usersTable } from "@workspace/db";
+import { db, usersTable, baUserTable, baSessionTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 import { auth } from "../lib/auth";
@@ -50,34 +50,38 @@ router.post("/add-user", requireAuth, async (req: Request, res: Response) => {
   }
 
   try {
-    await auth.api.signUpEmail({
+    const signUpResult = await auth.api.signUpEmail({
       body: {
         email: email.trim(),
         password,
         name: name?.trim() ?? email.trim(),
       },
     });
+
+    const baUserId = signUpResult?.user?.id ?? null;
+
+    const [dbUser] = await db
+      .insert(usersTable)
+      .values({
+        authId: baUserId,
+        email: email.trim(),
+        name: name?.trim() ?? null,
+      })
+      .onConflictDoUpdate({
+        target: usersTable.email,
+        set: {
+          authId: baUserId,
+          name: name?.trim() ?? null,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+
+    res.status(201).json(dbUser);
   } catch (err) {
     const e = err as { message?: string; status?: number };
-    if (!e.message?.toLowerCase().includes("already")) {
-      res.status(400).json({ error: e.message ?? "Failed to create user" });
-      return;
-    }
+    res.status(400).json({ error: e.message ?? "Failed to create user" });
   }
-
-  const [dbUser] = await db
-    .insert(usersTable)
-    .values({
-      email: email.trim(),
-      name: name?.trim() ?? null,
-    })
-    .onConflictDoUpdate({
-      target: usersTable.email,
-      set: { name: name?.trim() ?? null, updatedAt: new Date() },
-    })
-    .returning();
-
-  res.status(201).json(dbUser);
 });
 
 router.patch(
@@ -140,6 +144,15 @@ router.delete("/:userId", requireAuth, async (req: Request, res: Response) => {
     if (!target) {
       res.status(404).json({ error: "User not found" });
       return;
+    }
+
+    if (target.authId) {
+      await db
+        .delete(baSessionTable)
+        .where(eq(baSessionTable.userId, target.authId));
+      await db
+        .delete(baUserTable)
+        .where(eq(baUserTable.id, target.authId));
     }
 
     await db.delete(usersTable).where(eq(usersTable.id, userId));

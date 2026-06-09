@@ -1,5 +1,5 @@
 import { db, usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import type { Request, Response, NextFunction } from "express";
 import { auth } from "../lib/auth";
 
@@ -28,27 +28,28 @@ export async function requireAuth(
     const [existing] = await db
       .select()
       .from(usersTable)
-      .where(eq(usersTable.email, user.email))
+      .where(
+        or(
+          eq(usersTable.authId, user.id),
+          eq(usersTable.email, user.email),
+        ),
+      )
       .limit(1);
 
     if (existing) {
-      (req as AuthRequest).userId = user.id;
+      if (!existing.authId) {
+        await db
+          .update(usersTable)
+          .set({ authId: user.id, updatedAt: new Date() })
+          .where(eq(usersTable.id, existing.id));
+        existing.authId = user.id;
+      }
+      (req as AuthRequest).userId = existing.id;
       (req as AuthRequest).dbUser = existing;
       return next();
     }
 
-    const [newUser] = await db
-      .insert(usersTable)
-      .values({
-        email: user.email,
-        name: user.name ?? null,
-        avatarUrl: user.image ?? null,
-      })
-      .returning();
-
-    (req as AuthRequest).userId = user.id;
-    (req as AuthRequest).dbUser = newUser;
-    next();
+    res.status(403).json({ error: "Account not provisioned. Contact your administrator." });
   } catch (err) {
     next(err);
   }
