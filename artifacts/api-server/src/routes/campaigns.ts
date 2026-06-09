@@ -14,8 +14,10 @@ function getResend() {
 
 router.get("/", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { status, page = "1", limit = "50" } = req.query as Record<string, string>;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const { status, page = "1", pageSize = "50" } = req.query as Record<string, string>;
+    const ps = parseInt(pageSize);
+    const pg = parseInt(page);
+    const offset = (pg - 1) * ps;
 
     const where = status
       ? eq(emailCampaignsTable.status, status as typeof emailCampaignsTable.$inferSelect["status"])
@@ -35,7 +37,7 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
         .where(where)
         .groupBy(emailCampaignsTable.id)
         .orderBy(desc(emailCampaignsTable.createdAt))
-        .limit(parseInt(limit))
+        .limit(ps)
         .offset(offset),
       db.select({ count: sql<number>`count(*)::int` }).from(emailCampaignsTable).where(where),
     ]);
@@ -53,8 +55,9 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
         },
       })),
       total: count,
-      page: parseInt(page),
-      limit: parseInt(limit),
+      page: pg,
+      pageSize: ps,
+      hasMore: count > pg * ps,
     });
   } catch {
     res.status(500).json({ error: "Failed to list campaigns" });
@@ -63,7 +66,7 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
 
 router.get("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     const [campaign] = await db
       .select()
@@ -129,7 +132,7 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
 
 router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const [existing] = await db.select().from(emailCampaignsTable).where(eq(emailCampaignsTable.id, id)).limit(1);
     if (!existing) {
       res.status(404).json({ error: "Campaign not found" });
@@ -150,7 +153,7 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
 
 router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const [existing] = await db.select().from(emailCampaignsTable).where(eq(emailCampaignsTable.id, id)).limit(1);
     if (!existing) {
       res.status(404).json({ error: "Campaign not found" });
@@ -166,11 +169,12 @@ router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
 
 router.post("/:id/send", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    const { contactIds } = req.body as { contactIds: string[] };
+    const id = req.params.id as string;
+    const { recipientContactIds } = req.body as { recipientContactIds: string[] };
+    const contactIds = recipientContactIds;
 
     if (!contactIds || contactIds.length === 0) {
-      res.status(400).json({ error: "contactIds array is required" });
+      res.status(400).json({ error: "recipientContactIds array is required" });
       return;
     }
 

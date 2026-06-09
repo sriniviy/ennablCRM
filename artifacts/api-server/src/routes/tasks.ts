@@ -8,8 +8,10 @@ const router = Router();
 
 router.get("/", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { filter, contactId, dealId, assigneeId, page = "1", limit = "50" } = req.query as Record<string, string>;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const { filter, contactId, dealId, assigneeId, page = "1", pageSize = "50" } = req.query as Record<string, string>;
+    const ps = parseInt(pageSize);
+    const pg = parseInt(page);
+    const offset = (pg - 1) * ps;
     const now = new Date();
     const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
@@ -49,7 +51,7 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
         .leftJoin(usersTable, eq(tasksTable.assigneeId, usersTable.id))
         .where(where)
         .orderBy(asc(tasksTable.dueDate), desc(tasksTable.createdAt))
-        .limit(parseInt(limit))
+        .limit(ps)
         .offset(offset),
       db.select({ count: sql<number>`count(*)::int` }).from(tasksTable).where(where),
     ]);
@@ -62,8 +64,9 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
         assignee: assignee?.id ? assignee : null,
       })),
       total: count,
-      page: parseInt(page),
-      limit: parseInt(limit),
+      page: pg,
+      pageSize: ps,
+      hasMore: count > pg * ps,
     });
   } catch {
     res.status(500).json({ error: "Failed to list tasks" });
@@ -72,7 +75,7 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
 
 router.get("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const [row] = await db
       .select({
         task: tasksTable,
@@ -142,7 +145,7 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
 
 router.patch("/:id/complete", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { dbUser } = req as AuthRequest;
     const { completed } = req.body as { completed: boolean };
 
@@ -181,7 +184,7 @@ router.patch("/:id/complete", requireAuth, async (req: Request, res: Response) =
 
 router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const [existing] = await db.select().from(tasksTable).where(eq(tasksTable.id, id)).limit(1);
     if (!existing) {
       res.status(404).json({ error: "Task not found" });
@@ -205,7 +208,7 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
 
 router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const [existing] = await db.select().from(tasksTable).where(eq(tasksTable.id, id)).limit(1);
     if (!existing) {
       res.status(404).json({ error: "Task not found" });

@@ -7,8 +7,10 @@ const router = Router();
 
 router.get("/", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { search, page = "1", limit = "50" } = req.query as Record<string, string>;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const { search, page = "1", pageSize = "50" } = req.query as Record<string, string>;
+    const ps = parseInt(pageSize);
+    const pg = parseInt(page);
+    const offset = (pg - 1) * ps;
 
     const where = search ? ilike(companiesTable.name, `%${search}%`) : undefined;
 
@@ -21,21 +23,13 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
         })
         .from(companiesTable)
         .leftJoin(contactsTable, eq(contactsTable.companyId, companiesTable.id))
-        .leftJoin(
-          dealsTable,
-          and(
-            eq(dealsTable.companyId, companiesTable.id),
-          ),
-        )
+        .leftJoin(dealsTable, and(eq(dealsTable.companyId, companiesTable.id)))
         .where(where)
         .groupBy(companiesTable.id)
         .orderBy(desc(companiesTable.createdAt))
-        .limit(parseInt(limit))
+        .limit(ps)
         .offset(offset),
-      db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(companiesTable)
-        .where(where),
+      db.select({ count: sql<number>`count(*)::int` }).from(companiesTable).where(where),
     ]);
 
     res.json({
@@ -45,8 +39,9 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
         openDeals,
       })),
       total: count,
-      page: parseInt(page),
-      limit: parseInt(limit),
+      page: pg,
+      pageSize: ps,
+      hasMore: count > pg * ps,
     });
   } catch {
     res.status(500).json({ error: "Failed to list companies" });
@@ -55,7 +50,7 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
 
 router.get("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     const [company] = await db
       .select()
@@ -68,7 +63,7 @@ router.get("/:id", requireAuth, async (req: Request, res: Response) => {
       return;
     }
 
-    const [contacts, deals, [{ pipelineValue }]] = await Promise.all([
+    const [contacts, deals, [{ openPipelineValue }]] = await Promise.all([
       db
         .select({
           id: contactsTable.id,
@@ -84,14 +79,18 @@ router.get("/:id", requireAuth, async (req: Request, res: Response) => {
       db
         .select({
           deal: dealsTable,
-          stage: { id: dealStagesTable.id, name: dealStagesTable.name, color: dealStagesTable.color },
+          stage: {
+            id: dealStagesTable.id,
+            name: dealStagesTable.name,
+            color: dealStagesTable.color,
+          },
         })
         .from(dealsTable)
         .leftJoin(dealStagesTable, eq(dealsTable.stageId, dealStagesTable.id))
         .where(eq(dealsTable.companyId, id))
         .orderBy(desc(dealsTable.createdAt)),
       db
-        .select({ pipelineValue: sql<number>`coalesce(sum(${dealsTable.value}), 0)::float` })
+        .select({ openPipelineValue: sql<number>`coalesce(sum(${dealsTable.value}), 0)::float` })
         .from(dealsTable)
         .where(eq(dealsTable.companyId, id)),
     ]);
@@ -100,7 +99,7 @@ router.get("/:id", requireAuth, async (req: Request, res: Response) => {
       ...company,
       contacts,
       deals: deals.map(({ deal, stage }) => ({ ...deal, stage })),
-      pipelineValue,
+      openPipelineValue,
     });
   } catch {
     res.status(500).json({ error: "Failed to get company" });
@@ -109,23 +108,36 @@ router.get("/:id", requireAuth, async (req: Request, res: Response) => {
 
 router.post("/", requireAuth, async (req: Request, res: Response) => {
   try {
-    const body = req.body;
+    const body = req.body as {
+      name: string;
+      domain?: string;
+      industry?: string;
+      size?: string;
+      website?: string;
+      phone?: string;
+      address?: string;
+      city?: string;
+      country?: string;
+    };
     if (!body.name) {
       res.status(400).json({ error: "name is required" });
       return;
     }
 
-    const [company] = await db.insert(companiesTable).values({
-      name: body.name,
-      domain: body.domain ?? null,
-      industry: body.industry ?? null,
-      size: body.size ?? null,
-      website: body.website ?? null,
-      phone: body.phone ?? null,
-      address: body.address ?? null,
-      city: body.city ?? null,
-      country: body.country ?? null,
-    }).returning();
+    const [company] = await db
+      .insert(companiesTable)
+      .values({
+        name: body.name,
+        domain: body.domain ?? null,
+        industry: body.industry ?? null,
+        size: body.size ?? null,
+        website: body.website ?? null,
+        phone: body.phone ?? null,
+        address: body.address ?? null,
+        city: body.city ?? null,
+        country: body.country ?? null,
+      })
+      .returning();
 
     res.status(201).json(company);
   } catch {
@@ -135,8 +147,12 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
 
 router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    const [existing] = await db.select().from(companiesTable).where(eq(companiesTable.id, id)).limit(1);
+    const id = req.params.id as string;
+    const [existing] = await db
+      .select()
+      .from(companiesTable)
+      .where(eq(companiesTable.id, id))
+      .limit(1);
     if (!existing) {
       res.status(404).json({ error: "Company not found" });
       return;
@@ -156,8 +172,12 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
 
 router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    const [existing] = await db.select().from(companiesTable).where(eq(companiesTable.id, id)).limit(1);
+    const id = req.params.id as string;
+    const [existing] = await db
+      .select()
+      .from(companiesTable)
+      .where(eq(companiesTable.id, id))
+      .limit(1);
     if (!existing) {
       res.status(404).json({ error: "Company not found" });
       return;

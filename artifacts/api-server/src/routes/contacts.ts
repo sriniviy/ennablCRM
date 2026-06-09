@@ -8,8 +8,10 @@ const router = Router();
 
 router.get("/", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { search, status, companyId, page = "1", limit = "50" } = req.query as Record<string, string>;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const { search, status, companyId, page = "1", pageSize = "50" } = req.query as Record<string, string>;
+    const ps = parseInt(pageSize);
+    const pg = parseInt(page);
+    const offset = (pg - 1) * ps;
 
     const conditions = [];
     if (search) {
@@ -49,7 +51,7 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
         .leftJoin(usersTable, eq(contactsTable.assigneeId, usersTable.id))
         .where(where)
         .orderBy(desc(contactsTable.createdAt))
-        .limit(parseInt(limit))
+        .limit(ps)
         .offset(offset),
       db
         .select({ count: sql<number>`count(*)::int` })
@@ -64,8 +66,9 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
         assignee: assignee?.id ? assignee : null,
       })),
       total: count,
-      page: parseInt(page),
-      limit: parseInt(limit),
+      page: pg,
+      pageSize: ps,
+      hasMore: count > pg * ps,
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to list contacts" });
@@ -131,7 +134,7 @@ router.post("/import", requireAuth, async (req: Request, res: Response) => {
 
 router.get("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const [row] = await db
       .select({
         contact: contactsTable,
@@ -208,7 +211,7 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
 
 router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const body = req.body;
 
     const [existing] = await db.select().from(contactsTable).where(eq(contactsTable.id, id)).limit(1);
@@ -234,7 +237,7 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
 
 router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const [existing] = await db.select().from(contactsTable).where(eq(contactsTable.id, id)).limit(1);
     if (!existing) {
       res.status(404).json({ error: "Contact not found" });

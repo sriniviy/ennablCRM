@@ -1,38 +1,24 @@
 import { Router, type Request, type Response } from "express";
 import { db, dealsTable, dealStagesTable, contactsTable, companiesTable, usersTable } from "@workspace/db";
-import { eq, ilike, and, asc, desc, sql } from "drizzle-orm";
+import { eq, ilike, and, asc, desc } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 import { logActivity } from "../lib/activity";
 
 const router = Router();
 
-router.get("/stages", requireAuth, async (_req: Request, res: Response) => {
-  try {
-    const stages = await db
-      .select()
-      .from(dealStagesTable)
-      .orderBy(asc(dealStagesTable.order));
-    res.json(stages);
-  } catch {
-    res.status(500).json({ error: "Failed to list deal stages" });
-  }
-});
-
 router.get("/", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { stageId, contactId, companyId, assigneeId, search, page = "1", limit = "100" } = req.query as Record<string, string>;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const { search, contactId, companyId, assigneeId } = req.query as Record<string, string>;
 
     const conditions = [];
-    if (stageId) conditions.push(eq(dealsTable.stageId, stageId));
     if (contactId) conditions.push(eq(dealsTable.contactId, contactId));
     if (companyId) conditions.push(eq(dealsTable.companyId, companyId));
     if (assigneeId) conditions.push(eq(dealsTable.assigneeId, assigneeId));
     if (search) conditions.push(ilike(dealsTable.title, `%${search}%`));
-
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
-    const [deals, [{ count }]] = await Promise.all([
+    const [stages, rows] = await Promise.all([
+      db.select().from(dealStagesTable).orderBy(asc(dealStagesTable.order)),
       db
         .select({
           deal: dealsTable,
@@ -48,10 +34,7 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
             lastName: contactsTable.lastName,
             email: contactsTable.email,
           },
-          company: {
-            id: companiesTable.id,
-            name: companiesTable.name,
-          },
+          company: { id: companiesTable.id, name: companiesTable.name },
           assignee: {
             id: usersTable.id,
             name: usersTable.name,
@@ -64,24 +47,32 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
         .leftJoin(companiesTable, eq(dealsTable.companyId, companiesTable.id))
         .leftJoin(usersTable, eq(dealsTable.assigneeId, usersTable.id))
         .where(where)
-        .orderBy(asc(dealsTable.order), desc(dealsTable.createdAt))
-        .limit(parseInt(limit))
-        .offset(offset),
-      db.select({ count: sql<number>`count(*)::int` }).from(dealsTable).where(where),
+        .orderBy(asc(dealsTable.order), desc(dealsTable.createdAt)),
     ]);
 
-    res.json({
-      data: deals.map(({ deal, stage, contact, company, assignee }) => ({
+    const dealMap = new Map<string, object[]>();
+    for (const { deal, stage, contact, company, assignee } of rows) {
+      const key = deal.stageId;
+      if (!dealMap.has(key)) dealMap.set(key, []);
+      dealMap.get(key)!.push({
         ...deal,
         stage: stage?.id ? stage : null,
         contact: contact?.id ? contact : null,
         company: company?.id ? company : null,
         assignee: assignee?.id ? assignee : null,
-      })),
-      total: count,
-      page: parseInt(page),
-      limit: parseInt(limit),
+      });
+    }
+
+    const columns = stages.map((stage) => {
+      const stageDeals = dealMap.get(stage.id) ?? [];
+      const totalValue = (stageDeals as Array<{ value?: number | null }>).reduce(
+        (sum, d) => sum + (Number(d.value) || 0),
+        0,
+      );
+      return { stage, deals: stageDeals, totalValue };
     });
+
+    res.json(columns);
   } catch {
     res.status(500).json({ error: "Failed to list deals" });
   }
@@ -89,14 +80,28 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
 
 router.get("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const [row] = await db
       .select({
         deal: dealsTable,
-        stage: { id: dealStagesTable.id, name: dealStagesTable.name, color: dealStagesTable.color, order: dealStagesTable.order },
-        contact: { id: contactsTable.id, firstName: contactsTable.firstName, lastName: contactsTable.lastName, email: contactsTable.email },
+        stage: {
+          id: dealStagesTable.id,
+          name: dealStagesTable.name,
+          color: dealStagesTable.color,
+          order: dealStagesTable.order,
+        },
+        contact: {
+          id: contactsTable.id,
+          firstName: contactsTable.firstName,
+          lastName: contactsTable.lastName,
+          email: contactsTable.email,
+        },
         company: { id: companiesTable.id, name: companiesTable.name },
-        assignee: { id: usersTable.id, name: usersTable.name, avatarUrl: usersTable.avatarUrl },
+        assignee: {
+          id: usersTable.id,
+          name: usersTable.name,
+          avatarUrl: usersTable.avatarUrl,
+        },
       })
       .from(dealsTable)
       .leftJoin(dealStagesTable, eq(dealsTable.stageId, dealStagesTable.id))
@@ -126,26 +131,40 @@ router.get("/:id", requireAuth, async (req: Request, res: Response) => {
 router.post("/", requireAuth, async (req: Request, res: Response) => {
   try {
     const { dbUser } = req as AuthRequest;
-    const body = req.body;
+    const body = req.body as {
+      title: string;
+      stageId: string;
+      value?: number;
+      currency?: string;
+      probability?: number;
+      closeDate?: string;
+      contactId?: string;
+      companyId?: string;
+      assigneeId?: string;
+      notes?: string;
+    };
 
     if (!body.title || !body.stageId) {
       res.status(400).json({ error: "title and stageId are required" });
       return;
     }
 
-    const [deal] = await db.insert(dealsTable).values({
-      title: body.title,
-      stageId: body.stageId,
-      value: body.value ?? null,
-      currency: body.currency ?? "USD",
-      probability: body.probability ?? 50,
-      closeDate: body.closeDate ? new Date(body.closeDate) : null,
-      contactId: body.contactId ?? null,
-      companyId: body.companyId ?? null,
-      assigneeId: body.assigneeId ?? null,
-      notes: body.notes ?? null,
-      order: 0,
-    }).returning();
+    const [deal] = await db
+      .insert(dealsTable)
+      .values({
+        title: body.title,
+        stageId: body.stageId,
+        value: body.value ?? null,
+        currency: body.currency ?? "USD",
+        probability: body.probability ?? 50,
+        closeDate: body.closeDate ? new Date(body.closeDate) : null,
+        contactId: body.contactId ?? null,
+        companyId: body.companyId ?? null,
+        assigneeId: body.assigneeId ?? null,
+        notes: body.notes ?? null,
+        order: 0,
+      })
+      .returning();
 
     await logActivity({
       type: "DEAL_CREATED",
@@ -163,11 +182,15 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
 
 router.patch("/:id/move", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { dbUser } = req as AuthRequest;
-    const { stageId, order } = req.body;
+    const { stageId, order } = req.body as { stageId: string; order?: number };
 
-    const [existing] = await db.select().from(dealsTable).where(eq(dealsTable.id, id)).limit(1);
+    const [existing] = await db
+      .select()
+      .from(dealsTable)
+      .where(eq(dealsTable.id, id))
+      .limit(1);
     if (!existing) {
       res.status(404).json({ error: "Deal not found" });
       return;
@@ -182,7 +205,11 @@ router.patch("/:id/move", requireAuth, async (req: Request, res: Response) => {
       .returning();
 
     if (oldStageId !== stageId) {
-      const [newStage] = await db.select().from(dealStagesTable).where(eq(dealStagesTable.id, stageId)).limit(1);
+      const [newStage] = await db
+        .select()
+        .from(dealStagesTable)
+        .where(eq(dealStagesTable.id, stageId))
+        .limit(1);
       await logActivity({
         type: "DEAL_MOVED",
         title: `Moved deal "${existing.title}" to ${newStage?.name ?? stageId}`,
@@ -199,15 +226,19 @@ router.patch("/:id/move", requireAuth, async (req: Request, res: Response) => {
 
 router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    const [existing] = await db.select().from(dealsTable).where(eq(dealsTable.id, id)).limit(1);
+    const id = req.params.id as string;
+    const [existing] = await db
+      .select()
+      .from(dealsTable)
+      .where(eq(dealsTable.id, id))
+      .limit(1);
     if (!existing) {
       res.status(404).json({ error: "Deal not found" });
       return;
     }
 
-    const body = { ...req.body };
-    if (body.closeDate) body.closeDate = new Date(body.closeDate);
+    const body = { ...req.body } as Record<string, unknown>;
+    if (body.closeDate) body.closeDate = new Date(body.closeDate as string);
 
     const [updated] = await db
       .update(dealsTable)
@@ -223,8 +254,12 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
 
 router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    const [existing] = await db.select().from(dealsTable).where(eq(dealsTable.id, id)).limit(1);
+    const id = req.params.id as string;
+    const [existing] = await db
+      .select()
+      .from(dealsTable)
+      .where(eq(dealsTable.id, id))
+      .limit(1);
     if (!existing) {
       res.status(404).json({ error: "Deal not found" });
       return;
