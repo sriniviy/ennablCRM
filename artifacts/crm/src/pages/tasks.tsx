@@ -1,5 +1,5 @@
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useListTasks, useCompleteTask, getListTasksQueryKey, type TaskWithRelations } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -43,6 +43,16 @@ export function TasksPage() {
 
   const openNew = () => { setEditTask(undefined); setDialogOpen(true); };
   const openEdit = (t: TaskWithRelations) => { setEditTask(t); setDialogOpen(true); };
+
+  useEffect(() => {
+    if (!data?.data) return;
+    const params = new URLSearchParams(window.location.search);
+    const openId = params.get("open");
+    if (!openId) return;
+    const task = data.data.find((t) => t.id === openId);
+    if (task) openEdit(task);
+    window.history.replaceState({}, "", window.location.pathname);
+  }, [data?.data]);
 
   const getDueBadge = (task: TaskWithRelations) => {
     if (!task.dueDate) return null;

@@ -176,14 +176,14 @@ export function GlobalSearch({ collapsed }: GlobalSearchProps) {
             </>
           )}
 
-          {data && data.deals.length > 0 && (
+          {data && debouncedQuery.trim().length > 0 && data.deals.length > 0 && (
             <>
               <CommandGroup heading="Deals">
                 {data.deals.map((d) => (
                   <CommandItem
                     key={d.id}
                     value={`deal-${d.id}-${d.title}`}
-                    onSelect={() => go(`/deals`)}
+                    onSelect={() => go(`/deals?open=${d.id}`)}
                     className="cursor-pointer"
                   >
                     <CircleDollarSign className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -195,13 +195,13 @@ export function GlobalSearch({ collapsed }: GlobalSearchProps) {
             </>
           )}
 
-          {data && data.tasks.length > 0 && (
+          {data && debouncedQuery.trim().length > 0 && data.tasks.length > 0 && (
             <CommandGroup heading="Tasks">
               {data.tasks.map((t) => (
                 <CommandItem
                   key={t.id}
                   value={`task-${t.id}-${t.title}`}
-                  onSelect={() => go(`/tasks`)}
+                  onSelect={() => go(`/tasks?open=${t.id}`)}
                   className="cursor-pointer"
                 >
                   <CheckSquare className="h-4 w-4 text-muted-foreground shrink-0" />

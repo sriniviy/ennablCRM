@@ -1,5 +1,5 @@
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useListDeals, useMoveDeal, getListDealsQueryKey, type PipelineColumn, type DealWithRelations } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -60,6 +60,16 @@ export function DealsPage() {
     setDefaultStageId(undefined);
     setDialogOpen(true);
   };
+
+  useEffect(() => {
+    if (!columns) return;
+    const params = new URLSearchParams(window.location.search);
+    const openId = params.get("open");
+    if (!openId) return;
+    const deal = columns.flatMap((c) => c.deals).find((d) => d.id === openId);
+    if (deal) openEdit(deal as DealWithRelations);
+    window.history.replaceState({}, "", window.location.pathname);
+  }, [columns]);
 
   return (
     <SidebarLayout>
