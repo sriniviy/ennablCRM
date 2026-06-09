@@ -1,7 +1,6 @@
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
-import { useRef } from "react";
-import { useListDeals, useMoveDeal, getListDealsQueryKey } from "@workspace/api-client-react";
-import type { PipelineColumn } from "@workspace/api-client-react";
+import { useRef, useState } from "react";
+import { useListDeals, useMoveDeal, getListDealsQueryKey, type PipelineColumn, type DealWithRelations } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,28 +8,28 @@ import { Plus } from "lucide-react";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { formatCurrency } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
+import { DealDialog } from "@/components/deals/deal-dialog";
 
 export function DealsPage() {
   const { data: columns, isLoading: dealsLoading } = useListDeals();
   const moveDeal = useMoveDeal();
   const queryClient = useQueryClient();
 
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editDeal, setEditDeal] = useState<DealWithRelations | undefined>();
+  const [defaultStageId, setDefaultStageId] = useState<string | undefined>();
+
   const moveDealMutate = useRef(moveDeal.mutate);
   moveDealMutate.current = moveDeal.mutate;
 
   const handleDragEnd = (result: DropResult) => {
     const { source, destination, draggableId } = result;
-
     if (!destination) return;
-    if (
-      source.droppableId === destination.droppableId &&
-      source.index === destination.index
-    ) return;
+    if (source.droppableId === destination.droppableId && source.index === destination.index) return;
 
     const destStageId = destination.droppableId;
     const destIndex = destination.index;
 
-    // Optimistic update — move deal between PipelineColumn[] entries
     queryClient.setQueryData(getListDealsQueryKey(), (old: PipelineColumn[] | undefined) => {
       if (!old) return old;
       const deal = old.flatMap(c => c.deals).find(d => d.id === draggableId);
@@ -47,10 +46,19 @@ export function DealsPage() {
       });
     });
 
-    moveDealMutate.current({
-      id: draggableId,
-      data: { stageId: destStageId, order: destIndex }
-    });
+    moveDealMutate.current({ id: draggableId, data: { stageId: destStageId, order: destIndex } });
+  };
+
+  const openNew = (stageId?: string) => {
+    setEditDeal(undefined);
+    setDefaultStageId(stageId);
+    setDialogOpen(true);
+  };
+
+  const openEdit = (deal: DealWithRelations) => {
+    setEditDeal(deal);
+    setDefaultStageId(undefined);
+    setDialogOpen(true);
   };
 
   return (
@@ -61,7 +69,7 @@ export function DealsPage() {
             <h1 className="text-3xl font-bold tracking-tight">Deals Pipeline</h1>
             <p className="text-muted-foreground">Manage and track your active opportunities.</p>
           </div>
-          <Button data-testid="btn-new-deal">
+          <Button data-testid="btn-new-deal" onClick={() => openNew()}>
             <Plus className="mr-2 h-4 w-4" /> Add Deal
           </Button>
         </div>
@@ -85,15 +93,21 @@ export function DealsPage() {
                     <div className="mb-4">
                       <div className="flex items-center justify-between mb-1">
                         <h3 className="font-semibold text-sm flex items-center gap-2">
-                          <span 
-                            className="w-3 h-3 rounded-full inline-block" 
-                            style={{ backgroundColor: column.stage.color || 'var(--primary)' }}
+                          <span
+                            className="w-3 h-3 rounded-full inline-block"
+                            style={{ backgroundColor: column.stage.color || "var(--primary)" }}
                           />
                           {column.stage.name}
-                          <span className="text-muted-foreground font-normal ml-1">
-                            ({column.deals.length})
-                          </span>
+                          <span className="text-muted-foreground font-normal ml-1">({column.deals.length})</span>
                         </h3>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                          onClick={() => openNew(column.stage.id)}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
                       </div>
                       <p className="text-sm font-medium text-muted-foreground">
                         {formatCurrency(column.totalValue)}
@@ -105,9 +119,7 @@ export function DealsPage() {
                         <div
                           {...provided.droppableProps}
                           ref={provided.innerRef}
-                          className={`flex-1 rounded-xl p-2 min-h-[150px] transition-colors ${
-                            snapshot.isDraggingOver ? "bg-muted" : "bg-muted/30"
-                          }`}
+                          className={`flex-1 rounded-xl p-2 min-h-[150px] transition-colors ${snapshot.isDraggingOver ? "bg-muted" : "bg-muted/30"}`}
                         >
                           <div className="space-y-3">
                             {column.deals.map((deal, index) => (
@@ -117,18 +129,17 @@ export function DealsPage() {
                                     ref={provided.innerRef}
                                     {...provided.draggableProps}
                                     {...provided.dragHandleProps}
-                                    style={{
-                                      ...provided.draggableProps.style,
-                                    }}
+                                    style={{ ...provided.draggableProps.style }}
+                                    onClick={() => openEdit(deal)}
                                   >
-                                    <Card className={`shadow-sm border border-border/50 ${snapshot.isDragging ? "shadow-lg ring-1 ring-primary/20" : ""}`}>
+                                    <Card className={`shadow-sm border border-border/50 cursor-pointer hover:shadow-md transition-shadow ${snapshot.isDragging ? "shadow-lg ring-1 ring-primary/20" : ""}`}>
                                       <CardContent className="p-4">
                                         <div className="font-medium mb-1 line-clamp-2">{deal.title}</div>
                                         <div className="text-lg font-bold text-primary mb-2">
                                           {formatCurrency(deal.value || 0)}
                                         </div>
                                         <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                          <span>{deal.company?.name || deal.contact?.firstName || 'No account'}</span>
+                                          <span>{deal.company?.name || deal.contact?.firstName || "No account"}</span>
                                           <span className="bg-muted px-2 py-0.5 rounded">{deal.probability}%</span>
                                         </div>
                                       </CardContent>
@@ -149,6 +160,8 @@ export function DealsPage() {
           </div>
         )}
       </div>
+
+      <DealDialog open={dialogOpen} onOpenChange={setDialogOpen} deal={editDeal} defaultStageId={defaultStageId} />
     </SidebarLayout>
   );
 }

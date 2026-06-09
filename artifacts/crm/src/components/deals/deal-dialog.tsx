@@ -1,0 +1,189 @@
+import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useCreateDeal, useUpdateDeal, useDeleteDeal,
+  useListDealStages, useListContacts, useListCompanies,
+  getListDealsQueryKey,
+  type DealWithRelations,
+} from "@workspace/api-client-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Trash2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+
+interface DealDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  deal?: DealWithRelations;
+  defaultStageId?: string;
+}
+
+export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDialogProps) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const isEdit = !!deal;
+
+  const [title, setTitle] = useState("");
+  const [value, setValue] = useState("");
+  const [probability, setProbability] = useState("50");
+  const [closeDate, setCloseDate] = useState("");
+  const [stageId, setStageId] = useState("");
+  const [contactId, setContactId] = useState("");
+  const [companyId, setCompanyId] = useState("");
+  const [notes, setNotes] = useState("");
+  const [showDelete, setShowDelete] = useState(false);
+
+  const { data: stages } = useListDealStages();
+  const { data: contacts } = useListContacts({ page: 1, pageSize: 200 });
+  const { data: companies } = useListCompanies({ page: 1, pageSize: 200 });
+  const create = useCreateDeal();
+  const update = useUpdateDeal();
+  const remove = useDeleteDeal();
+
+  useEffect(() => {
+    if (open) {
+      setTitle(deal?.title ?? "");
+      setValue(deal?.value != null ? String(deal.value) : "");
+      setProbability(deal?.probability != null ? String(deal.probability) : "50");
+      setCloseDate(deal?.closeDate ? deal.closeDate.split("T")[0] : "");
+      setStageId(deal?.stageId ?? defaultStageId ?? "");
+      setContactId(deal?.contact?.id ?? "");
+      setCompanyId(deal?.company?.id ?? "");
+      setNotes(deal?.notes ?? "");
+    }
+  }, [open, deal, defaultStageId]);
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: getListDealsQueryKey() });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stageId) {
+      toast({ title: "Stage required", description: "Please select a pipeline stage.", variant: "destructive" });
+      return;
+    }
+    const data = {
+      title,
+      value: value ? parseFloat(value) : undefined,
+      probability: probability ? parseInt(probability) : undefined,
+      closeDate: closeDate || undefined,
+      stageId,
+      contactId: contactId || undefined,
+      companyId: companyId || undefined,
+      notes: notes || undefined,
+    };
+    if (isEdit) {
+      update.mutate({ id: deal.id, data }, {
+        onSuccess: () => { toast({ title: "Deal updated" }); invalidate(); onOpenChange(false); },
+        onError: () => toast({ title: "Error", description: "Failed to update deal", variant: "destructive" }),
+      });
+    } else {
+      create.mutate({ data }, {
+        onSuccess: () => { toast({ title: "Deal created" }); invalidate(); onOpenChange(false); },
+        onError: () => toast({ title: "Error", description: "Failed to create deal", variant: "destructive" }),
+      });
+    }
+  };
+
+  const handleDelete = () => {
+    remove.mutate({ id: deal!.id }, {
+      onSuccess: () => { toast({ title: "Deal deleted" }); invalidate(); onOpenChange(false); },
+      onError: () => toast({ title: "Error", description: "Failed to delete deal", variant: "destructive" }),
+    });
+  };
+
+  const isPending = create.isPending || update.isPending;
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>{isEdit ? "Edit Deal" : "New Deal"}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="d-title">Deal Title *</Label>
+              <Input id="d-title" value={title} onChange={e => setTitle(e.target.value)} required />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Stage *</Label>
+              <Select value={stageId || "none"} onValueChange={v => setStageId(v === "none" ? "" : v)}>
+                <SelectTrigger><SelectValue placeholder="Select stage…" /></SelectTrigger>
+                <SelectContent>
+                  {stages?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="d-value">Value ($)</Label>
+                <Input id="d-value" type="number" min="0" step="0.01" value={value} onChange={e => setValue(e.target.value)} placeholder="0.00" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="d-prob">Probability (%)</Label>
+                <Input id="d-prob" type="number" min="0" max="100" value={probability} onChange={e => setProbability(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="d-close">Close Date</Label>
+              <Input id="d-close" type="date" value={closeDate} onChange={e => setCloseDate(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Contact</Label>
+                <Select value={contactId || "none"} onValueChange={v => setContactId(v === "none" ? "" : v)}>
+                  <SelectTrigger><SelectValue placeholder="No contact" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No contact</SelectItem>
+                    {contacts?.data?.map(c => <SelectItem key={c.id} value={c.id}>{c.firstName} {c.lastName}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Company</Label>
+                <Select value={companyId || "none"} onValueChange={v => setCompanyId(v === "none" ? "" : v)}>
+                  <SelectTrigger><SelectValue placeholder="No company" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No company</SelectItem>
+                    {companies?.data?.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="d-notes">Notes</Label>
+              <Textarea id="d-notes" value={notes} onChange={e => setNotes(e.target.value)} rows={2} />
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0">
+              {isEdit && (
+                <Button type="button" variant="destructive" size="icon" className="mr-auto" onClick={() => setShowDelete(true)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <Button type="submit" disabled={isPending}>{isPending ? "Saving…" : isEdit ? "Save Changes" : "Create Deal"}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={showDelete} onOpenChange={setShowDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete deal?</AlertDialogTitle>
+            <AlertDialogDescription>This will permanently delete "{deal?.title}".</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}

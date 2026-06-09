@@ -8,7 +8,7 @@ const router = Router();
 
 router.get("/", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { search, status, companyId, page = "1", pageSize = "50" } = req.query as Record<string, string>;
+    const { search, status, companyId, tag, page = "1", pageSize = "50" } = req.query as Record<string, string>;
     const ps = parseInt(pageSize);
     const pg = parseInt(page);
     const offset = (pg - 1) * ps;
@@ -28,6 +28,9 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
     }
     if (companyId) {
       conditions.push(eq(contactsTable.companyId, companyId));
+    }
+    if (tag) {
+      conditions.push(sql`${contactsTable.tags} @> ARRAY[${tag}]::text[]`);
     }
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
