@@ -1,10 +1,11 @@
 import { useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useImportContacts, getListContactsQueryKey } from "@workspace/api-client-react";
+import { importContacts, getListContactsQueryKey } from "@workspace/api-client-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Progress } from "@/components/ui/progress";
 import { Upload, AlertCircle, CheckCircle2, ChevronDown, ChevronRight, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -22,7 +23,7 @@ const CONTACT_FIELDS = [
   { value: "notes", label: "Notes" },
 ];
 
-type Step = "upload" | "map" | "done";
+type Step = "upload" | "map" | "importing" | "done";
 
 interface SkippedRow {
   row: number;
@@ -33,6 +34,8 @@ interface ImportResult {
   imported: number;
   skipped: SkippedRow[];
 }
+
+const BATCH_SIZE = 100;
 
 export function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
   const qc = useQueryClient();
@@ -45,8 +48,7 @@ export function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [result, setResult] = useState<ImportResult | null>(null);
   const [skippedOpen, setSkippedOpen] = useState(false);
-
-  const importMutation = useImportContacts();
+  const [importProgress, setImportProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
 
   const parseCSV = (text: string) => {
     const lines = text.trim().split(/\r?\n/);
@@ -113,21 +115,36 @@ export function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
     reader.readAsText(file);
   };
 
-  const handleImport = () => {
+  const handleImport = async () => {
     const activeMapping: Record<string, string> = {};
     for (const [col, field] of Object.entries(mapping)) {
       if (field && field !== "skip") activeMapping[col] = field;
     }
 
-    importMutation.mutate({ data: { rows, mapping: activeMapping } }, {
-      onSuccess: (data) => {
-        setResult(data as ImportResult);
-        setSkippedOpen(false);
-        setStep("done");
-        qc.invalidateQueries({ queryKey: getListContactsQueryKey() });
-      },
-      onError: () => toast({ title: "Import failed", description: "Failed to import contacts.", variant: "destructive" }),
-    });
+    const total = rows.length;
+    setImportProgress({ done: 0, total });
+    setStep("importing");
+
+    let totalImported = 0;
+    const allSkipped: SkippedRow[] = [];
+
+    try {
+      for (let offset = 0; offset < total; offset += BATCH_SIZE) {
+        const batch = rows.slice(offset, offset + BATCH_SIZE);
+        const data = await importContacts({ rows: batch, mapping: activeMapping });
+        totalImported += data.imported;
+        allSkipped.push(...(data.skipped ?? []));
+        setImportProgress({ done: Math.min(offset + BATCH_SIZE, total), total });
+      }
+
+      setResult({ imported: totalImported, skipped: allSkipped });
+      setSkippedOpen(false);
+      setStep("done");
+      qc.invalidateQueries({ queryKey: getListContactsQueryKey() });
+    } catch {
+      setStep("map");
+      toast({ title: "Import failed", description: "Failed to import contacts.", variant: "destructive" });
+    }
   };
 
   const handleClose = () => {
@@ -139,6 +156,7 @@ export function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
       setMapping({});
       setResult(null);
       setSkippedOpen(false);
+      setImportProgress({ done: 0, total: 0 });
       if (fileRef.current) fileRef.current.value = "";
     }, 300);
   };
@@ -173,6 +191,7 @@ export function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
   };
 
   const previewRows = rows.slice(0, 3);
+  const progressPct = importProgress.total > 0 ? Math.round((importProgress.done / importProgress.total) * 100) : 0;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -263,6 +282,21 @@ export function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
           </div>
         )}
 
+        {step === "importing" && (
+          <div className="py-8 space-y-5">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Importing contacts…</span>
+                <span className="font-medium tabular-nums">
+                  {importProgress.done} / {importProgress.total} rows
+                </span>
+              </div>
+              <Progress value={progressPct} className="h-3" />
+              <p className="text-xs text-muted-foreground text-right">{progressPct}% complete</p>
+            </div>
+          </div>
+        )}
+
         {step === "done" && result && (
           <div className="py-6 space-y-4">
             <div className="flex items-start gap-3">
@@ -327,11 +361,14 @@ export function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
               <Button variant="outline" onClick={() => setStep("upload")}>Back</Button>
               <Button
                 onClick={handleImport}
-                disabled={importMutation.isPending || !Object.values(mapping).some(v => v && v !== "skip")}
+                disabled={!Object.values(mapping).some(v => v && v !== "skip")}
               >
-                {importMutation.isPending ? "Importing…" : `Import ${rows.length} rows`}
+                Import {rows.length} rows
               </Button>
             </>
+          )}
+          {step === "importing" && (
+            <Button variant="outline" disabled>Importing…</Button>
           )}
           {step === "done" && <Button onClick={handleClose}>Done</Button>}
         </DialogFooter>
