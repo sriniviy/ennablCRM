@@ -7,8 +7,10 @@ const router = Router();
 
 router.get("/", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { contactId, dealId, companyId, type, page = "1", limit = "50" } = req.query as Record<string, string>;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const { contactId, dealId, companyId, type, page = "1", pageSize = "50" } = req.query as Record<string, string>;
+    const ps = parseInt(pageSize);
+    const pg = parseInt(page);
+    const offset = (pg - 1) * ps;
 
     const conditions = [];
     if (contactId) conditions.push(eq(activitiesTable.contactId, contactId));
@@ -32,7 +34,7 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
         .leftJoin(dealsTable, eq(activitiesTable.dealId, dealsTable.id))
         .where(where)
         .orderBy(desc(activitiesTable.createdAt))
-        .limit(parseInt(limit))
+        .limit(ps)
         .offset(offset),
       db.select({ count: sql<number>`count(*)::int` }).from(activitiesTable).where(where),
     ]);
@@ -45,8 +47,9 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
         deal: deal?.id ? deal : null,
       })),
       total: count,
-      page: parseInt(page),
-      limit: parseInt(limit),
+      page: pg,
+      pageSize: ps,
+      hasMore: count > pg * ps,
     });
   } catch {
     res.status(500).json({ error: "Failed to list activities" });

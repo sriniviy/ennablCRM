@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { db, contactsTable, companiesTable, usersTable } from "@workspace/db";
+import { db, contactsTable, companiesTable, usersTable, dealsTable, dealStagesTable, tasksTable, activitiesTable } from "@workspace/db";
 import { eq, ilike, and, or, sql, asc, desc, isNotNull } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 import { logActivity } from "../lib/activity";
@@ -145,7 +145,7 @@ router.post("/import", requireAuth, async (req: Request, res: Response) => {
       });
     }
 
-    res.status(201).json({ created, skipped, errors });
+    res.status(200).json({ created, skipped, errors });
   } catch {
     res.status(500).json({ error: "Failed to import contacts" });
   }
@@ -181,10 +181,45 @@ router.get("/:id", requireAuth, async (req: Request, res: Response) => {
       return;
     }
 
+    const [deals, tasks, activities] = await Promise.all([
+      db
+        .select({
+          deal: dealsTable,
+          stage: { id: dealStagesTable.id, name: dealStagesTable.name, color: dealStagesTable.color },
+        })
+        .from(dealsTable)
+        .leftJoin(dealStagesTable, eq(dealsTable.stageId, dealStagesTable.id))
+        .where(eq(dealsTable.contactId, id))
+        .orderBy(desc(dealsTable.createdAt))
+        .limit(20),
+      db
+        .select()
+        .from(tasksTable)
+        .where(eq(tasksTable.contactId, id))
+        .orderBy(asc(tasksTable.dueDate), desc(tasksTable.createdAt))
+        .limit(20),
+      db
+        .select({
+          activity: activitiesTable,
+          user: { id: usersTable.id, name: usersTable.name, avatarUrl: usersTable.avatarUrl },
+        })
+        .from(activitiesTable)
+        .leftJoin(usersTable, eq(activitiesTable.userId, usersTable.id))
+        .where(eq(activitiesTable.contactId, id))
+        .orderBy(desc(activitiesTable.createdAt))
+        .limit(50),
+    ]);
+
     res.json({
       ...row.contact,
       company: row.company?.id ? row.company : null,
       assignee: row.assignee?.id ? row.assignee : null,
+      deals: deals.map(({ deal, stage }) => ({ ...deal, stage })),
+      tasks,
+      activities: activities.map(({ activity, user }) => ({
+        ...activity,
+        user: user?.id ? user : null,
+      })),
     });
   } catch {
     res.status(500).json({ error: "Failed to get contact" });

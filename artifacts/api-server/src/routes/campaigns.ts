@@ -216,11 +216,19 @@ router.post("/:id/send", requireAuth, async (req: Request, res: Response) => {
     for (const contact of validContacts) {
       if (!contact.email) continue;
 
-      const trackingPixelUrl = `${process.env.API_BASE_URL ?? ""}/api/track/open/${id}?cid=${contact.id}`;
-      const htmlWithTracking = campaign.htmlContent.replace(
-        "</body>",
-        `<img src="${trackingPixelUrl}" width="1" height="1" style="display:none" alt="" /></body>`,
-      );
+      const base = process.env.API_BASE_URL ?? "";
+      const trackingPixelUrl = `${base}/api/track/open/${id}?cid=${contact.id}`;
+
+      const htmlWithTracking = campaign.htmlContent
+        .replace(
+          /href="(https?:\/\/[^"]+)"/gi,
+          (_match: string, url: string) =>
+            `href="${base}/api/track/click/${id}?cid=${contact.id}&url=${encodeURIComponent(url)}"`,
+        )
+        .replace(
+          "</body>",
+          `<img src="${trackingPixelUrl}" width="1" height="1" style="display:none" alt="" /></body>`,
+        );
 
       if (resend) {
         try {
