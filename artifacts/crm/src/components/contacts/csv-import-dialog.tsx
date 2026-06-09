@@ -49,6 +49,7 @@ export function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [skippedOpen, setSkippedOpen] = useState(false);
   const [importProgress, setImportProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
+  const cancelledRef = useRef(false);
 
   const parseCSV = (text: string) => {
     const lines = text.trim().split(/\r?\n/);
@@ -122,6 +123,7 @@ export function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
     }
 
     const total = rows.length;
+    cancelledRef.current = false;
     setImportProgress({ done: 0, total });
     setStep("importing");
 
@@ -130,6 +132,20 @@ export function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
 
     try {
       for (let offset = 0; offset < total; offset += BATCH_SIZE) {
+        if (cancelledRef.current) {
+          if (totalImported > 0) {
+            qc.invalidateQueries({ queryKey: getListContactsQueryKey() });
+            toast({
+              title: "Import cancelled",
+              description: `${totalImported} row${totalImported === 1 ? "" : "s"} already imported have been saved.`,
+            });
+          } else {
+            toast({ title: "Import cancelled", description: "No rows were imported." });
+          }
+          setStep("map");
+          return;
+        }
+
         const batch = rows.slice(offset, offset + BATCH_SIZE);
         const data = await importContacts({ rows: batch, mapping: activeMapping });
         totalImported += data.imported;
@@ -145,6 +161,10 @@ export function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
       setStep("map");
       toast({ title: "Import failed", description: "Failed to import contacts.", variant: "destructive" });
     }
+  };
+
+  const handleCancelImport = () => {
+    cancelledRef.current = true;
   };
 
   const handleClose = () => {
@@ -368,7 +388,7 @@ export function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
             </>
           )}
           {step === "importing" && (
-            <Button variant="outline" disabled>Importing…</Button>
+            <Button variant="outline" onClick={handleCancelImport}>Cancel import</Button>
           )}
           {step === "done" && <Button onClick={handleClose}>Done</Button>}
         </DialogFooter>
