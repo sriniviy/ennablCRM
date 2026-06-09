@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { ThemeProvider } from "@/hooks/use-theme";
 import { ClerkProvider, SignIn, SignUp, Show, useClerk, useAuth, RedirectToSignIn } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
@@ -223,9 +224,11 @@ function ClerkProviderWithRoutes() {
 
 function App() {
   return (
-    <WouterRouter base={basePath}>
-      <ClerkProviderWithRoutes />
-    </WouterRouter>
+    <ThemeProvider>
+      <WouterRouter base={basePath}>
+        <ClerkProviderWithRoutes />
+      </WouterRouter>
+    </ThemeProvider>
   );
 }
 
