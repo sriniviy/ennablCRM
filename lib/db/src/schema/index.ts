@@ -8,3 +8,4 @@ export * from "./tasks";
 export * from "./activities";
 export * from "./campaigns";
 export * from "./notes";
+export * from "./sequences";

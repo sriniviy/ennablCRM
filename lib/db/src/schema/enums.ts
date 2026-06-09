@@ -39,6 +39,16 @@ export const activityTypeEnum = pgEnum("activity_type", [
   "TASK_COMPLETED",
   "CONTACT_CREATED",
   "MEETING",
+  "SEQUENCE_ENROLLED",
+  "SEQUENCE_STEP_SENT",
+  "SEQUENCE_UNENROLLED",
+]);
+
+export const enrollmentStatusEnum = pgEnum("enrollment_status", [
+  "ACTIVE",
+  "PAUSED",
+  "COMPLETED",
+  "UNENROLLED",
 ]);
 
 export const campaignStatusEnum = pgEnum("campaign_status", [

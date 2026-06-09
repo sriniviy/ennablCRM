@@ -36,11 +36,16 @@ export function CampaignsPage() {
             <h1 className="text-3xl font-bold tracking-tight">Campaigns</h1>
             <p className="text-muted-foreground">Engage your audience with email campaigns.</p>
           </div>
-          <Button asChild data-testid="btn-new-campaign">
-            <Link href="/campaigns/new">
-              <Plus className="mr-2 h-4 w-4" /> Create Campaign
-            </Link>
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" asChild>
+              <Link href="/sequences">Sequences</Link>
+            </Button>
+            <Button asChild data-testid="btn-new-campaign">
+              <Link href="/campaigns/new">
+                <Plus className="mr-2 h-4 w-4" /> Create Campaign
+              </Link>
+            </Button>
+          </div>
         </div>
 
         <div className="rounded-md border bg-card">
