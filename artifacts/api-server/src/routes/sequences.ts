@@ -251,6 +251,41 @@ router.delete(
   },
 );
 
+router.post(
+  "/:id/steps/reorder",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const { orderedIds } = req.body as { orderedIds?: string[] };
+      if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+        res.status(400).json({ error: "orderedIds array required" });
+        return;
+      }
+      await db.transaction(async (tx) => {
+        for (let i = 0; i < orderedIds.length; i++) {
+          await tx
+            .update(sequenceStepsTable)
+            .set({ stepOrder: i })
+            .where(
+              and(
+                eq(sequenceStepsTable.id, orderedIds[i]),
+                eq(sequenceStepsTable.sequenceId, req.params.id),
+              ),
+            );
+        }
+      });
+      const steps = await db
+        .select()
+        .from(sequenceStepsTable)
+        .where(eq(sequenceStepsTable.sequenceId, req.params.id))
+        .orderBy(asc(sequenceStepsTable.stepOrder));
+      res.json(steps);
+    } catch {
+      res.status(500).json({ error: "Failed to reorder steps" });
+    }
+  },
+);
+
 // ─── Enroll / Unenroll ───────────────────────────────────────────────────────
 
 router.post(
@@ -394,10 +429,45 @@ router.delete(
 
 // ─── Scheduled sender (runs every 60s) ───────────────────────────────────────
 
+// Sentinel: push nextSendAt 10 min into the future before processing to claim
+// the row and prevent double-processing if the interval fires again before we finish.
+const CLAIM_WINDOW_MS = 10 * 60 * 1000;
+
 export async function runSequenceSender() {
   const resend = getResend();
 
-  const due = await db
+  // Require Resend to be configured; without it we must not advance state.
+  if (!resend) return;
+
+  const now = new Date();
+
+  // Atomically claim due rows by bumping nextSendAt forward before processing.
+  const claimedIds: string[] = await db.transaction(async (tx) => {
+    const due = await tx
+      .select({ id: sequenceEnrollmentsTable.id })
+      .from(sequenceEnrollmentsTable)
+      .where(
+        and(
+          eq(sequenceEnrollmentsTable.status, "ACTIVE"),
+          lte(sequenceEnrollmentsTable.nextSendAt, now),
+        ),
+      )
+      .limit(50);
+
+    const ids = due.map((r) => r.id);
+    if (ids.length === 0) return [];
+
+    await tx
+      .update(sequenceEnrollmentsTable)
+      .set({ nextSendAt: new Date(now.getTime() + CLAIM_WINDOW_MS) })
+      .where(inArray(sequenceEnrollmentsTable.id, ids));
+
+    return ids;
+  });
+
+  if (claimedIds.length === 0) return;
+
+  const claimed = await db
     .select({
       enrollment: sequenceEnrollmentsTable,
       contactEmail: contactsTable.email,
@@ -409,15 +479,9 @@ export async function runSequenceSender() {
       contactsTable,
       eq(contactsTable.id, sequenceEnrollmentsTable.contactId),
     )
-    .where(
-      and(
-        eq(sequenceEnrollmentsTable.status, "ACTIVE"),
-        lte(sequenceEnrollmentsTable.nextSendAt, new Date()),
-      ),
-    )
-    .limit(100);
+    .where(inArray(sequenceEnrollmentsTable.id, claimedIds));
 
-  for (const { enrollment, contactEmail, contactFirstName, contactLastName } of due) {
+  for (const { enrollment, contactEmail, contactFirstName, contactLastName } of claimed) {
     if (!contactEmail) continue;
 
     const steps = await db
@@ -426,13 +490,19 @@ export async function runSequenceSender() {
       .where(eq(sequenceStepsTable.sequenceId, enrollment.sequenceId))
       .orderBy(asc(sequenceStepsTable.stepOrder));
 
-    if (steps.length === 0) continue;
+    if (steps.length === 0) {
+      await db
+        .update(sequenceEnrollmentsTable)
+        .set({ status: "COMPLETED", completedAt: new Date(), nextSendAt: null })
+        .where(eq(sequenceEnrollmentsTable.id, enrollment.id));
+      continue;
+    }
 
     const step = steps[enrollment.currentStep];
     if (!step) {
       await db
         .update(sequenceEnrollmentsTable)
-        .set({ status: "COMPLETED", completedAt: new Date() })
+        .set({ status: "COMPLETED", completedAt: new Date(), nextSendAt: null })
         .where(eq(sequenceEnrollmentsTable.id, enrollment.id));
       continue;
     }
@@ -446,22 +516,27 @@ export async function runSequenceSender() {
     const contactName =
       [contactFirstName, contactLastName].filter(Boolean).join(" ") || contactEmail;
 
-    if (resend) {
-      try {
-        const fromEmail = process.env.RESEND_FROM_EMAIL ?? "noreply@resend.dev";
-        const fromName = process.env.RESEND_FROM_NAME ?? "MyCRM";
-        await resend.emails.send({
-          from: `${fromName} <${fromEmail}>`,
-          to: contactEmail,
-          subject: step.subject,
-          html: step.body.replace(/\n/g, "<br>"),
-          text: step.body,
-        });
-      } catch {
-        continue;
-      }
+    // Attempt send — only advance state on success.
+    try {
+      const fromEmail = process.env.RESEND_FROM_EMAIL ?? "noreply@resend.dev";
+      const fromName = process.env.RESEND_FROM_NAME ?? "MyCRM";
+      await resend.emails.send({
+        from: `${fromName} <${fromEmail}>`,
+        to: contactEmail,
+        subject: step.subject,
+        html: step.body.replace(/\n/g, "<br>"),
+        text: step.body,
+      });
+    } catch {
+      // Send failed — restore original nextSendAt so it's retried next tick.
+      await db
+        .update(sequenceEnrollmentsTable)
+        .set({ nextSendAt: now })
+        .where(eq(sequenceEnrollmentsTable.id, enrollment.id));
+      continue;
     }
 
+    // Send succeeded — advance to next step or complete.
     const nextStepIndex = enrollment.currentStep + 1;
     const isDone = nextStepIndex >= steps.length;
 

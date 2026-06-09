@@ -44,6 +44,8 @@ import {
   CheckCircle2,
   XCircle,
   Mail,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -232,6 +234,27 @@ export function SequenceDetailPage() {
     onError: (err: Error) =>
       toast({ title: "Failed", description: err.message, variant: "destructive" }),
   });
+
+  const reorderMutation = useMutation({
+    mutationFn: (orderedIds: string[]) =>
+      apiFetch(`/sequences/${id}/steps/reorder`, {
+        method: "POST",
+        body: JSON.stringify({ orderedIds }),
+      }),
+    onSuccess: () => invalidate(),
+    onError: (err: Error) =>
+      toast({ title: "Failed to reorder", description: err.message, variant: "destructive" }),
+  });
+
+  const moveStep = (index: number, direction: "up" | "down") => {
+    const currentSteps = sequence?.steps ?? [];
+    if (direction === "up" && index === 0) return;
+    if (direction === "down" && index === currentSteps.length - 1) return;
+    const newOrder = [...currentSteps];
+    const swapWith = direction === "up" ? index - 1 : index + 1;
+    [newOrder[index], newOrder[swapWith]] = [newOrder[swapWith], newOrder[index]];
+    reorderMutation.mutate(newOrder.map((s) => s.id));
+  };
 
   const enrollMutation = useMutation({
     mutationFn: (contactIds: string[]) =>
@@ -514,6 +537,28 @@ export function SequenceDetailPage() {
                               ? `Send after ${step.delayDays} day${step.delayDays !== 1 ? "s" : ""} from enrollment`
                               : `Send ${step.delayDays} day${step.delayDays !== 1 ? "s" : ""} after step ${i}`}
                           </div>
+                        </div>
+                        <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                            disabled={i === 0 || reorderMutation.isPending}
+                            onClick={(e) => { e.stopPropagation(); moveStep(i, "up"); }}
+                            title="Move up"
+                          >
+                            <ChevronUp className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                            disabled={i === steps.length - 1 || reorderMutation.isPending}
+                            onClick={(e) => { e.stopPropagation(); moveStep(i, "down"); }}
+                            title="Move down"
+                          >
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          </Button>
                         </div>
                         <Button
                           variant="ghost"
