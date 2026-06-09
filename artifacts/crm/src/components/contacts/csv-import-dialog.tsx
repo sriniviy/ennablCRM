@@ -48,7 +48,7 @@ export function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [result, setResult] = useState<ImportResult | null>(null);
   const [skippedOpen, setSkippedOpen] = useState(false);
-  const [importProgress, setImportProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
+  const [importProgress, setImportProgress] = useState<{ done: number; total: number; importedSoFar: number; skippedSoFar: number }>({ done: 0, total: 0, importedSoFar: 0, skippedSoFar: 0 });
   const cancelledRef = useRef(false);
 
   const parseCSV = (text: string) => {
@@ -124,7 +124,7 @@ export function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
 
     const total = rows.length;
     cancelledRef.current = false;
-    setImportProgress({ done: 0, total });
+    setImportProgress({ done: 0, total, importedSoFar: 0, skippedSoFar: 0 });
     setStep("importing");
 
     let totalImported = 0;
@@ -150,7 +150,7 @@ export function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
         const data = await importContacts({ rows: batch, mapping: activeMapping });
         totalImported += data.imported;
         allSkipped.push(...(data.skipped ?? []));
-        setImportProgress({ done: Math.min(offset + BATCH_SIZE, total), total });
+        setImportProgress({ done: Math.min(offset + BATCH_SIZE, total), total, importedSoFar: totalImported, skippedSoFar: allSkipped.length });
       }
 
       setResult({ imported: totalImported, skipped: allSkipped });
@@ -176,7 +176,7 @@ export function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
       setMapping({});
       setResult(null);
       setSkippedOpen(false);
-      setImportProgress({ done: 0, total: 0 });
+      setImportProgress({ done: 0, total: 0, importedSoFar: 0, skippedSoFar: 0 });
       if (fileRef.current) fileRef.current.value = "";
     }, 300);
   };
@@ -313,6 +313,12 @@ export function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
               </div>
               <Progress value={progressPct} className="h-3" />
               <p className="text-xs text-muted-foreground text-right">{progressPct}% complete</p>
+            </div>
+            <div className="flex gap-4 text-sm tabular-nums">
+              <span className="text-green-600 font-medium">{importProgress.importedSoFar} imported</span>
+              {importProgress.skippedSoFar > 0 && (
+                <span className="text-amber-600 font-medium">{importProgress.skippedSoFar} skipped</span>
+              )}
             </div>
           </div>
         )}
