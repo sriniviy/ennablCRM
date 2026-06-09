@@ -19,10 +19,26 @@ function getResend() {
   return new Resend(key);
 }
 
+// Returns the sequence only if it exists and belongs to userId (ownership guard).
+async function getOwnedSequence(sequenceId: string, userId: string) {
+  const [sequence] = await db
+    .select()
+    .from(sequencesTable)
+    .where(
+      and(
+        eq(sequencesTable.id, sequenceId),
+        eq(sequencesTable.ownerId, userId),
+      ),
+    )
+    .limit(1);
+  return sequence ?? null;
+}
+
 // ─── Sequences CRUD ──────────────────────────────────────────────────────────
 
-router.get("/", requireAuth, async (_req: Request, res: Response) => {
+router.get("/", requireAuth, async (req: Request, res: Response) => {
   try {
+    const { dbUser } = req as AuthRequest;
     const rows = await db
       .select({
         sequence: sequencesTable,
@@ -39,6 +55,7 @@ router.get("/", requireAuth, async (_req: Request, res: Response) => {
         sequenceEnrollmentsTable,
         eq(sequenceEnrollmentsTable.sequenceId, sequencesTable.id),
       )
+      .where(eq(sequencesTable.ownerId, dbUser.id))
       .groupBy(sequencesTable.id)
       .orderBy(sql`${sequencesTable.createdAt} desc`);
 
@@ -75,11 +92,8 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
 
 router.get("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    const [sequence] = await db
-      .select()
-      .from(sequencesTable)
-      .where(eq(sequencesTable.id, req.params.id))
-      .limit(1);
+    const { dbUser } = req as AuthRequest;
+    const sequence = await getOwnedSequence(req.params.id, dbUser.id);
     if (!sequence) {
       res.status(404).json({ error: "Sequence not found" });
       return;
@@ -121,20 +135,27 @@ router.get("/:id", requireAuth, async (req: Request, res: Response) => {
 
 router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
+    const { dbUser } = req as AuthRequest;
     const { name } = req.body as { name?: string };
     if (!name?.trim()) {
       res.status(400).json({ error: "name is required" });
       return;
     }
-    const [updated] = await db
-      .update(sequencesTable)
-      .set({ name: name.trim(), updatedAt: new Date() })
-      .where(eq(sequencesTable.id, req.params.id))
-      .returning();
-    if (!updated) {
+    const existing = await getOwnedSequence(req.params.id, dbUser.id);
+    if (!existing) {
       res.status(404).json({ error: "Sequence not found" });
       return;
     }
+    const [updated] = await db
+      .update(sequencesTable)
+      .set({ name: name.trim(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(sequencesTable.id, req.params.id),
+          eq(sequencesTable.ownerId, dbUser.id),
+        ),
+      )
+      .returning();
     res.json(updated);
   } catch {
     res.status(500).json({ error: "Failed to update sequence" });
@@ -143,18 +164,20 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
 
 router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    const [existing] = await db
-      .select()
-      .from(sequencesTable)
-      .where(eq(sequencesTable.id, req.params.id))
-      .limit(1);
+    const { dbUser } = req as AuthRequest;
+    const existing = await getOwnedSequence(req.params.id, dbUser.id);
     if (!existing) {
       res.status(404).json({ error: "Sequence not found" });
       return;
     }
     await db
       .delete(sequencesTable)
-      .where(eq(sequencesTable.id, req.params.id));
+      .where(
+        and(
+          eq(sequencesTable.id, req.params.id),
+          eq(sequencesTable.ownerId, dbUser.id),
+        ),
+      );
     res.status(204).send();
   } catch {
     res.status(500).json({ error: "Failed to delete sequence" });
@@ -165,6 +188,12 @@ router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
 
 router.post("/:id/steps", requireAuth, async (req: Request, res: Response) => {
   try {
+    const { dbUser } = req as AuthRequest;
+    const sequence = await getOwnedSequence(req.params.id, dbUser.id);
+    if (!sequence) {
+      res.status(404).json({ error: "Sequence not found" });
+      return;
+    }
     const { subject, body, delayDays } = req.body as {
       subject?: string;
       body?: string;
@@ -177,12 +206,12 @@ router.post("/:id/steps", requireAuth, async (req: Request, res: Response) => {
     const [{ maxOrder }] = await db
       .select({ maxOrder: sql<number>`coalesce(max(${sequenceStepsTable.stepOrder}), -1)::int` })
       .from(sequenceStepsTable)
-      .where(eq(sequenceStepsTable.sequenceId, req.params.id));
+      .where(eq(sequenceStepsTable.sequenceId, sequence.id));
 
     const [step] = await db
       .insert(sequenceStepsTable)
       .values({
-        sequenceId: req.params.id,
+        sequenceId: sequence.id,
         subject: subject.trim(),
         body: body.trim(),
         delayDays: delayDays ?? 1,
@@ -200,6 +229,12 @@ router.patch(
   requireAuth,
   async (req: Request, res: Response) => {
     try {
+      const { dbUser } = req as AuthRequest;
+      const sequence = await getOwnedSequence(req.params.id, dbUser.id);
+      if (!sequence) {
+        res.status(404).json({ error: "Sequence not found" });
+        return;
+      }
       const { subject, body, delayDays } = req.body as {
         subject?: string;
         body?: string;
@@ -216,7 +251,7 @@ router.patch(
         .where(
           and(
             eq(sequenceStepsTable.id, req.params.stepId),
-            eq(sequenceStepsTable.sequenceId, req.params.id),
+            eq(sequenceStepsTable.sequenceId, sequence.id),
           ),
         )
         .returning();
@@ -236,12 +271,18 @@ router.delete(
   requireAuth,
   async (req: Request, res: Response) => {
     try {
+      const { dbUser } = req as AuthRequest;
+      const sequence = await getOwnedSequence(req.params.id, dbUser.id);
+      if (!sequence) {
+        res.status(404).json({ error: "Sequence not found" });
+        return;
+      }
       await db
         .delete(sequenceStepsTable)
         .where(
           and(
             eq(sequenceStepsTable.id, req.params.stepId),
-            eq(sequenceStepsTable.sequenceId, req.params.id),
+            eq(sequenceStepsTable.sequenceId, sequence.id),
           ),
         );
       res.status(204).send();
@@ -256,6 +297,12 @@ router.post(
   requireAuth,
   async (req: Request, res: Response) => {
     try {
+      const { dbUser } = req as AuthRequest;
+      const sequence = await getOwnedSequence(req.params.id, dbUser.id);
+      if (!sequence) {
+        res.status(404).json({ error: "Sequence not found" });
+        return;
+      }
       const { orderedIds } = req.body as { orderedIds?: string[] };
       if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
         res.status(400).json({ error: "orderedIds array required" });
@@ -269,7 +316,7 @@ router.post(
             .where(
               and(
                 eq(sequenceStepsTable.id, orderedIds[i]),
-                eq(sequenceStepsTable.sequenceId, req.params.id),
+                eq(sequenceStepsTable.sequenceId, sequence.id),
               ),
             );
         }
@@ -277,7 +324,7 @@ router.post(
       const steps = await db
         .select()
         .from(sequenceStepsTable)
-        .where(eq(sequenceStepsTable.sequenceId, req.params.id))
+        .where(eq(sequenceStepsTable.sequenceId, sequence.id))
         .orderBy(asc(sequenceStepsTable.stepOrder));
       res.json(steps);
     } catch {
@@ -300,11 +347,7 @@ router.post(
         return;
       }
 
-      const [sequence] = await db
-        .select()
-        .from(sequencesTable)
-        .where(eq(sequencesTable.id, req.params.id))
-        .limit(1);
+      const sequence = await getOwnedSequence(req.params.id, dbUser.id);
       if (!sequence) {
         res.status(404).json({ error: "Sequence not found" });
         return;
@@ -385,13 +428,21 @@ router.delete(
   async (req: Request, res: Response) => {
     try {
       const { dbUser } = req as AuthRequest;
+
+      // Verify the parent sequence belongs to the requester before touching the enrollment.
+      const sequence = await getOwnedSequence(req.params.id, dbUser.id);
+      if (!sequence) {
+        res.status(404).json({ error: "Sequence not found" });
+        return;
+      }
+
       const [enrollment] = await db
         .select()
         .from(sequenceEnrollmentsTable)
         .where(
           and(
             eq(sequenceEnrollmentsTable.id, req.params.enrollmentId),
-            eq(sequenceEnrollmentsTable.sequenceId, req.params.id),
+            eq(sequenceEnrollmentsTable.sequenceId, sequence.id),
           ),
         )
         .limit(1);
@@ -406,18 +457,12 @@ router.delete(
         .set({ status: "UNENROLLED", completedAt: new Date() })
         .where(eq(sequenceEnrollmentsTable.id, enrollment.id));
 
-      const [sequence] = await db
-        .select()
-        .from(sequencesTable)
-        .where(eq(sequencesTable.id, req.params.id))
-        .limit(1);
-
       await db.insert(activitiesTable).values({
         type: "SEQUENCE_UNENROLLED",
-        title: `Unenrolled from sequence "${sequence?.name ?? ""}"`,
+        title: `Unenrolled from sequence "${sequence.name}"`,
         contactId: enrollment.contactId,
         userId: dbUser.id,
-        metadata: { sequenceId: req.params.id, enrollmentId: enrollment.id },
+        metadata: { sequenceId: sequence.id, enrollmentId: enrollment.id },
       });
 
       res.json({ ok: true });
