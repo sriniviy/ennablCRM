@@ -3,6 +3,7 @@ import { db, dealsTable, dealStagesTable, contactsTable, companiesTable, usersTa
 import { eq, ilike, and, asc, desc } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 import { logActivity } from "../lib/activity";
+import { logAudit } from "../lib/audit";
 
 const router = Router();
 
@@ -252,6 +253,16 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
       contactId: deal.contactId ?? undefined,
     });
 
+    await logAudit({
+      action: "CREATE",
+      objectType: "deal",
+      objectId: deal.id,
+      objectLabel: deal.title,
+      actorId: dbUser.id,
+      actorName: dbUser.name,
+      after: deal,
+    });
+
     res.status(201).json(deal);
   } catch {
     res.status(500).json({ error: "Failed to create deal" });
@@ -296,6 +307,17 @@ router.patch("/:id/move", requireAuth, async (req: Request, res: Response) => {
       });
     }
 
+    await logAudit({
+      action: "UPDATE",
+      objectType: "deal",
+      objectId: updated.id,
+      objectLabel: updated.title,
+      actorId: dbUser.id,
+      actorName: dbUser.name,
+      before: existing,
+      after: updated,
+    });
+
     res.json(updated);
   } catch {
     res.status(500).json({ error: "Failed to move deal" });
@@ -304,6 +326,7 @@ router.patch("/:id/move", requireAuth, async (req: Request, res: Response) => {
 
 router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
+    const { dbUser } = req as AuthRequest;
     const id = req.params.id as string;
     const [existing] = await db
       .select()
@@ -324,6 +347,17 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
       .where(eq(dealsTable.id, id))
       .returning();
 
+    await logAudit({
+      action: "UPDATE",
+      objectType: "deal",
+      objectId: updated.id,
+      objectLabel: updated.title,
+      actorId: dbUser.id,
+      actorName: dbUser.name,
+      before: existing,
+      after: updated,
+    });
+
     res.json(updated);
   } catch {
     res.status(500).json({ error: "Failed to update deal" });
@@ -332,6 +366,7 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
 
 router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
+    const { dbUser } = req as AuthRequest;
     const id = req.params.id as string;
     const [existing] = await db
       .select()
@@ -344,6 +379,17 @@ router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
     }
 
     await db.delete(dealsTable).where(eq(dealsTable.id, id));
+
+    await logAudit({
+      action: "DELETE",
+      objectType: "deal",
+      objectId: existing.id,
+      objectLabel: existing.title,
+      actorId: dbUser.id,
+      actorName: dbUser.name,
+      before: existing,
+    });
+
     res.status(204).send();
   } catch {
     res.status(500).json({ error: "Failed to delete deal" });

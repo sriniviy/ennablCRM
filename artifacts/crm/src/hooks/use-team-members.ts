@@ -1,11 +1,12 @@
-import { useAuth } from "@clerk/react";
+import { useSessionToken } from "@/hooks/use-session-token";
+
 import { useQuery } from "@tanstack/react-query";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export interface TeamMember {
   id: string;
-  clerkId: string;
+  clerkId: string | null;
   email: string;
   name: string | null;
   avatarUrl: string | null;
@@ -14,7 +15,7 @@ export interface TeamMember {
 }
 
 export function useTeamMembers() {
-  const { getToken } = useAuth();
+  const getToken = useSessionToken();
   return useQuery<TeamMember[]>({
     queryKey: ["team", "members"],
     queryFn: async () => {

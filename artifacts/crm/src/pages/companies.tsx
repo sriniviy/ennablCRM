@@ -1,6 +1,7 @@
+import { useSessionToken } from "@/hooks/use-session-token";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useState } from "react";
-import { useAuth } from "@clerk/react";
+
 import { useListCompanies, type Company } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { Input } from "@/components/ui/input";
@@ -32,7 +33,7 @@ const COMPANY_COLUMNS: ColumnDef[] = [
 ];
 
 export function CompaniesPage() {
-  const { getToken } = useAuth();
+  const getToken = useSessionToken();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 400);

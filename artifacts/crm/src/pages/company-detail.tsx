@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Globe, MapPin, Phone, Users, Briefcase, Pencil } from "lucide-react";
 import { NotesFeed } from "@/components/notes/notes-feed";
+import { AuditHistory } from "@/components/audit/audit-history";
 import { formatCurrency } from "@/lib/utils";
 import { useState } from "react";
 import { CompanyDialog } from "@/components/companies/company-dialog";
@@ -199,6 +200,9 @@ export function CompanyDetailPage() {
                 <TabsTrigger value="notes" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   Notes
                 </TabsTrigger>
+                <TabsTrigger value="history" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
+                  History
+                </TabsTrigger>
               </TabsList>
               
               <TabsContent value="contacts" className="pt-6">
@@ -252,6 +256,9 @@ export function CompanyDetailPage() {
               </TabsContent>
               <TabsContent value="notes" className="pt-6">
                 <NotesFeed entityType="company" entityId={id} />
+              </TabsContent>
+              <TabsContent value="history" className="pt-6">
+                <AuditHistory objectType="company" objectId={id} />
               </TabsContent>
             </Tabs>
           </div>

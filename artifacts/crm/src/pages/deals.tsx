@@ -1,6 +1,7 @@
+import { useSessionToken } from "@/hooks/use-session-token";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useRef, useState, useEffect } from "react";
-import { useAuth } from "@clerk/react";
+
 import { useListDeals, useMoveDeal, getListDealsQueryKey, type PipelineColumn, type DealWithRelations } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -29,7 +30,7 @@ const DEAL_COLUMNS: ColumnDef[] = [
 ];
 
 export function DealsPage() {
-  const { getToken } = useAuth();
+  const getToken = useSessionToken();
   const { toast } = useToast();
   const { data: columns, isLoading: dealsLoading } = useListDeals();
   const moveDeal = useMoveDeal();

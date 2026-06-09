@@ -80,3 +80,10 @@ export const sendStatusEnum = pgEnum("send_status", [
   "BOUNCED",
   "UNSUBSCRIBED",
 ]);
+
+export const auditActionEnum = pgEnum("audit_action", [
+  "CREATE",
+  "UPDATE",
+  "DELETE",
+  "MERGE",
+]);

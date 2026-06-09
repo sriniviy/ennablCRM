@@ -16,6 +16,7 @@ import reportsRouter from "./reports";
 import teamRouter from "./team";
 import sequencesRouter from "./sequences";
 import scheduledExportsRouter from "./scheduled-exports";
+import auditRouter from "./audit";
 
 const router: IRouter = Router();
 
@@ -36,5 +37,6 @@ router.use("/reports", reportsRouter);
 router.use("/team", teamRouter);
 router.use("/sequences", sequencesRouter);
 router.use("/scheduled-exports", scheduledExportsRouter);
+router.use("/audit", auditRouter);
 
 export default router;

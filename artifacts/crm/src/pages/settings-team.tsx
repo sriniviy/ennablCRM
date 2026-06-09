@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
-import { useAuth } from "@clerk/react";
+import { useSessionToken } from "@/hooks/use-session-token";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,14 +35,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useGetMe } from "@workspace/api-client-react";
-import { Users, UserPlus, Mail, Trash2, Shield, Clock, CalendarClock, Pause, Play } from "lucide-react";
+import { Users, UserPlus, Trash2, Shield, CalendarClock, Pause, Play } from "lucide-react";
 import { format } from "date-fns";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 interface TeamMember {
   id: string;
-  clerkId: string;
   email: string;
   name: string | null;
   avatarUrl: string | null;
@@ -49,15 +49,9 @@ interface TeamMember {
   createdAt: string;
 }
 
-interface PendingInvite {
-  id: string;
-  emailAddress: string;
-  createdAt: string;
-}
-
 interface TeamData {
   members: TeamMember[];
-  pending: PendingInvite[];
+  pending: unknown[];
 }
 
 interface ScheduledExport {
@@ -72,7 +66,7 @@ interface ScheduledExport {
 }
 
 function useTeamApi() {
-  const { getToken } = useAuth();
+  const getToken = useSessionToken();
 
   const authFetch = async (path: string, opts: RequestInit = {}) => {
     const token = await getToken();
@@ -95,7 +89,7 @@ function useTeamApi() {
 }
 
 function useScheduledExportsApi() {
-  const { getToken } = useAuth();
+  const getToken = useSessionToken();
 
   const authFetch = async (path: string, opts: RequestInit = {}) => {
     const token = await getToken();
@@ -111,7 +105,6 @@ function useScheduledExportsApi() {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.error ?? `Request failed (${res.status})`);
     }
-    if (res.status === 204) return null;
     return res.json();
   };
 
@@ -122,7 +115,7 @@ const DATA_TYPE_LABELS: Record<string, string> = {
   tasks: "Tasks",
   activities: "Activities",
   notes: "Notes",
-  combined: "Combined (all)",
+  combined: "Combined Report",
 };
 
 function ScheduledExportsSection() {
@@ -130,30 +123,10 @@ function ScheduledExportsSection() {
   const qc = useQueryClient();
   const { toast } = useToast();
 
-  const [frequency, setFrequency] = useState<"daily" | "weekly">("weekly");
-  const [dataType, setDataType] = useState<"tasks" | "activities" | "notes" | "combined">("combined");
-  const [email, setEmail] = useState("");
-
   const { data: schedules = [], isLoading } = useQuery<ScheduledExport[]>({
     queryKey: ["scheduled-exports"],
     queryFn: () => authFetch(""),
     staleTime: 30_000,
-  });
-
-  const createMutation = useMutation({
-    mutationFn: () =>
-      authFetch("", {
-        method: "POST",
-        body: JSON.stringify({ frequency, dataType, deliveryEmail: email }),
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["scheduled-exports"] });
-      setEmail("");
-      toast({ title: "Scheduled export created" });
-    },
-    onError: (err: Error) => {
-      toast({ title: "Failed to create", description: err.message, variant: "destructive" });
-    },
   });
 
   const toggleMutation = useMutation({
@@ -162,9 +135,7 @@ function ScheduledExportsSection() {
         method: "PATCH",
         body: JSON.stringify({ paused }),
       }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["scheduled-exports"] });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["scheduled-exports"] }),
     onError: (err: Error) => {
       toast({ title: "Failed to update", description: err.message, variant: "destructive" });
     },
@@ -181,12 +152,6 @@ function ScheduledExportsSection() {
     },
   });
 
-  const handleCreate = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.trim()) return;
-    createMutation.mutate();
-  };
-
   return (
     <Card>
       <CardHeader>
@@ -195,56 +160,14 @@ function ScheduledExportsSection() {
           Scheduled Exports
         </CardTitle>
         <CardDescription>
-          Automatically email a CSV snapshot on a recurring schedule.
+          Automated CSV exports delivered to your inbox.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Create form */}
-        <form onSubmit={handleCreate} className="space-y-3">
-          <div className="flex flex-wrap gap-2">
-            <Select value={frequency} onValueChange={(v) => setFrequency(v as typeof frequency)}>
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="daily">Daily</SelectItem>
-                <SelectItem value="weekly">Weekly</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select value={dataType} onValueChange={(v) => setDataType(v as typeof dataType)}>
-              <SelectTrigger className="w-44">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="tasks">Tasks</SelectItem>
-                <SelectItem value="activities">Activities</SelectItem>
-                <SelectItem value="notes">Notes</SelectItem>
-                <SelectItem value="combined">Combined (all)</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Input
-              type="email"
-              placeholder="recipient@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="flex-1 min-w-48"
-              disabled={createMutation.isPending}
-            />
-
-            <Button type="submit" disabled={createMutation.isPending || !email.trim()}>
-              {createMutation.isPending ? "Adding…" : "Add Schedule"}
-            </Button>
-          </div>
-        </form>
-
-        {/* Existing schedules */}
+      <CardContent>
         {isLoading ? (
           <div className="space-y-3">
             {[1, 2].map((i) => (
               <div key={i} className="flex items-center gap-3">
-                <Skeleton className="h-8 w-8 rounded-md" />
                 <div className="space-y-1 flex-1">
                   <Skeleton className="h-4 w-48" />
                   <Skeleton className="h-3 w-64" />
@@ -332,7 +255,10 @@ export function SettingsTeamPage() {
   const { authFetch } = useTeamApi();
   const qc = useQueryClient();
   const { toast } = useToast();
-  const [inviteEmail, setInviteEmail] = useState("");
+
+  const [addEmail, setAddEmail] = useState("");
+  const [addName, setAddName] = useState("");
+  const [addPassword, setAddPassword] = useState("");
 
   const { data, isLoading } = useQuery<TeamData>({
     queryKey: ["team"],
@@ -340,31 +266,21 @@ export function SettingsTeamPage() {
     staleTime: 30_000,
   });
 
-  const inviteMutation = useMutation({
-    mutationFn: (email: string) =>
-      authFetch("/invite", {
+  const addUserMutation = useMutation({
+    mutationFn: ({ email, name, password }: { email: string; name: string; password: string }) =>
+      authFetch("/add-user", {
         method: "POST",
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, name, password }),
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["team"] });
-      setInviteEmail("");
-      toast({ title: "Invitation sent", description: `Invite sent to ${inviteEmail}` });
+      setAddEmail("");
+      setAddName("");
+      setAddPassword("");
+      toast({ title: "Team member added", description: `Account created for ${addEmail}` });
     },
     onError: (err: Error) => {
-      toast({ title: "Failed to send invite", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const revokeInviteMutation = useMutation({
-    mutationFn: (inviteId: string) =>
-      authFetch(`/invite/${inviteId}`, { method: "DELETE" }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["team"] });
-      toast({ title: "Invitation revoked" });
-    },
-    onError: (err: Error) => {
-      toast({ title: "Failed to revoke", description: err.message, variant: "destructive" });
+      toast({ title: "Failed to add member", description: err.message, variant: "destructive" });
     },
   });
 
@@ -397,10 +313,14 @@ export function SettingsTeamPage() {
 
   const isAdmin = me?.role === "ADMIN";
 
-  const handleInvite = (e: React.FormEvent) => {
+  const handleAddUser = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inviteEmail.trim()) return;
-    inviteMutation.mutate(inviteEmail.trim());
+    if (!addEmail.trim() || !addPassword.trim()) return;
+    addUserMutation.mutate({
+      email: addEmail.trim(),
+      name: addName.trim(),
+      password: addPassword,
+    });
   };
 
   return (
@@ -411,33 +331,62 @@ export function SettingsTeamPage() {
           <p className="text-muted-foreground">Manage your team and workspace.</p>
         </div>
 
-        {/* Invite form — admins only */}
+        {/* Add team member — admins only */}
         {isAdmin && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <UserPlus className="h-5 w-5" />
-                Invite Team Member
+                Add Team Member
               </CardTitle>
               <CardDescription>
-                Send an invitation email to add someone to your workspace.
+                Create a login for a new team member. Share their temporary password securely.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleInvite} className="flex gap-2 max-w-md">
-                <Input
-                  type="email"
-                  placeholder="colleague@example.com"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  disabled={inviteMutation.isPending}
-                  className="flex-1"
-                />
+              <form onSubmit={handleAddUser} className="space-y-3 max-w-md">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="add-name">Name</Label>
+                    <Input
+                      id="add-name"
+                      type="text"
+                      placeholder="Jane Smith"
+                      value={addName}
+                      onChange={(e) => setAddName(e.target.value)}
+                      disabled={addUserMutation.isPending}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="add-email">Email</Label>
+                    <Input
+                      id="add-email"
+                      type="email"
+                      placeholder="jane@example.com"
+                      value={addEmail}
+                      onChange={(e) => setAddEmail(e.target.value)}
+                      required
+                      disabled={addUserMutation.isPending}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="add-password">Temporary password</Label>
+                  <Input
+                    id="add-password"
+                    type="text"
+                    placeholder="Min. 8 characters"
+                    value={addPassword}
+                    onChange={(e) => setAddPassword(e.target.value)}
+                    required
+                    disabled={addUserMutation.isPending}
+                  />
+                </div>
                 <Button
                   type="submit"
-                  disabled={inviteMutation.isPending || !inviteEmail.trim()}
+                  disabled={addUserMutation.isPending || !addEmail.trim() || !addPassword.trim()}
                 >
-                  {inviteMutation.isPending ? "Sending…" : "Send Invite"}
+                  {addUserMutation.isPending ? "Adding…" : "Add team member"}
                 </Button>
               </form>
             </CardContent>
@@ -549,8 +498,7 @@ export function SettingsTeamPage() {
                               <AlertDialogDescription>
                                 This will permanently remove{" "}
                                 <strong>{member.name ?? member.email}</strong> from
-                                MyCRM and revoke their account access. This cannot be
-                                undone.
+                                MyCRM. This cannot be undone.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -573,65 +521,13 @@ export function SettingsTeamPage() {
           </CardContent>
         </Card>
 
-        {/* Pending invitations */}
-        {(data?.pending?.length ?? 0) > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5" />
-                Pending Invitations
-              </CardTitle>
-              <CardDescription>
-                Invitations awaiting acceptance.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="divide-y">
-                {data?.pending.map((invite) => (
-                  <div
-                    key={invite.id}
-                    className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
-                  >
-                    <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center shrink-0">
-                      <Mail className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium truncate">
-                        {invite.emailAddress}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Invited {format(new Date(invite.createdAt), "MMM d, yyyy")}
-                      </div>
-                    </div>
-                    <Badge variant="outline" className="text-xs text-amber-600 border-amber-300 dark:border-amber-700 dark:text-amber-400">
-                      Pending
-                    </Badge>
-                    {isAdmin && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
-                        onClick={() => revokeInviteMutation.mutate(invite.id)}
-                        disabled={revokeInviteMutation.isPending}
-                        title="Revoke invitation"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {/* Scheduled Exports — admins only */}
         {isAdmin && <ScheduledExportsSection />}
 
         {/* Non-admin: read-only notice */}
         {!isAdmin && !isLoading && (
           <p className="text-sm text-muted-foreground">
-            Only admins can invite or remove team members. Contact an admin to make changes.
+            Only admins can add or remove team members. Contact an admin to make changes.
           </p>
         )}
       </div>

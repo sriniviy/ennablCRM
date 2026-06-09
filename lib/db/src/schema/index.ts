@@ -10,3 +10,5 @@ export * from "./campaigns";
 export * from "./notes";
 export * from "./sequences";
 export * from "./scheduled_exports";
+export * from "./audit_log";
+export * from "./auth";

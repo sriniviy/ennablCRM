@@ -1,7 +1,8 @@
+import { useSessionToken } from "@/hooks/use-session-token";
 import { useState } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Link } from "wouter";
-import { useAuth } from "@clerk/react";
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,7 +36,7 @@ interface SequenceSummary {
 }
 
 function useSequenceApi() {
-  const { getToken } = useAuth();
+  const getToken = useSessionToken();
   return async (path: string, opts: RequestInit = {}) => {
     const token = await getToken();
     const res = await fetch(`${BASE}/api/sequences${path}`, {

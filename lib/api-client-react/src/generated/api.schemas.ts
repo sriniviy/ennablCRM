@@ -114,6 +114,16 @@ export const SendStatus = {
   UNSUBSCRIBED: 'UNSUBSCRIBED',
 } as const;
 
+export type AuditAction = typeof AuditAction[keyof typeof AuditAction];
+
+
+export const AuditAction = {
+  CREATE: 'CREATE',
+  UPDATE: 'UPDATE',
+  DELETE: 'DELETE',
+  MERGE: 'MERGE',
+} as const;
+
 export interface User {
   id: string;
   clerkId: string;
@@ -357,6 +367,29 @@ export interface PaginatedActivities {
 
 export interface PaginatedCampaigns {
   data: CampaignWithStats[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+}
+
+export type AuditLogEntryChanges = { [key: string]: unknown } | null;
+
+export interface AuditLogEntry {
+  id: string;
+  action: AuditAction;
+  objectType: string;
+  objectId: string;
+  objectLabel?: string | null;
+  actorId?: string | null;
+  actorName?: string | null;
+  changes?: AuditLogEntryChanges;
+  createdAt: string;
+  actor?: UserSummary | null;
+}
+
+export interface PaginatedAuditLog {
+  data: AuditLogEntry[];
   total: number;
   page: number;
   pageSize: number;
@@ -614,5 +647,16 @@ limit?: number;
 
 export type TrackEmailClickParams = {
 url: string;
+};
+
+export type ListAuditParams = {
+objectType?: string;
+objectId?: string;
+actorId?: string;
+action?: AuditAction;
+dateFrom?: string;
+dateTo?: string;
+page?: number;
+pageSize?: number;
 };
 

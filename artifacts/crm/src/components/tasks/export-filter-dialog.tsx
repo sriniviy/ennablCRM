@@ -1,5 +1,6 @@
+import { useSessionToken } from "@/hooks/use-session-token";
 import { useState, useEffect } from "react";
-import { useAuth } from "@clerk/react";
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -42,7 +43,7 @@ interface ExportFilterDialogProps {
 }
 
 export function ExportFilterDialog({ open, onOpenChange, mode, defaultStatus }: ExportFilterDialogProps) {
-  const { getToken } = useAuth();
+  const getToken = useSessionToken();
   const { toast } = useToast();
 
   const [dateFrom, setDateFrom] = useState("");

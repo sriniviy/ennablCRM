@@ -33,3 +33,8 @@ externalPort = 3000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+BETTER_AUTH_SECRET = "3ec0cbca7569820d63593fc4eb690b7de83f8f89bcb2795a7363ee3cbdea84cf"

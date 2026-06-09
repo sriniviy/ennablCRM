@@ -1333,3 +1333,45 @@ export const TrackEmailClickQueryParams = zod.object({
 })
 
 
+/**
+ * Browsing the global audit log (without objectId) requires the ADMIN role. Per-record history (with objectId) is available to any authenticated user.
+ * @summary List audit log entries with optional filtering
+ */
+export const listAuditQueryPageDefault = 1;
+export const listAuditQueryPageSizeDefault = 50;
+
+export const ListAuditQueryParams = zod.object({
+  "objectType": zod.coerce.string().optional(),
+  "objectId": zod.coerce.string().optional(),
+  "actorId": zod.coerce.string().optional(),
+  "action": zod.enum(['CREATE', 'UPDATE', 'DELETE', 'MERGE']).optional(),
+  "dateFrom": zod.date().optional(),
+  "dateTo": zod.date().optional(),
+  "page": zod.coerce.number().default(listAuditQueryPageDefault),
+  "pageSize": zod.coerce.number().default(listAuditQueryPageSizeDefault)
+})
+
+export const ListAuditResponse = zod.object({
+  "data": zod.array(zod.object({
+  "id": zod.string(),
+  "action": zod.enum(['CREATE', 'UPDATE', 'DELETE', 'MERGE']),
+  "objectType": zod.string(),
+  "objectId": zod.string(),
+  "objectLabel": zod.string().nullish(),
+  "actorId": zod.string().nullish(),
+  "actorName": zod.string().nullish(),
+  "changes": zod.record(zod.string(), zod.unknown()).nullish(),
+  "createdAt": zod.coerce.date(),
+  "actor": zod.object({
+  "id": zod.string(),
+  "name": zod.string().nullish(),
+  "avatarUrl": zod.string().nullish()
+}).nullish()
+})),
+  "total": zod.number(),
+  "page": zod.number(),
+  "pageSize": zod.number(),
+  "hasMore": zod.boolean()
+})
+
+

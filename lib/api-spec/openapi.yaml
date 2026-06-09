@@ -27,6 +27,8 @@ tags:
     description: Dashboard and stats
   - name: tracking
     description: Email tracking
+  - name: audit
+    description: Audit log operations
 
 paths:
   /healthz:
@@ -874,6 +876,70 @@ paths:
         "302":
           description: Redirect to target URL
 
+  # ── Audit log ──────────────────────────────────────────────────────────────
+
+  /audit:
+    get:
+      operationId: listAudit
+      tags: [audit]
+      summary: List audit log entries with optional filtering
+      description: >-
+        Browsing the global audit log (without objectId) requires the ADMIN
+        role. Per-record history (with objectId) is available to any
+        authenticated user.
+      parameters:
+        - name: objectType
+          in: query
+          schema:
+            type: string
+        - name: objectId
+          in: query
+          schema:
+            type: string
+        - name: actorId
+          in: query
+          schema:
+            type: string
+        - name: action
+          in: query
+          schema:
+            $ref: "#/components/schemas/AuditAction"
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Paginated audit log list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedAuditLog"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   parameters:
     IdParam:
@@ -964,6 +1030,10 @@ components:
     SendStatus:
       type: string
       enum: [PENDING, SENT, OPENED, CLICKED, BOUNCED, UNSUBSCRIBED]
+
+    AuditAction:
+      type: string
+      enum: [CREATE, UPDATE, DELETE, MERGE]
 
     # ── Core models ────────────────────────────────────────────────────────
 
@@ -1561,6 +1631,56 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CampaignWithStats"
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        hasMore:
+          type: boolean
+      required: [data, total, page, pageSize, hasMore]
+
+    AuditLogEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        action:
+          $ref: "#/components/schemas/AuditAction"
+        objectType:
+          type: string
+        objectId:
+          type: string
+        objectLabel:
+          type: string
+          nullable: true
+        actorId:
+          type: string
+          nullable: true
+        actorName:
+          type: string
+          nullable: true
+        changes:
+          type: object
+          nullable: true
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+        actor:
+          allOf:
+            - $ref: "#/components/schemas/UserSummary"
+          nullable: true
+      required: [id, action, objectType, objectId, createdAt]
+
+    PaginatedAuditLog:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditLogEntry"
         total:
           type: integer
         page:

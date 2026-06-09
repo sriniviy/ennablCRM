@@ -1,15 +1,11 @@
 import { Router } from "express";
-import { createClerkClient } from "@clerk/express";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
+import { auth } from "../lib/auth";
 import type { Request, Response } from "express";
 
 const router = Router();
-
-const clerk = createClerkClient({
-  secretKey: process.env.CLERK_SECRET_KEY,
-});
 
 function requireAdmin(req: Request, res: Response): boolean {
   const { dbUser } = req as AuthRequest;
@@ -26,23 +22,7 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
       .select()
       .from(usersTable)
       .orderBy(usersTable.createdAt);
-
-    let pending: { id: string; emailAddress: string; createdAt: string }[] = [];
-    try {
-      const invitationList = await clerk.invitations.getInvitationList({
-        status: "pending",
-        limit: 100,
-      });
-      pending = (invitationList.data ?? []).map((inv) => ({
-        id: inv.id,
-        emailAddress: inv.emailAddress,
-        createdAt: new Date(inv.createdAt).toISOString(),
-      }));
-    } catch {
-      pending = [];
-    }
-
-    res.json({ members, pending });
+    res.json({ members, pending: [] });
   } catch (err) {
     const e = err as Error;
     res.status(500).json({ error: e.message });
@@ -51,46 +31,54 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-router.post("/invite", requireAuth, async (req: Request, res: Response) => {
+router.post("/add-user", requireAuth, async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
 
-  const email = (req.body as { email?: string })?.email?.trim() ?? "";
-  if (!EMAIL_RE.test(email)) {
+  const { email, name, password } = req.body as {
+    email?: string;
+    name?: string;
+    password?: string;
+  };
+
+  if (!email || !EMAIL_RE.test(email.trim())) {
     res.status(400).json({ error: "Valid email required" });
+    return;
+  }
+  if (!password || password.length < 8) {
+    res.status(400).json({ error: "Password must be at least 8 characters" });
     return;
   }
 
   try {
-    const invitation = await clerk.invitations.createInvitation({
-      emailAddress: email,
-      redirectUrl: `${req.headers.origin ?? ""}`,
-    });
-    res.status(201).json({
-      id: invitation.id,
-      emailAddress: invitation.emailAddress,
-      createdAt: new Date(invitation.createdAt).toISOString(),
+    await auth.api.signUpEmail({
+      body: {
+        email: email.trim(),
+        password,
+        name: name?.trim() ?? email.trim(),
+      },
     });
   } catch (err) {
-    const e = err as { errors?: { message: string }[]; message?: string };
-    const msg = e.errors?.[0]?.message ?? e.message ?? "Failed to send invite";
-    res.status(400).json({ error: msg });
-  }
-});
-
-router.delete(
-  "/invite/:inviteId",
-  requireAuth,
-  async (req: Request, res: Response) => {
-    if (!requireAdmin(req, res)) return;
-    try {
-      await clerk.invitations.revokeInvitation(req.params.inviteId as string);
-      res.json({ ok: true });
-    } catch (err) {
-      const e = err as Error;
-      res.status(400).json({ error: e.message });
+    const e = err as { message?: string; status?: number };
+    if (!e.message?.toLowerCase().includes("already")) {
+      res.status(400).json({ error: e.message ?? "Failed to create user" });
+      return;
     }
-  },
-);
+  }
+
+  const [dbUser] = await db
+    .insert(usersTable)
+    .values({
+      email: email.trim(),
+      name: name?.trim() ?? null,
+    })
+    .onConflictDoUpdate({
+      target: usersTable.email,
+      set: { name: name?.trim() ?? null, updatedAt: new Date() },
+    })
+    .returning();
+
+  res.status(201).json(dbUser);
+});
 
 router.patch(
   "/:userId/role",
@@ -155,13 +143,6 @@ router.delete("/:userId", requireAuth, async (req: Request, res: Response) => {
     }
 
     await db.delete(usersTable).where(eq(usersTable.id, userId));
-
-    try {
-      await clerk.users.banUser(target.clerkId);
-    } catch {
-      // best-effort; DB removal is the authoritative action
-    }
-
     res.json({ ok: true });
   } catch (err) {
     const e = err as Error;

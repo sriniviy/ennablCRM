@@ -1,7 +1,8 @@
+import { useSessionToken } from "@/hooks/use-session-token";
 import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@clerk/react";
+
 import {
   CommandDialog,
   CommandEmpty,
@@ -22,7 +23,7 @@ interface SearchResults {
 }
 
 function useSearch(query: string) {
-  const { getToken } = useAuth();
+  const getToken = useSessionToken();
   return useQuery<SearchResults>({
     queryKey: ["search", query],
     queryFn: async () => {

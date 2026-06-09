@@ -1,6 +1,7 @@
+import { useSessionToken } from "@/hooks/use-session-token";
 import { useState, useCallback } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
-import { useAuth } from "@clerk/react";
+
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -67,7 +68,7 @@ interface ForecastData {
 }
 
 function useReportsData(range: Range) {
-  const { getToken } = useAuth();
+  const getToken = useSessionToken();
 
   const authFetch = useCallback(
     async (url: string) => {

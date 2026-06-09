@@ -1,5 +1,6 @@
+import { useSessionToken } from "@/hooks/use-session-token";
 import { useState, useCallback } from "react";
-import { useAuth } from "@clerk/react";
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,7 +31,7 @@ function notesQueryKey(entityType: string, entityId: string) {
 }
 
 export function NotesFeed({ entityType, entityId }: NotesFeedProps) {
-  const { getToken } = useAuth();
+  const getToken = useSessionToken();
   const qc = useQueryClient();
   const { toast } = useToast();
   const [draft, setDraft] = useState("");

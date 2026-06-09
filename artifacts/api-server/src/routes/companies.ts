@@ -1,7 +1,8 @@
 import { Router, type Request, type Response } from "express";
 import { db, companiesTable, contactsTable, dealsTable, dealStagesTable } from "@workspace/db";
 import { eq, ilike, and, sql, desc } from "drizzle-orm";
-import { requireAuth } from "../middlewares/requireAuth";
+import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
+import { logAudit } from "../lib/audit";
 
 const router = Router();
 
@@ -170,6 +171,7 @@ router.get("/:id", requireAuth, async (req: Request, res: Response) => {
 
 router.post("/", requireAuth, async (req: Request, res: Response) => {
   try {
+    const { dbUser } = req as AuthRequest;
     const body = req.body as {
       name: string;
       domain?: string;
@@ -215,6 +217,16 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
       })
       .returning();
 
+    await logAudit({
+      action: "CREATE",
+      objectType: "company",
+      objectId: company.id,
+      objectLabel: company.name,
+      actorId: dbUser.id,
+      actorName: dbUser.name,
+      after: company,
+    });
+
     res.status(201).json(company);
   } catch {
     res.status(500).json({ error: "Failed to create company" });
@@ -223,6 +235,7 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
 
 router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
+    const { dbUser } = req as AuthRequest;
     const id = req.params.id as string;
     const [existing] = await db
       .select()
@@ -240,6 +253,17 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
       .where(eq(companiesTable.id, id))
       .returning();
 
+    await logAudit({
+      action: "UPDATE",
+      objectType: "company",
+      objectId: updated.id,
+      objectLabel: updated.name,
+      actorId: dbUser.id,
+      actorName: dbUser.name,
+      before: existing,
+      after: updated,
+    });
+
     res.json(updated);
   } catch {
     res.status(500).json({ error: "Failed to update company" });
@@ -248,6 +272,7 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
 
 router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
+    const { dbUser } = req as AuthRequest;
     const id = req.params.id as string;
     const [existing] = await db
       .select()
@@ -260,6 +285,17 @@ router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
     }
 
     await db.delete(companiesTable).where(eq(companiesTable.id, id));
+
+    await logAudit({
+      action: "DELETE",
+      objectType: "company",
+      objectId: existing.id,
+      objectLabel: existing.name,
+      actorId: dbUser.id,
+      actorName: dbUser.name,
+      before: existing,
+    });
+
     res.status(204).send();
   } catch {
     res.status(500).json({ error: "Failed to delete company" });

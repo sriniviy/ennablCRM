@@ -1,60 +1,52 @@
-import { getAuth, createClerkClient } from "@clerk/express";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import type { Request, Response, NextFunction } from "express";
+import { auth } from "../lib/auth";
 
 export type AuthRequest = Request & {
   userId: string;
   dbUser: typeof usersTable.$inferSelect;
 };
 
-const clerk = createClerkClient({
-  secretKey: process.env.CLERK_SECRET_KEY,
-});
-
 export async function requireAuth(
   req: Request,
   res: Response,
   next: NextFunction,
 ) {
-  const { userId } = getAuth(req);
-  if (!userId) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-
   try {
+    const session = await auth.api.getSession({
+      headers: req.headers as unknown as Headers,
+    });
+
+    if (!session) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const { user } = session;
+
     const [existing] = await db
       .select()
       .from(usersTable)
-      .where(eq(usersTable.clerkId, userId))
+      .where(eq(usersTable.email, user.email))
       .limit(1);
 
     if (existing) {
-      (req as AuthRequest).userId = userId;
+      (req as AuthRequest).userId = user.id;
       (req as AuthRequest).dbUser = existing;
       return next();
     }
 
-    const clerkUser = await clerk.users.getUser(userId);
-    const primaryEmail =
-      clerkUser.emailAddresses.find(
-        (e) => e.id === clerkUser.primaryEmailAddressId,
-      )?.emailAddress ?? `${userId}@unknown.local`;
-
     const [newUser] = await db
       .insert(usersTable)
       .values({
-        clerkId: userId,
-        email: primaryEmail,
-        name:
-          `${clerkUser.firstName ?? ""} ${clerkUser.lastName ?? ""}`.trim() ||
-          null,
-        avatarUrl: clerkUser.imageUrl || null,
+        email: user.email,
+        name: user.name ?? null,
+        avatarUrl: user.image ?? null,
       })
       .returning();
 
-    (req as AuthRequest).userId = userId;
+    (req as AuthRequest).userId = user.id;
     (req as AuthRequest).dbUser = newUser;
     next();
   } catch (err) {

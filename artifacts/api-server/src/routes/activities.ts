@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { db, activitiesTable, usersTable, contactsTable, companiesTable, dealsTable } from "@workspace/db";
 import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
+import { logAudit } from "../lib/audit";
 
 const router = Router();
 
@@ -147,6 +148,16 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
       taskId: body.taskId ?? null,
       metadata: body.metadata ?? null,
     }).returning();
+
+    await logAudit({
+      action: "CREATE",
+      objectType: "activity",
+      objectId: activity.id,
+      objectLabel: activity.title,
+      actorId: dbUser.id,
+      actorName: dbUser.name,
+      after: activity,
+    });
 
     res.status(201).json(activity);
   } catch {

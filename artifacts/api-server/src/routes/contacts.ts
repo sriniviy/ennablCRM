@@ -3,6 +3,7 @@ import { db, contactsTable, companiesTable, usersTable, dealsTable, dealStagesTa
 import { eq, ilike, and, or, sql, asc, desc, isNotNull } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 import { logActivity } from "../lib/activity";
+import { logAudit } from "../lib/audit";
 
 const router = Router();
 
@@ -349,6 +350,16 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
       contactId: contact.id,
     });
 
+    await logAudit({
+      action: "CREATE",
+      objectType: "contact",
+      objectId: contact.id,
+      objectLabel: `${contact.firstName} ${contact.lastName}`.trim(),
+      actorId: dbUser.id,
+      actorName: dbUser.name,
+      after: contact,
+    });
+
     res.status(201).json(contact);
   } catch {
     res.status(500).json({ error: "Failed to create contact" });
@@ -357,6 +368,7 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
 
 router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
+    const { dbUser } = req as AuthRequest;
     const id = req.params.id as string;
     const body = req.body;
 
@@ -375,6 +387,17 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
       .where(eq(contactsTable.id, id))
       .returning();
 
+    await logAudit({
+      action: "UPDATE",
+      objectType: "contact",
+      objectId: updated.id,
+      objectLabel: `${updated.firstName} ${updated.lastName}`.trim(),
+      actorId: dbUser.id,
+      actorName: dbUser.name,
+      before: existing,
+      after: updated,
+    });
+
     res.json(updated);
   } catch {
     res.status(500).json({ error: "Failed to update contact" });
@@ -383,6 +406,7 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
 
 router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
+    const { dbUser } = req as AuthRequest;
     const id = req.params.id as string;
     const [existing] = await db.select().from(contactsTable).where(eq(contactsTable.id, id)).limit(1);
     if (!existing) {
@@ -391,6 +415,17 @@ router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
     }
 
     await db.delete(contactsTable).where(eq(contactsTable.id, id));
+
+    await logAudit({
+      action: "DELETE",
+      objectType: "contact",
+      objectId: existing.id,
+      objectLabel: `${existing.firstName} ${existing.lastName}`.trim(),
+      actorId: dbUser.id,
+      actorName: dbUser.name,
+      before: existing,
+    });
+
     res.status(204).send();
   } catch {
     res.status(500).json({ error: "Failed to delete contact" });

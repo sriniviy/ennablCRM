@@ -36,11 +36,13 @@ import type {
   DashboardStats,
   DealStage,
   DealWithRelations,
+  ErrorResponse,
   GetDashboardActivityFeedParams,
   HealthStatus,
   ImportContactsInput,
   ImportResult,
   ListActivitiesParams,
+  ListAuditParams,
   ListCampaignsParams,
   ListCompaniesParams,
   ListContactsParams,
@@ -49,6 +51,7 @@ import type {
   MoveDealInput,
   NotFoundResponse,
   PaginatedActivities,
+  PaginatedAuditLog,
   PaginatedCampaigns,
   PaginatedCompanies,
   PaginatedContacts,
@@ -2936,6 +2939,91 @@ export function useTrackEmailClick<TData = Awaited<ReturnType<typeof trackEmailC
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getTrackEmailClickQueryOptions(id,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getListAuditUrl = (params?: ListAuditParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/audit?${stringifiedParams}` : `/api/audit`
+}
+
+/**
+ * Browsing the global audit log (without objectId) requires the ADMIN role. Per-record history (with objectId) is available to any authenticated user.
+ * @summary List audit log entries with optional filtering
+ */
+export const listAudit = async (params?: ListAuditParams, options?: RequestInit): Promise<PaginatedAuditLog> => {
+
+  return customFetch<PaginatedAuditLog>(getListAuditUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAuditQueryKey = (params?: ListAuditParams,) => {
+    return [
+    `/api/audit`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAuditQueryOptions = <TData = Awaited<ReturnType<typeof listAudit>>, TError = ErrorType<UnauthorizedResponse | ErrorResponse>>(params?: ListAuditParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAudit>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAuditQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAudit>>> = ({ signal }) => listAudit(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAudit>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAuditQueryResult = NonNullable<Awaited<ReturnType<typeof listAudit>>>
+export type ListAuditQueryError = ErrorType<UnauthorizedResponse | ErrorResponse>
+
+
+/**
+ * @summary List audit log entries with optional filtering
+ */
+
+export function useListAudit<TData = Awaited<ReturnType<typeof listAudit>>, TError = ErrorType<UnauthorizedResponse | ErrorResponse>>(
+ params?: ListAuditParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAudit>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAuditQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

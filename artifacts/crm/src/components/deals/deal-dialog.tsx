@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { NotesFeed } from "@/components/notes/notes-feed";
+import { AuditHistory } from "@/components/audit/audit-history";
 
 interface DealDialogProps {
   open: boolean;
@@ -116,6 +117,9 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
                 <TabsTrigger value="notes" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-2 pt-1">
                   Notes
                 </TabsTrigger>
+                <TabsTrigger value="history" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-2 pt-1">
+                  History
+                </TabsTrigger>
               </TabsList>
               <TabsContent value="details">
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -183,6 +187,9 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
               </TabsContent>
               <TabsContent value="notes">
                 <NotesFeed entityType="deal" entityId={deal.id} />
+              </TabsContent>
+              <TabsContent value="history">
+                <AuditHistory objectType="deal" objectId={deal.id} />
               </TabsContent>
             </Tabs>
           ) : (

@@ -1,3 +1,1 @@
-- [api-spec codegen pitfalls](api-spec-codegen.md) — orval regenerates api-zod index with a colliding types barrel; openapi.yaml drifts from backend reality + stale generated client.
-- [Express 5 req.params typing](express5-req-params.md) — params are `string | string[]`; cast `as string` before drizzle eq()/string fns.
-- [CRM dialog field clearing](crm-dialog-field-clearing.md) — edit dialogs must send `null` (not undefined) to clear optional fields; PATCH spreads body so undefined is a no-op.
+- [Better Auth migration](better-auth-migration.md) — drizzle-orm dual-variant TS conflict; kysely must be in lib/db deps too; @opentelemetry/semantic-conventions needed at runtime.

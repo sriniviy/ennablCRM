@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Mail, Phone, Building2, Calendar, MessageSquare, Linkedin, CheckSquare, Pencil } from "lucide-react";
 import { NotesFeed } from "@/components/notes/notes-feed";
+import { AuditHistory } from "@/components/audit/audit-history";
 import { formatCurrency } from "@/lib/utils";
 import { useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -210,6 +211,9 @@ export function ContactDetailPage() {
                 <TabsTrigger value="tasks" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   Tasks ({contact.tasks?.length || 0})
                 </TabsTrigger>
+                <TabsTrigger value="history" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
+                  History
+                </TabsTrigger>
               </TabsList>
               
               <TabsContent value="activity" className="pt-6">
@@ -360,6 +364,10 @@ export function ContactDetailPage() {
                 ) : (
                   <p className="text-muted-foreground text-sm">No tasks for this contact.</p>
                 )}
+              </TabsContent>
+
+              <TabsContent value="history" className="pt-6">
+                <AuditHistory objectType="contact" objectId={contact.id} />
               </TabsContent>
             </Tabs>
           </div>

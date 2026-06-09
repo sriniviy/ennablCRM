@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useGetMe } from "@workspace/api-client-react";
-import { useClerk } from "@clerk/react";
+import { authClient } from "@/lib/auth-client";
 import {
   LayoutDashboard,
   Users,
@@ -10,6 +10,7 @@ import {
   Mail,
   BarChart2,
   Settings,
+  ScrollText,
   LogOut,
   Menu,
   ChevronLeft,
@@ -45,6 +46,7 @@ const navItems = [
   { name: "Tasks", href: "/tasks", icon: CheckSquare },
   { name: "Campaigns", href: "/campaigns", icon: Mail },
   { name: "Reports", href: "/reports", icon: BarChart2 },
+  { name: "Audit Log", href: "/admin/audit-log", icon: ScrollText, adminOnly: true },
   { name: "Settings", href: "/settings/team", icon: Settings },
 ];
 
@@ -57,9 +59,8 @@ function getInitialCollapsed(): boolean {
 }
 
 export function SidebarLayout({ children }: { children: React.ReactNode }) {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const { data: user } = useGetMe();
-  const { signOut } = useClerk();
   const { theme, toggle: toggleTheme } = useTheme();
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -71,13 +72,18 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     } catch {}
   }, [collapsed]);
 
-  const handleSignOut = () => {
-    signOut({ redirectUrl: basePath || "/" });
+  const handleSignOut = async () => {
+    await authClient.signOut();
+    setLocation("/sign-in");
   };
+
+  const visibleNavItems = navItems.filter(
+    (item) => !item.adminOnly || user?.role === "ADMIN",
+  );
 
   const MobileNavLinks = () => (
     <div className="flex-1 space-y-1">
-      {navItems.map((item) => {
+      {visibleNavItems.map((item) => {
         const isActive = location.startsWith(item.href);
         return (
           <Link
@@ -101,7 +107,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
 
   const DesktopNavLinks = () => (
     <div className="flex-1 space-y-1">
-      {navItems.map((item) => {
+      {visibleNavItems.map((item) => {
         const isActive = location.startsWith(item.href);
         const linkClass = `flex items-center rounded-lg py-2 text-sm font-medium transition-colors ${
           collapsed ? "justify-center px-0" : "gap-3 px-3"
