@@ -467,6 +467,8 @@ export async function runSequenceSender() {
 
   if (claimedIds.length === 0) return;
 
+  // Re-fetch with status = ACTIVE so enrollments unenrolled between claim and
+  // send are automatically excluded — no unwanted emails sent post-unenroll.
   const claimed = await db
     .select({
       enrollment: sequenceEnrollmentsTable,
@@ -479,7 +481,12 @@ export async function runSequenceSender() {
       contactsTable,
       eq(contactsTable.id, sequenceEnrollmentsTable.contactId),
     )
-    .where(inArray(sequenceEnrollmentsTable.id, claimedIds));
+    .where(
+      and(
+        inArray(sequenceEnrollmentsTable.id, claimedIds),
+        eq(sequenceEnrollmentsTable.status, "ACTIVE"),
+      ),
+    );
 
   for (const { enrollment, contactEmail, contactFirstName, contactLastName } of claimed) {
     if (!contactEmail) continue;
