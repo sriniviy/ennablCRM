@@ -157,7 +157,7 @@ router.delete("/:userId", requireAuth, async (req: Request, res: Response) => {
     await db.delete(usersTable).where(eq(usersTable.id, userId));
 
     try {
-      await clerk.users.deleteUser(target.clerkId);
+      await clerk.users.banUser(target.clerkId);
     } catch {
       // best-effort; DB removal is the authoritative action
     }
