@@ -178,6 +178,11 @@ router.post("/:id/send", requireAuth, async (req: Request, res: Response) => {
       return;
     }
 
+    if (!getResend()) {
+      res.status(503).json({ error: "Email sending is not configured. Set RESEND_API_KEY to enable outbound email." });
+      return;
+    }
+
     const [campaign] = await db.select().from(emailCampaignsTable).where(eq(emailCampaignsTable.id, id)).limit(1);
     if (!campaign) {
       res.status(404).json({ error: "Campaign not found" });
@@ -210,7 +215,7 @@ router.post("/:id/send", requireAuth, async (req: Request, res: Response) => {
         .onConflictDoNothing();
     }
 
-    const resend = getResend();
+    const resend = getResend()!;
     let sentCount = 0;
 
     for (const contact of validContacts) {
@@ -230,30 +235,15 @@ router.post("/:id/send", requireAuth, async (req: Request, res: Response) => {
           `<img src="${trackingPixelUrl}" width="1" height="1" style="display:none" alt="" /></body>`,
         );
 
-      if (resend) {
-        try {
-          await resend.emails.send({
-            from: `${campaign.fromName} <${campaign.fromEmail}>`,
-            to: contact.email,
-            subject: campaign.subject,
-            html: htmlWithTracking,
-            text: campaign.textContent ?? undefined,
-          });
+      try {
+        await resend.emails.send({
+          from: `${campaign.fromName} <${campaign.fromEmail}>`,
+          to: contact.email,
+          subject: campaign.subject,
+          html: htmlWithTracking,
+          text: campaign.textContent ?? undefined,
+        });
 
-          await db
-            .update(campaignContactsTable)
-            .set({ status: "SENT", sentAt: new Date() })
-            .where(
-              and(
-                eq(campaignContactsTable.campaignId, id),
-                eq(campaignContactsTable.contactId, contact.id),
-              ),
-            );
-          sentCount++;
-        } catch {
-          // ignore individual send errors
-        }
-      } else {
         await db
           .update(campaignContactsTable)
           .set({ status: "SENT", sentAt: new Date() })
@@ -264,6 +254,8 @@ router.post("/:id/send", requireAuth, async (req: Request, res: Response) => {
             ),
           );
         sentCount++;
+      } catch {
+        // ignore individual send errors — don't fail the whole batch
       }
     }
 

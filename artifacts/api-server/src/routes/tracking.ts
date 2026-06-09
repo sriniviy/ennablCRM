@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { db, campaignContactsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
+import { logActivity } from "../lib/activity";
 
 const router = Router();
 
@@ -21,6 +22,14 @@ router.get("/open/:campaignId", async (req: Request, res: Response) => {
           eq(campaignContactsTable.campaignId, campaignId),
           eq(campaignContactsTable.contactId, contactId),
         ),
+      )
+      .then(() =>
+        logActivity({
+          type: "EMAIL_OPENED",
+          title: "Email opened",
+          contactId,
+          metadata: { campaignId },
+        }),
       )
       .catch(() => {});
   }
@@ -43,6 +52,14 @@ router.get("/click/:campaignId", async (req: Request, res: Response) => {
           eq(campaignContactsTable.campaignId, campaignId),
           eq(campaignContactsTable.contactId, contactId),
         ),
+      )
+      .then(() =>
+        logActivity({
+          type: "EMAIL_CLICKED",
+          title: "Email link clicked",
+          contactId,
+          metadata: { campaignId, url },
+        }),
       )
       .catch(() => {});
   }
