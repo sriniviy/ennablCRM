@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useCreateCompany, useUpdateCompany, useDeleteCompany,
-  getListCompaniesQueryKey,
+  getListCompaniesQueryKey, getGetCompanyQueryKey,
   type Company,
 } from "@workspace/api-client-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -52,7 +52,10 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
     }
   }, [open, company]);
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: getListCompaniesQueryKey() });
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: getListCompaniesQueryKey() });
+    if (company?.id) qc.invalidateQueries({ queryKey: getGetCompanyQueryKey(company.id) });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

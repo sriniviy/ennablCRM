@@ -5,13 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Globe, MapPin, Phone, Users, Briefcase } from "lucide-react";
+import { ArrowLeft, Globe, MapPin, Phone, Users, Briefcase, Pencil } from "lucide-react";
 import { NotesFeed } from "@/components/notes/notes-feed";
 import { formatCurrency } from "@/lib/utils";
+import { useState } from "react";
+import { CompanyDialog } from "@/components/companies/company-dialog";
 
 export function CompanyDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: company, isLoading } = useGetCompany(id);
+  const [editOpen, setEditOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -45,6 +48,7 @@ export function CompanyDetailPage() {
   }
 
   return (
+    <>
     <SidebarLayout>
       <div className="space-y-6">
         <div>
@@ -65,7 +69,9 @@ export function CompanyDetailPage() {
               </div>
             </div>
             <div className="flex gap-2">
-              <Button>Edit</Button>
+              <Button onClick={() => setEditOpen(true)}>
+                <Pencil className="mr-2 h-4 w-4" /> Edit
+              </Button>
             </div>
           </div>
         </div>
@@ -187,5 +193,14 @@ export function CompanyDetailPage() {
         </div>
       </div>
     </SidebarLayout>
+
+    {company && (
+      <CompanyDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        company={company}
+      />
+    )}
+  </>
   );
 }

@@ -7,16 +7,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Mail, Phone, Building2, Calendar, MessageSquare, Linkedin, CheckSquare } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Building2, Calendar, MessageSquare, Linkedin, CheckSquare, Pencil } from "lucide-react";
 import { NotesFeed } from "@/components/notes/notes-feed";
 import { formatCurrency } from "@/lib/utils";
 import { useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { ContactDialog } from "@/components/contacts/contact-dialog";
 
 export function ContactDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: contact, isLoading } = useGetContact(id);
+  const [editOpen, setEditOpen] = useState(false);
   const [note, setNote] = useState("");
   const createActivity = useCreateActivity();
   const queryClient = useQueryClient();
@@ -76,6 +78,7 @@ export function ContactDetailPage() {
   }
 
   return (
+    <>
     <SidebarLayout>
       <div className="space-y-6">
         <div>
@@ -96,7 +99,9 @@ export function ContactDetailPage() {
               <Badge variant="outline" className="text-sm px-3 py-1">
                 {contact.status}
               </Badge>
-              <Button>Edit</Button>
+              <Button onClick={() => setEditOpen(true)}>
+                <Pencil className="mr-2 h-4 w-4" /> Edit
+              </Button>
             </div>
           </div>
         </div>
@@ -267,5 +272,14 @@ export function ContactDetailPage() {
         </div>
       </div>
     </SidebarLayout>
+
+    {contact && (
+      <ContactDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        contact={contact}
+      />
+    )}
+  </>
   );
 }
