@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Upload, AlertCircle, CheckCircle2, ChevronDown, ChevronRight } from "lucide-react";
+import { Upload, AlertCircle, CheckCircle2, ChevronDown, ChevronRight, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface CsvImportDialogProps {
@@ -141,6 +141,35 @@ export function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
       setSkippedOpen(false);
       if (fileRef.current) fileRef.current.value = "";
     }, 300);
+  };
+
+  const downloadSkippedRows = () => {
+    if (!result || result.skipped.length === 0) return;
+    const skipReasonCol = "Skip reason";
+    const csvHeaders = [...headers, skipReasonCol];
+
+    const escapeCell = (val: string) => {
+      if (val.includes(",") || val.includes('"') || val.includes("\n")) {
+        return `"${val.replace(/"/g, '""')}"`;
+      }
+      return val;
+    };
+
+    const lines: string[] = [csvHeaders.map(escapeCell).join(",")];
+    for (const skipped of result.skipped) {
+      const rowData = rows[skipped.row - 2] ?? {};
+      const cells = headers.map(h => escapeCell(rowData[h] ?? ""));
+      cells.push(escapeCell(skipped.reason));
+      lines.push(cells.join(","));
+    }
+
+    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "skipped-rows.csv";
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const previewRows = rows.slice(0, 3);
@@ -280,6 +309,13 @@ export function CsvImportDialog({ open, onOpenChange }: CsvImportDialogProps) {
                   </div>
                 )}
               </div>
+            )}
+
+            {result.skipped.length > 0 && (
+              <Button variant="outline" size="sm" className="self-start" onClick={downloadSkippedRows}>
+                <Download className="h-4 w-4 mr-2" />
+                Download skipped rows
+              </Button>
             )}
           </div>
         )}
