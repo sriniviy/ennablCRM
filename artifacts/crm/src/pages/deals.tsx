@@ -5,14 +5,28 @@ import { useListDeals, useMoveDeal, getListDealsQueryKey, type PipelineColumn, t
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Download, Loader2 } from "lucide-react";
+import { Plus, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { formatCurrency } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { DealDialog } from "@/components/deals/deal-dialog";
+import { ExportColumnsDialog, type ColumnDef } from "@/components/export-columns-dialog";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+const DEAL_COLUMNS: ColumnDef[] = [
+  { key: "title", label: "Title" },
+  { key: "stage", label: "Stage" },
+  { key: "value", label: "Value" },
+  { key: "currency", label: "Currency" },
+  { key: "probability", label: "Probability (%)" },
+  { key: "closeDate", label: "Close Date" },
+  { key: "contact", label: "Contact" },
+  { key: "company", label: "Company" },
+  { key: "notes", label: "Notes" },
+  { key: "createdAt", label: "Created At" },
+];
 
 export function DealsPage() {
   const { getToken } = useAuth();
@@ -24,13 +38,16 @@ export function DealsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editDeal, setEditDeal] = useState<DealWithRelations | undefined>();
   const [defaultStageId, setDefaultStageId] = useState<string | undefined>();
+  const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  const handleExport = async () => {
+  const handleExport = async (fields: string[]) => {
     setExporting(true);
     try {
       const token = await getToken();
-      const res = await fetch(`${BASE}/api/deals/export`, {
+      const params = new URLSearchParams();
+      params.set("fields", fields.join(","));
+      const res = await fetch(`${BASE}/api/deals/export?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error("Export failed");
@@ -43,6 +60,7 @@ export function DealsPage() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      setExportOpen(false);
     } catch {
       toast({ title: "Export failed", variant: "destructive" });
     } finally {
@@ -111,8 +129,8 @@ export function DealsPage() {
             <p className="text-muted-foreground">Manage and track your active opportunities.</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={handleExport} disabled={exporting}>
-              {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+            <Button variant="outline" onClick={() => setExportOpen(true)}>
+              <Download className="mr-2 h-4 w-4" />
               Export CSV
             </Button>
             <Button data-testid="btn-new-deal" onClick={() => openNew()}>
@@ -209,6 +227,14 @@ export function DealsPage() {
       </div>
 
       <DealDialog open={dialogOpen} onOpenChange={setDialogOpen} deal={editDeal} defaultStageId={defaultStageId} />
+      <ExportColumnsDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        columns={DEAL_COLUMNS}
+        storageKey="crm:export-columns:deals"
+        onExport={handleExport}
+        exporting={exporting}
+      />
     </SidebarLayout>
   );
 }

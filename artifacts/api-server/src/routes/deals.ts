@@ -80,7 +80,7 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
 
 router.get("/export", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { search, contactId, companyId, assigneeId } = req.query as Record<string, string>;
+    const { search, contactId, companyId, assigneeId, fields } = req.query as Record<string, string>;
 
     const conditions = [];
     if (contactId) conditions.push(eq(dealsTable.contactId, contactId));
@@ -105,19 +105,47 @@ router.get("/export", requireAuth, async (req: Request, res: Response) => {
       .orderBy(asc(dealsTable.order), desc(dealsTable.createdAt));
 
     const escape = (v: string | number | null | undefined) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const headers = ["Title","Stage","Value","Currency","Probability (%)","Close Date","Contact","Company","Notes","Created At"];
-    const csvRows = rows.map(({ deal: d, stageName, contactFirstName, contactLastName, companyName }) => [
-      d.title,
-      stageName,
-      d.value,
-      d.currency,
-      d.probability,
-      d.closeDate ? new Date(d.closeDate).toISOString().slice(0, 10) : "",
-      [contactFirstName, contactLastName].filter(Boolean).join(" "),
-      companyName,
-      d.notes,
-      d.createdAt ? new Date(d.createdAt).toISOString() : "",
-    ].map(escape).join(","));
+
+    type DealColKey = "title" | "stage" | "value" | "currency" | "probability" | "closeDate" | "contact" | "company" | "notes" | "createdAt";
+    const ALL_COLS: { key: DealColKey; header: string }[] = [
+      { key: "title", header: "Title" },
+      { key: "stage", header: "Stage" },
+      { key: "value", header: "Value" },
+      { key: "currency", header: "Currency" },
+      { key: "probability", header: "Probability (%)" },
+      { key: "closeDate", header: "Close Date" },
+      { key: "contact", header: "Contact" },
+      { key: "company", header: "Company" },
+      { key: "notes", header: "Notes" },
+      { key: "createdAt", header: "Created At" },
+    ];
+
+    const selectedKeys = fields
+      ? new Set(fields.split(",").map((f) => f.trim()).filter(Boolean))
+      : new Set(ALL_COLS.map((c) => c.key));
+    const cols = ALL_COLS.filter((c) => selectedKeys.has(c.key));
+
+    type DealRow = typeof rows[number];
+    const getValue = (key: DealColKey, row: DealRow) => {
+      const { deal: d, stageName, contactFirstName, contactLastName, companyName } = row;
+      switch (key) {
+        case "title": return d.title;
+        case "stage": return stageName;
+        case "value": return d.value;
+        case "currency": return d.currency;
+        case "probability": return d.probability;
+        case "closeDate": return d.closeDate ? new Date(d.closeDate).toISOString().slice(0, 10) : "";
+        case "contact": return [contactFirstName, contactLastName].filter(Boolean).join(" ");
+        case "company": return companyName;
+        case "notes": return d.notes;
+        case "createdAt": return d.createdAt ? new Date(d.createdAt).toISOString() : "";
+      }
+    };
+
+    const headers = cols.map((c) => c.header);
+    const csvRows = rows.map((row) =>
+      cols.map((c) => escape(getValue(c.key, row))).join(",")
+    );
 
     const csv = [headers.map(escape).join(","), ...csvRows].join("\n");
     res.setHeader("Content-Type", "text/csv");

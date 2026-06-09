@@ -9,12 +9,26 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Plus, Globe, Building2, Download, Loader2 } from "lucide-react";
+import { Search, Plus, Globe, Building2, Download } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { CompanyDialog } from "@/components/companies/company-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { ExportColumnsDialog, type ColumnDef } from "@/components/export-columns-dialog";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+const COMPANY_COLUMNS: ColumnDef[] = [
+  { key: "name", label: "Name" },
+  { key: "domain", label: "Domain" },
+  { key: "industry", label: "Industry" },
+  { key: "size", label: "Size" },
+  { key: "website", label: "Website" },
+  { key: "phone", label: "Phone" },
+  { key: "address", label: "Address" },
+  { key: "city", label: "City" },
+  { key: "country", label: "Country" },
+  { key: "createdAt", label: "Created At" },
+];
 
 export function CompaniesPage() {
   const { getToken } = useAuth();
@@ -23,14 +37,16 @@ export function CompaniesPage() {
   const debouncedSearch = useDebounce(search, 400);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editCompany, setEditCompany] = useState<Company | undefined>();
+  const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  const handleExport = async () => {
+  const handleExport = async (fields: string[]) => {
     setExporting(true);
     try {
       const token = await getToken();
       const params = new URLSearchParams();
       if (debouncedSearch) params.set("search", debouncedSearch);
+      params.set("fields", fields.join(","));
       const res = await fetch(`${BASE}/api/companies/export?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -44,6 +60,7 @@ export function CompaniesPage() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      setExportOpen(false);
     } catch {
       toast({ title: "Export failed", variant: "destructive" });
     } finally {
@@ -65,8 +82,8 @@ export function CompaniesPage() {
             <p className="text-muted-foreground">Manage your accounts and organizations.</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={handleExport} disabled={exporting}>
-              {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+            <Button variant="outline" onClick={() => setExportOpen(true)}>
+              <Download className="mr-2 h-4 w-4" />
               Export CSV
             </Button>
             <Button data-testid="btn-new-company" onClick={openNew}>
@@ -154,6 +171,14 @@ export function CompaniesPage() {
       </div>
 
       <CompanyDialog open={dialogOpen} onOpenChange={setDialogOpen} company={editCompany} />
+      <ExportColumnsDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        columns={COMPANY_COLUMNS}
+        storageKey="crm:export-columns:companies"
+        onExport={handleExport}
+        exporting={exporting}
+      />
     </SidebarLayout>
   );
 }

@@ -156,7 +156,7 @@ router.post("/import", requireAuth, async (req: Request, res: Response) => {
 
 router.get("/export", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { search, status, companyId, tag } = req.query as Record<string, string>;
+    const { search, status, companyId, tag, fields } = req.query as Record<string, string>;
 
     const conditions = [];
     if (search) {
@@ -190,12 +190,47 @@ router.get("/export", requireAuth, async (req: Request, res: Response) => {
       .orderBy(desc(contactsTable.createdAt));
 
     const escape = (v: string | null | undefined) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const headers = ["First Name","Last Name","Email","Phone","Title","Status","Company","Tags","Notes","LinkedIn","Created At"];
-    const csvRows = rows.map(({ contact: c, companyName }) => [
-      c.firstName, c.lastName, c.email, c.phone, c.title, c.status,
-      companyName, (c.tags ?? []).join(";"), c.notes, c.linkedIn,
-      c.createdAt ? new Date(c.createdAt).toISOString() : "",
-    ].map(escape).join(","));
+
+    type ContactColKey = "firstName" | "lastName" | "email" | "phone" | "title" | "status" | "company" | "tags" | "notes" | "linkedIn" | "createdAt";
+    const ALL_COLS: { key: ContactColKey; header: string }[] = [
+      { key: "firstName", header: "First Name" },
+      { key: "lastName", header: "Last Name" },
+      { key: "email", header: "Email" },
+      { key: "phone", header: "Phone" },
+      { key: "title", header: "Title" },
+      { key: "status", header: "Status" },
+      { key: "company", header: "Company" },
+      { key: "tags", header: "Tags" },
+      { key: "notes", header: "Notes" },
+      { key: "linkedIn", header: "LinkedIn" },
+      { key: "createdAt", header: "Created At" },
+    ];
+
+    const selectedKeys = fields
+      ? new Set(fields.split(",").map((f) => f.trim()).filter(Boolean))
+      : new Set(ALL_COLS.map((c) => c.key));
+    const cols = ALL_COLS.filter((c) => selectedKeys.has(c.key));
+
+    const getValue = (key: ContactColKey, contact: typeof rows[number]["contact"], companyName: string | null) => {
+      switch (key) {
+        case "firstName": return contact.firstName;
+        case "lastName": return contact.lastName;
+        case "email": return contact.email;
+        case "phone": return contact.phone;
+        case "title": return contact.title;
+        case "status": return contact.status;
+        case "company": return companyName;
+        case "tags": return (contact.tags ?? []).join(";");
+        case "notes": return contact.notes;
+        case "linkedIn": return contact.linkedIn;
+        case "createdAt": return contact.createdAt ? new Date(contact.createdAt).toISOString() : "";
+      }
+    };
+
+    const headers = cols.map((c) => c.header);
+    const csvRows = rows.map(({ contact, companyName }) =>
+      cols.map((c) => escape(getValue(c.key, contact, companyName ?? null))).join(",")
+    );
 
     const csv = [headers.map(escape).join(","), ...csvRows].join("\n");
     res.setHeader("Content-Type", "text/csv");

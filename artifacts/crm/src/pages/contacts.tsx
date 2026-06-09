@@ -11,11 +11,12 @@ import {
 } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Plus, Upload, Download, Loader2 } from "lucide-react";
+import { Search, Plus, Upload, Download } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { ContactDialog } from "@/components/contacts/contact-dialog";
 import { CsvImportDialog } from "@/components/contacts/csv-import-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { ExportColumnsDialog, type ColumnDef } from "@/components/export-columns-dialog";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -29,6 +30,20 @@ const STATUS_COLORS: Record<string, string> = {
   UNQUALIFIED: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400",
 };
 
+const CONTACT_COLUMNS: ColumnDef[] = [
+  { key: "firstName", label: "First Name" },
+  { key: "lastName", label: "Last Name" },
+  { key: "email", label: "Email" },
+  { key: "phone", label: "Phone" },
+  { key: "title", label: "Title" },
+  { key: "status", label: "Status" },
+  { key: "company", label: "Company" },
+  { key: "tags", label: "Tags" },
+  { key: "notes", label: "Notes" },
+  { key: "linkedIn", label: "LinkedIn" },
+  { key: "createdAt", label: "Created At" },
+];
+
 export function ContactsPage() {
   const { getToken } = useAuth();
   const { toast } = useToast();
@@ -41,9 +56,10 @@ export function ContactsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editContact, setEditContact] = useState<ContactWithRelations | undefined>();
   const [importOpen, setImportOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  const handleExport = async () => {
+  const handleExport = async (fields: string[]) => {
     setExporting(true);
     try {
       const token = await getToken();
@@ -51,6 +67,7 @@ export function ContactsPage() {
       if (debouncedSearch) params.set("search", debouncedSearch);
       if (statusFilter !== "ALL") params.set("status", statusFilter);
       if (debouncedTag) params.set("tag", debouncedTag);
+      params.set("fields", fields.join(","));
       const res = await fetch(`${BASE}/api/contacts/export?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -64,6 +81,7 @@ export function ContactsPage() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      setExportOpen(false);
     } catch {
       toast({ title: "Export failed", variant: "destructive" });
     } finally {
@@ -94,8 +112,8 @@ export function ContactsPage() {
             <Button variant="outline" onClick={() => setImportOpen(true)}>
               <Upload className="mr-2 h-4 w-4" /> Import CSV
             </Button>
-            <Button variant="outline" onClick={handleExport} disabled={exporting}>
-              {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+            <Button variant="outline" onClick={() => setExportOpen(true)}>
+              <Download className="mr-2 h-4 w-4" />
               Export CSV
             </Button>
             <Button data-testid="btn-new-contact" onClick={openNew}>
@@ -201,6 +219,14 @@ export function ContactsPage() {
 
       <ContactDialog open={dialogOpen} onOpenChange={setDialogOpen} contact={editContact} />
       <CsvImportDialog open={importOpen} onOpenChange={setImportOpen} />
+      <ExportColumnsDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        columns={CONTACT_COLUMNS}
+        storageKey="crm:export-columns:contacts"
+        onExport={handleExport}
+        exporting={exporting}
+      />
     </SidebarLayout>
   );
 }

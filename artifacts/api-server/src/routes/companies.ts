@@ -50,7 +50,7 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
 
 router.get("/export", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { search } = req.query as Record<string, string>;
+    const { search, fields } = req.query as Record<string, string>;
     const where = search ? ilike(companiesTable.name, `%${search}%`) : undefined;
 
     const rows = await db
@@ -60,12 +60,46 @@ router.get("/export", requireAuth, async (req: Request, res: Response) => {
       .orderBy(desc(companiesTable.createdAt));
 
     const escape = (v: string | null | undefined) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const headers = ["Name","Domain","Industry","Size","Website","Phone","Address","City","Country","Created At"];
-    const csvRows = rows.map((c) => [
-      c.name, c.domain, c.industry, c.size, c.website, c.phone,
-      c.address, c.city, c.country,
-      c.createdAt ? new Date(c.createdAt).toISOString() : "",
-    ].map(escape).join(","));
+
+    type CompanyColKey = "name" | "domain" | "industry" | "size" | "website" | "phone" | "address" | "city" | "country" | "createdAt";
+    const ALL_COLS: { key: CompanyColKey; header: string }[] = [
+      { key: "name", header: "Name" },
+      { key: "domain", header: "Domain" },
+      { key: "industry", header: "Industry" },
+      { key: "size", header: "Size" },
+      { key: "website", header: "Website" },
+      { key: "phone", header: "Phone" },
+      { key: "address", header: "Address" },
+      { key: "city", header: "City" },
+      { key: "country", header: "Country" },
+      { key: "createdAt", header: "Created At" },
+    ];
+
+    const selectedKeys = fields
+      ? new Set(fields.split(",").map((f) => f.trim()).filter(Boolean))
+      : new Set(ALL_COLS.map((c) => c.key));
+    const cols = ALL_COLS.filter((c) => selectedKeys.has(c.key));
+
+    type CompanyRow = typeof rows[number];
+    const getValue = (key: CompanyColKey, c: CompanyRow) => {
+      switch (key) {
+        case "name": return c.name;
+        case "domain": return c.domain;
+        case "industry": return c.industry;
+        case "size": return c.size;
+        case "website": return c.website;
+        case "phone": return c.phone;
+        case "address": return c.address;
+        case "city": return c.city;
+        case "country": return c.country;
+        case "createdAt": return c.createdAt ? new Date(c.createdAt).toISOString() : "";
+      }
+    };
+
+    const headers = cols.map((c) => c.header);
+    const csvRows = rows.map((c) =>
+      cols.map((col) => escape(getValue(col.key, c))).join(",")
+    );
 
     const csv = [headers.map(escape).join(","), ...csvRows].join("\n");
     res.setHeader("Content-Type", "text/csv");
