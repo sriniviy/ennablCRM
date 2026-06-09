@@ -1,5 +1,6 @@
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useState } from "react";
+import { useAuth } from "@clerk/react";
 import { useListContacts, ContactStatus, type ContactWithRelations } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { Input } from "@/components/ui/input";
@@ -10,10 +11,13 @@ import {
 } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Plus, Upload } from "lucide-react";
+import { Search, Plus, Upload, Download, Loader2 } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { ContactDialog } from "@/components/contacts/contact-dialog";
 import { CsvImportDialog } from "@/components/contacts/csv-import-dialog";
+import { useToast } from "@/hooks/use-toast";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 const STATUSES = ["ALL", ...Object.values(ContactStatus)];
 
@@ -26,6 +30,8 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export function ContactsPage() {
+  const { getToken } = useAuth();
+  const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [tagFilter, setTagFilter] = useState("");
@@ -35,6 +41,35 @@ export function ContactsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editContact, setEditContact] = useState<ContactWithRelations | undefined>();
   const [importOpen, setImportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const token = await getToken();
+      const params = new URLSearchParams();
+      if (debouncedSearch) params.set("search", debouncedSearch);
+      if (statusFilter !== "ALL") params.set("status", statusFilter);
+      if (debouncedTag) params.set("tag", debouncedTag);
+      const res = await fetch(`${BASE}/api/contacts/export?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "contacts.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: "Export failed", variant: "destructive" });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const { data, isLoading } = useListContacts({
     search: debouncedSearch || undefined,
@@ -58,6 +93,10 @@ export function ContactsPage() {
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setImportOpen(true)}>
               <Upload className="mr-2 h-4 w-4" /> Import CSV
+            </Button>
+            <Button variant="outline" onClick={handleExport} disabled={exporting}>
+              {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+              Export CSV
             </Button>
             <Button data-testid="btn-new-contact" onClick={openNew}>
               <Plus className="mr-2 h-4 w-4" /> Add Contact

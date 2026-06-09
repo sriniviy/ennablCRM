@@ -78,6 +78,56 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
   }
 });
 
+router.get("/export", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { search, contactId, companyId, assigneeId } = req.query as Record<string, string>;
+
+    const conditions = [];
+    if (contactId) conditions.push(eq(dealsTable.contactId, contactId));
+    if (companyId) conditions.push(eq(dealsTable.companyId, companyId));
+    if (assigneeId) conditions.push(eq(dealsTable.assigneeId, assigneeId));
+    if (search) conditions.push(ilike(dealsTable.title, `%${search}%`));
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const rows = await db
+      .select({
+        deal: dealsTable,
+        stageName: dealStagesTable.name,
+        contactFirstName: contactsTable.firstName,
+        contactLastName: contactsTable.lastName,
+        companyName: companiesTable.name,
+      })
+      .from(dealsTable)
+      .leftJoin(dealStagesTable, eq(dealsTable.stageId, dealStagesTable.id))
+      .leftJoin(contactsTable, eq(dealsTable.contactId, contactsTable.id))
+      .leftJoin(companiesTable, eq(dealsTable.companyId, companiesTable.id))
+      .where(where)
+      .orderBy(asc(dealsTable.order), desc(dealsTable.createdAt));
+
+    const escape = (v: string | number | null | undefined) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const headers = ["Title","Stage","Value","Currency","Probability (%)","Close Date","Contact","Company","Notes","Created At"];
+    const csvRows = rows.map(({ deal: d, stageName, contactFirstName, contactLastName, companyName }) => [
+      d.title,
+      stageName,
+      d.value,
+      d.currency,
+      d.probability,
+      d.closeDate ? new Date(d.closeDate).toISOString().slice(0, 10) : "",
+      [contactFirstName, contactLastName].filter(Boolean).join(" "),
+      companyName,
+      d.notes,
+      d.createdAt ? new Date(d.createdAt).toISOString() : "",
+    ].map(escape).join(","));
+
+    const csv = [headers.map(escape).join(","), ...csvRows].join("\n");
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", "attachment; filename=\"deals.csv\"");
+    res.send(csv);
+  } catch {
+    res.status(500).json({ error: "Failed to export deals" });
+  }
+});
+
 router.get("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
     const id = req.params.id as string;

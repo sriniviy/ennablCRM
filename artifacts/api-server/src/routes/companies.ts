@@ -48,6 +48,34 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
   }
 });
 
+router.get("/export", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { search } = req.query as Record<string, string>;
+    const where = search ? ilike(companiesTable.name, `%${search}%`) : undefined;
+
+    const rows = await db
+      .select()
+      .from(companiesTable)
+      .where(where)
+      .orderBy(desc(companiesTable.createdAt));
+
+    const escape = (v: string | null | undefined) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const headers = ["Name","Domain","Industry","Size","Website","Phone","Address","City","Country","Created At"];
+    const csvRows = rows.map((c) => [
+      c.name, c.domain, c.industry, c.size, c.website, c.phone,
+      c.address, c.city, c.country,
+      c.createdAt ? new Date(c.createdAt).toISOString() : "",
+    ].map(escape).join(","));
+
+    const csv = [headers.map(escape).join(","), ...csvRows].join("\n");
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", "attachment; filename=\"companies.csv\"");
+    res.send(csv);
+  } catch {
+    res.status(500).json({ error: "Failed to export companies" });
+  }
+});
+
 router.get("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
     const id = req.params.id as string;

@@ -154,6 +154,58 @@ router.post("/import", requireAuth, async (req: Request, res: Response) => {
   }
 });
 
+router.get("/export", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { search, status, companyId, tag } = req.query as Record<string, string>;
+
+    const conditions = [];
+    if (search) {
+      conditions.push(
+        or(
+          ilike(contactsTable.firstName, `%${search}%`),
+          ilike(contactsTable.lastName, `%${search}%`),
+          ilike(contactsTable.email, `%${search}%`),
+        ),
+      );
+    }
+    if (status) {
+      conditions.push(eq(contactsTable.status, status as typeof contactsTable.$inferSelect["status"]));
+    }
+    if (companyId) {
+      conditions.push(eq(contactsTable.companyId, companyId));
+    }
+    if (tag) {
+      conditions.push(sql`${contactsTable.tags} @> ARRAY[${tag}]::text[]`);
+    }
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const rows = await db
+      .select({
+        contact: contactsTable,
+        companyName: companiesTable.name,
+      })
+      .from(contactsTable)
+      .leftJoin(companiesTable, eq(contactsTable.companyId, companiesTable.id))
+      .where(where)
+      .orderBy(desc(contactsTable.createdAt));
+
+    const escape = (v: string | null | undefined) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const headers = ["First Name","Last Name","Email","Phone","Title","Status","Company","Tags","Notes","LinkedIn","Created At"];
+    const csvRows = rows.map(({ contact: c, companyName }) => [
+      c.firstName, c.lastName, c.email, c.phone, c.title, c.status,
+      companyName, (c.tags ?? []).join(";"), c.notes, c.linkedIn,
+      c.createdAt ? new Date(c.createdAt).toISOString() : "",
+    ].map(escape).join(","));
+
+    const csv = [headers.map(escape).join(","), ...csvRows].join("\n");
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", "attachment; filename=\"contacts.csv\"");
+    res.send(csv);
+  } catch {
+    res.status(500).json({ error: "Failed to export contacts" });
+  }
+});
+
 router.get("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
     const id = req.params.id as string;

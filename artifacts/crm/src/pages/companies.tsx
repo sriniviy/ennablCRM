@@ -1,5 +1,6 @@
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useState } from "react";
+import { useAuth } from "@clerk/react";
 import { useListCompanies, type Company } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { Input } from "@/components/ui/input";
@@ -8,15 +9,47 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Plus, Globe, Building2 } from "lucide-react";
+import { Search, Plus, Globe, Building2, Download, Loader2 } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { CompanyDialog } from "@/components/companies/company-dialog";
+import { useToast } from "@/hooks/use-toast";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export function CompaniesPage() {
+  const { getToken } = useAuth();
+  const { toast } = useToast();
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 400);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editCompany, setEditCompany] = useState<Company | undefined>();
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const token = await getToken();
+      const params = new URLSearchParams();
+      if (debouncedSearch) params.set("search", debouncedSearch);
+      const res = await fetch(`${BASE}/api/companies/export?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "companies.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: "Export failed", variant: "destructive" });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const { data, isLoading } = useListCompanies({ search: debouncedSearch || undefined, page: 1, pageSize: 50 });
 
@@ -31,9 +64,15 @@ export function CompaniesPage() {
             <h1 className="text-3xl font-bold tracking-tight">Companies</h1>
             <p className="text-muted-foreground">Manage your accounts and organizations.</p>
           </div>
-          <Button data-testid="btn-new-company" onClick={openNew}>
-            <Plus className="mr-2 h-4 w-4" /> Add Company
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleExport} disabled={exporting}>
+              {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+              Export CSV
+            </Button>
+            <Button data-testid="btn-new-company" onClick={openNew}>
+              <Plus className="mr-2 h-4 w-4" /> Add Company
+            </Button>
+          </div>
         </div>
 
         <div className="flex items-center space-x-2">

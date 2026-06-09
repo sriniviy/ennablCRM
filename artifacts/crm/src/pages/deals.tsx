@@ -1,16 +1,22 @@
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useRef, useState, useEffect } from "react";
+import { useAuth } from "@clerk/react";
 import { useListDeals, useMoveDeal, getListDealsQueryKey, type PipelineColumn, type DealWithRelations } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus } from "lucide-react";
+import { Plus, Download, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { formatCurrency } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { DealDialog } from "@/components/deals/deal-dialog";
 
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
 export function DealsPage() {
+  const { getToken } = useAuth();
+  const { toast } = useToast();
   const { data: columns, isLoading: dealsLoading } = useListDeals();
   const moveDeal = useMoveDeal();
   const queryClient = useQueryClient();
@@ -18,6 +24,31 @@ export function DealsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editDeal, setEditDeal] = useState<DealWithRelations | undefined>();
   const [defaultStageId, setDefaultStageId] = useState<string | undefined>();
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${BASE}/api/deals/export`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "deals.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: "Export failed", variant: "destructive" });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const moveDealMutate = useRef(moveDeal.mutate);
   moveDealMutate.current = moveDeal.mutate;
@@ -79,9 +110,15 @@ export function DealsPage() {
             <h1 className="text-3xl font-bold tracking-tight">Deals Pipeline</h1>
             <p className="text-muted-foreground">Manage and track your active opportunities.</p>
           </div>
-          <Button data-testid="btn-new-deal" onClick={() => openNew()}>
-            <Plus className="mr-2 h-4 w-4" /> Add Deal
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleExport} disabled={exporting}>
+              {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+              Export CSV
+            </Button>
+            <Button data-testid="btn-new-deal" onClick={() => openNew()}>
+              <Plus className="mr-2 h-4 w-4" /> Add Deal
+            </Button>
+          </div>
         </div>
 
         {dealsLoading ? (
