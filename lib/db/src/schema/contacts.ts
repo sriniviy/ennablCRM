@@ -1,8 +1,8 @@
-import { pgTable, text, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, index, boolean } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
-import { contactStatusEnum } from "./enums";
+import { contactStatusEnum, reviewStatusEnum } from "./enums";
 import { usersTable } from "./users";
 import { companiesTable } from "./companies";
 
@@ -18,6 +18,13 @@ export const contactsTable = pgTable(
     phone: text("phone"),
     title: text("title"),
     status: contactStatusEnum("status").notNull().default("LEAD"),
+    reviewStatus: reviewStatusEnum("review_status")
+      .notNull()
+      .default("REVIEWED"),
+    ennablUser: boolean("ennabl_user").notNull().default(false),
+    emailMarketingContact: boolean("email_marketing_contact")
+      .notNull()
+      .default(false),
     tags: text("tags")
       .array()
       .notNull()

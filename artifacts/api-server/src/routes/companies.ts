@@ -173,6 +173,13 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
     const body = req.body as {
       name: string;
       domain?: string;
+      domains?: string[];
+      status?: typeof companiesTable.$inferSelect["status"];
+      productLicensed?: string[];
+      memberOf?: string[];
+      assignedCsmId?: string;
+      estimatedAnnualRevenue?: number;
+      numberOfEmployees?: number;
       industry?: string;
       size?: string;
       website?: string;
@@ -191,6 +198,13 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
       .values({
         name: body.name,
         domain: body.domain ?? null,
+        domains: body.domains ?? [],
+        status: body.status ?? null,
+        productLicensed: body.productLicensed ?? [],
+        memberOf: body.memberOf ?? [],
+        assignedCsmId: body.assignedCsmId ?? null,
+        estimatedAnnualRevenue: body.estimatedAnnualRevenue ?? null,
+        numberOfEmployees: body.numberOfEmployees ?? null,
         industry: body.industry ?? null,
         size: body.size ?? null,
         website: body.website ?? null,

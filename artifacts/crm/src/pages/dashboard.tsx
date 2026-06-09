@@ -143,9 +143,9 @@ export function DashboardPage() {
                 <div className="space-y-3">
                   {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-14" />)}
                 </div>
-              ) : tasksData?.tasks && tasksData.tasks.length > 0 ? (
+              ) : tasksData?.data && tasksData.data.length > 0 ? (
                 <div className="space-y-1">
-                  {tasksData.tasks.map(task => {
+                  {tasksData.data.map(task => {
                     const { label, cls } = dueDateLabel(task.dueDate);
                     const isOverdue = cls.includes("destructive");
                     return (

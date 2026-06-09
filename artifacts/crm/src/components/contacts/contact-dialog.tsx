@@ -4,7 +4,7 @@ import {
   useCreateContact, useUpdateContact, useDeleteContact,
   useListCompanies,
   getListContactsQueryKey, getGetContactQueryKey,
-  ContactStatus, type ContactWithRelations,
+  ContactStatus, ReviewStatus, type ContactWithRelations,
 } from "@workspace/api-client-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -23,6 +24,7 @@ interface ContactDialogProps {
 }
 
 const STATUSES = Object.values(ContactStatus);
+const REVIEW_STATUSES = Object.values(ReviewStatus);
 
 export function ContactDialog({ open, onOpenChange, contact }: ContactDialogProps) {
   const qc = useQueryClient();
@@ -35,6 +37,9 @@ export function ContactDialog({ open, onOpenChange, contact }: ContactDialogProp
   const [phone, setPhone] = useState("");
   const [title, setTitle] = useState("");
   const [status, setStatus] = useState<string>("LEAD");
+  const [reviewStatus, setReviewStatus] = useState<string>("REVIEWED");
+  const [ennablUser, setEnnablUser] = useState(false);
+  const [emailMarketingContact, setEmailMarketingContact] = useState(false);
   const [companyId, setCompanyId] = useState("");
   const [tags, setTags] = useState("");
   const [notes, setNotes] = useState("");
@@ -53,6 +58,9 @@ export function ContactDialog({ open, onOpenChange, contact }: ContactDialogProp
       setPhone(contact?.phone ?? "");
       setTitle(contact?.title ?? "");
       setStatus(contact?.status ?? "LEAD");
+      setReviewStatus(contact?.reviewStatus ?? "REVIEWED");
+      setEnnablUser(contact?.ennablUser ?? false);
+      setEmailMarketingContact(contact?.emailMarketingContact ?? false);
       setCompanyId(contact?.company?.id ?? "");
       setTags((contact?.tags ?? []).join(", "));
       setNotes(contact?.notes ?? "");
@@ -72,6 +80,9 @@ export function ContactDialog({ open, onOpenChange, contact }: ContactDialogProp
       phone: phone || undefined,
       title: title || undefined,
       status: status as typeof ContactStatus[keyof typeof ContactStatus],
+      reviewStatus: reviewStatus as typeof ReviewStatus[keyof typeof ReviewStatus],
+      ennablUser,
+      emailMarketingContact,
       companyId: companyId || undefined,
       tags: tags ? tags.split(",").map(t => t.trim()).filter(Boolean) : [],
       notes: notes || undefined,
@@ -150,6 +161,23 @@ export function ContactDialog({ open, onOpenChange, contact }: ContactDialogProp
                   {companies?.data?.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Review Status</Label>
+              <Select value={reviewStatus} onValueChange={setReviewStatus}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {REVIEW_STATUSES.map(s => <SelectItem key={s} value={s}>{s.replace(/_/g, " ")}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center justify-between rounded-md border px-3 py-2">
+              <Label htmlFor="c-ennabl" className="cursor-pointer">Ennabl User</Label>
+              <Switch id="c-ennabl" checked={ennablUser} onCheckedChange={setEnnablUser} />
+            </div>
+            <div className="flex items-center justify-between rounded-md border px-3 py-2">
+              <Label htmlFor="c-marketing" className="cursor-pointer">Email Marketing Contact</Label>
+              <Switch id="c-marketing" checked={emailMarketingContact} onCheckedChange={setEmailMarketingContact} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="c-tags">Tags <span className="text-muted-foreground text-xs">(comma-separated)</span></Label>

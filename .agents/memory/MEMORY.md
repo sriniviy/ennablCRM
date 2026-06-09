@@ -1,0 +1,2 @@
+- [api-spec codegen pitfalls](api-spec-codegen.md) — orval regenerates api-zod index with a colliding types barrel; openapi.yaml drifts from backend reality + stale generated client.
+- [Express 5 req.params typing](express5-req-params.md) — params are `string | string[]`; cast `as string` before drizzle eq()/string fns.

@@ -1,6 +1,6 @@
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useState, useRef, useEffect } from "react";
-import { useListTasks, useCompleteTask, useGetTask, getListTasksQueryKey, type TaskWithRelations } from "@workspace/api-client-react";
+import { useListTasks, useCompleteTask, useGetTask, getListTasksQueryKey, getGetTaskQueryKey, type TaskWithRelations } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -28,7 +28,7 @@ function useTaskDeepLink(onOpen: (t: TaskWithRelations) => void) {
     return id;
   });
   const { data: deepTask } = useGetTask(deepLinkId ?? "", {
-    query: { enabled: !!deepLinkId },
+    query: { enabled: !!deepLinkId, queryKey: getGetTaskQueryKey(deepLinkId ?? "") },
   });
   const openedRef = useRef(false);
   useEffect(() => {

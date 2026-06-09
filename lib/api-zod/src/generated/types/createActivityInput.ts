@@ -11,6 +11,10 @@ export interface CreateActivityInput {
   type: ActivityType;
   title: string;
   description?: string;
+  endDate?: Date;
+  emailSubject?: string;
+  emailBody?: string;
+  aiSummary?: string;
   contactId?: string;
   dealId?: string;
   companyId?: string;

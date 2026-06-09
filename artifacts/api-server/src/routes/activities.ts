@@ -123,10 +123,23 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
       return;
     }
 
+    let endDate: Date | null = null;
+    if (body.endDate) {
+      endDate = new Date(body.endDate);
+      if (isNaN(endDate.getTime())) {
+        res.status(400).json({ error: "endDate is not a valid date" });
+        return;
+      }
+    }
+
     const [activity] = await db.insert(activitiesTable).values({
       type: body.type,
       title: body.title,
       description: body.description ?? null,
+      endDate,
+      emailSubject: body.emailSubject ?? null,
+      emailBody: body.emailBody ?? null,
+      aiSummary: body.aiSummary ?? null,
       userId: dbUser.id,
       contactId: body.contactId ?? null,
       companyId: body.companyId ?? null,

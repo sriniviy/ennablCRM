@@ -16,6 +16,10 @@ export interface ActivityWithRelations {
   type: ActivityType;
   title: string;
   description?: string | null;
+  endDate?: Date | null;
+  emailSubject?: string | null;
+  emailBody?: string | null;
+  aiSummary?: string | null;
   metadata?: ActivityWithRelationsMetadata;
   userId?: string | null;
   user?: UserSummary | null;

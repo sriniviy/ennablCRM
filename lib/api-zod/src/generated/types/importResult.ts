@@ -5,9 +5,9 @@
  * MyCRM API specification
  * OpenAPI spec version: 0.2.0
  */
+import type { ImportResultSkippedItem } from './importResultSkippedItem';
 
 export interface ImportResult {
-  created: number;
-  skipped: number;
-  errors: string[];
+  imported: number;
+  skipped: ImportResultSkippedItem[];
 }

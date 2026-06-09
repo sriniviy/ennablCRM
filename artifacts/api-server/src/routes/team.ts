@@ -83,7 +83,7 @@ router.delete(
   async (req: Request, res: Response) => {
     if (!requireAdmin(req, res)) return;
     try {
-      await clerk.invitations.revokeInvitation(req.params.inviteId);
+      await clerk.invitations.revokeInvitation(req.params.inviteId as string);
       res.json({ ok: true });
     } catch (err) {
       const e = err as Error;
@@ -99,7 +99,7 @@ router.patch(
     if (!requireAdmin(req, res)) return;
 
     const { dbUser } = req as AuthRequest;
-    const { userId } = req.params;
+    const userId = req.params.userId as string;
     const { role } = req.body as { role?: string };
 
     if (role !== "ADMIN" && role !== "MEMBER") {
@@ -135,7 +135,7 @@ router.delete("/:userId", requireAuth, async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
 
   const { dbUser } = req as AuthRequest;
-  const { userId } = req.params;
+  const userId = req.params.userId as string;
 
   if (dbUser.id === userId) {
     res.status(400).json({ error: "You cannot remove yourself" });

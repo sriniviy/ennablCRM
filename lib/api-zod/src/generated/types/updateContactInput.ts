@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.2.0
  */
 import type { ContactStatus } from './contactStatus';
+import type { ReviewStatus } from './reviewStatus';
 
 export interface UpdateContactInput {
   firstName?: string;
@@ -14,6 +15,9 @@ export interface UpdateContactInput {
   phone?: string;
   title?: string;
   status?: ContactStatus;
+  reviewStatus?: ReviewStatus;
+  ennablUser?: boolean;
+  emailMarketingContact?: boolean;
   companyId?: string | null;
   tags?: string[];
   notes?: string;

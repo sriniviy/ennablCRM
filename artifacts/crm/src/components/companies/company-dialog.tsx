@@ -3,15 +3,19 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   useCreateCompany, useUpdateCompany, useDeleteCompany,
   getListCompaniesQueryKey, getGetCompanyQueryKey,
-  type Company,
+  CompanyStatus, type Company,
 } from "@workspace/api-client-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+const STATUSES = Object.values(CompanyStatus);
+const toList = (s: string) => s.split(",").map(v => v.trim()).filter(Boolean);
 
 interface CompanyDialogProps {
   open: boolean;
@@ -27,6 +31,12 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
 
   const [name, setName] = useState("");
   const [domain, setDomain] = useState("");
+  const [domains, setDomains] = useState("");
+  const [status, setStatus] = useState<string>("none");
+  const [productLicensed, setProductLicensed] = useState("");
+  const [memberOf, setMemberOf] = useState("");
+  const [estimatedAnnualRevenue, setEstimatedAnnualRevenue] = useState("");
+  const [numberOfEmployees, setNumberOfEmployees] = useState("");
   const [industry, setIndustry] = useState("");
   const [size, setSize] = useState("");
   const [website, setWebsite] = useState("");
@@ -43,6 +53,12 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
     if (open) {
       setName(company?.name ?? "");
       setDomain(company?.domain ?? "");
+      setDomains((company?.domains ?? []).join(", "));
+      setStatus(company?.status ?? "none");
+      setProductLicensed((company?.productLicensed ?? []).join(", "));
+      setMemberOf((company?.memberOf ?? []).join(", "));
+      setEstimatedAnnualRevenue(company?.estimatedAnnualRevenue != null ? String(company.estimatedAnnualRevenue) : "");
+      setNumberOfEmployees(company?.numberOfEmployees != null ? String(company.numberOfEmployees) : "");
       setIndustry(company?.industry ?? "");
       setSize(company?.size ?? "");
       setWebsite(company?.website ?? "");
@@ -62,6 +78,12 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
     const data = {
       name,
       domain: domain || undefined,
+      domains: toList(domains),
+      status: status === "none" ? undefined : (status as typeof CompanyStatus[keyof typeof CompanyStatus]),
+      productLicensed: toList(productLicensed),
+      memberOf: toList(memberOf),
+      estimatedAnnualRevenue: estimatedAnnualRevenue ? Number(estimatedAnnualRevenue) : undefined,
+      numberOfEmployees: numberOfEmployees ? Number(numberOfEmployees) : undefined,
       industry: industry || undefined,
       size: size || undefined,
       website: website || undefined,
@@ -111,6 +133,42 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
               <div className="space-y-1.5">
                 <Label htmlFor="co-website">Website</Label>
                 <Input id="co-website" value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://acme.com" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Status</Label>
+                <Select value={status} onValueChange={setStatus}>
+                  <SelectTrigger><SelectValue placeholder="No status" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No status</SelectItem>
+                    {STATUSES.map(s => <SelectItem key={s} value={s}>{s.replace(/_/g, " ")}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="co-domains">Additional Domains <span className="text-muted-foreground text-xs">(comma-separated)</span></Label>
+                <Input id="co-domains" value={domains} onChange={e => setDomains(e.target.value)} placeholder="acme.io, acme.net" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="co-products">Products Licensed <span className="text-muted-foreground text-xs">(comma-separated)</span></Label>
+                <Input id="co-products" value={productLicensed} onChange={e => setProductLicensed(e.target.value)} placeholder="Benchmarks, Insights" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="co-memberof">Member Of <span className="text-muted-foreground text-xs">(comma-separated)</span></Label>
+                <Input id="co-memberof" value={memberOf} onChange={e => setMemberOf(e.target.value)} placeholder="Group A, Network B" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="co-revenue">Est. Annual Revenue</Label>
+                <Input id="co-revenue" type="number" value={estimatedAnnualRevenue} onChange={e => setEstimatedAnnualRevenue(e.target.value)} placeholder="1000000" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="co-employees">Number of Employees</Label>
+                <Input id="co-employees" type="number" value={numberOfEmployees} onChange={e => setNumberOfEmployees(e.target.value)} placeholder="250" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">

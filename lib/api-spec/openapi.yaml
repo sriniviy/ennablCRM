@@ -918,6 +918,14 @@ components:
       type: string
       enum: [LEAD, PROSPECT, CUSTOMER, CHURNED, UNQUALIFIED]
 
+    CompanyStatus:
+      type: string
+      enum: [PROSPECT, ACTIVE_CUSTOMER, CHURNED, DISQUALIFIED]
+
+    ReviewStatus:
+      type: string
+      enum: [AUTO_CREATED, REVIEWED, SUPPRESSED]
+
     UserRole:
       type: string
       enum: [ADMIN, MEMBER]
@@ -1003,6 +1011,30 @@ components:
           type: string
         domain:
           type: string
+          nullable: true
+        domains:
+          type: array
+          items:
+            type: string
+        status:
+          $ref: "#/components/schemas/CompanyStatus"
+          nullable: true
+        productLicensed:
+          type: array
+          items:
+            type: string
+        memberOf:
+          type: array
+          items:
+            type: string
+        assignedCsmId:
+          type: string
+          nullable: true
+        estimatedAnnualRevenue:
+          type: number
+          nullable: true
+        numberOfEmployees:
+          type: integer
           nullable: true
         industry:
           type: string
@@ -1098,6 +1130,12 @@ components:
           nullable: true
         status:
           $ref: "#/components/schemas/ContactStatus"
+        reviewStatus:
+          $ref: "#/components/schemas/ReviewStatus"
+        ennablUser:
+          type: boolean
+        emailMarketingContact:
+          type: boolean
         tags:
           type: array
           items:
@@ -1311,6 +1349,19 @@ components:
         title:
           type: string
         description:
+          type: string
+          nullable: true
+        endDate:
+          type: string
+          format: date-time
+          nullable: true
+        emailSubject:
+          type: string
+          nullable: true
+        emailBody:
+          type: string
+          nullable: true
+        aiSummary:
           type: string
           nullable: true
         metadata:
@@ -1537,6 +1588,12 @@ components:
           type: string
         status:
           $ref: "#/components/schemas/ContactStatus"
+        reviewStatus:
+          $ref: "#/components/schemas/ReviewStatus"
+        ennablUser:
+          type: boolean
+        emailMarketingContact:
+          type: boolean
         companyId:
           type: string
         tags:
@@ -1566,6 +1623,12 @@ components:
           type: string
         status:
           $ref: "#/components/schemas/ContactStatus"
+        reviewStatus:
+          $ref: "#/components/schemas/ReviewStatus"
+        ennablUser:
+          type: boolean
+        emailMarketingContact:
+          type: boolean
         companyId:
           type: string
           nullable: true
@@ -1600,15 +1663,19 @@ components:
     ImportResult:
       type: object
       properties:
-        created:
+        imported:
           type: integer
         skipped:
-          type: integer
-        errors:
           type: array
           items:
-            type: string
-      required: [created, skipped, errors]
+            type: object
+            properties:
+              row:
+                type: integer
+              reason:
+                type: string
+            required: [row, reason]
+      required: [imported, skipped]
 
     CreateCompanyInput:
       type: object
@@ -1617,6 +1684,26 @@ components:
           type: string
         domain:
           type: string
+        domains:
+          type: array
+          items:
+            type: string
+        status:
+          $ref: "#/components/schemas/CompanyStatus"
+        productLicensed:
+          type: array
+          items:
+            type: string
+        memberOf:
+          type: array
+          items:
+            type: string
+        assignedCsmId:
+          type: string
+        estimatedAnnualRevenue:
+          type: number
+        numberOfEmployees:
+          type: integer
         industry:
           type: string
         size:
@@ -1640,6 +1727,31 @@ components:
           type: string
         domain:
           type: string
+          nullable: true
+        domains:
+          type: array
+          items:
+            type: string
+        status:
+          $ref: "#/components/schemas/CompanyStatus"
+          nullable: true
+        productLicensed:
+          type: array
+          items:
+            type: string
+        memberOf:
+          type: array
+          items:
+            type: string
+        assignedCsmId:
+          type: string
+          nullable: true
+        estimatedAnnualRevenue:
+          type: number
+          nullable: true
+        numberOfEmployees:
+          type: integer
+          nullable: true
         industry:
           type: string
         size:
@@ -1779,6 +1891,15 @@ components:
         title:
           type: string
         description:
+          type: string
+        endDate:
+          type: string
+          format: date-time
+        emailSubject:
+          type: string
+        emailBody:
+          type: string
+        aiSummary:
           type: string
         contactId:
           type: string

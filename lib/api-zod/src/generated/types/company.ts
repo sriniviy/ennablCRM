@@ -5,11 +5,19 @@
  * MyCRM API specification
  * OpenAPI spec version: 0.2.0
  */
+import type { CompanyStatus } from './companyStatus';
 
 export interface Company {
   id: string;
   name: string;
   domain?: string | null;
+  domains?: string[];
+  status?: CompanyStatus | null;
+  productLicensed?: string[];
+  memberOf?: string[];
+  assignedCsmId?: string | null;
+  estimatedAnnualRevenue?: number | null;
+  numberOfEmployees?: number | null;
   industry?: string | null;
   size?: string | null;
   website?: string | null;

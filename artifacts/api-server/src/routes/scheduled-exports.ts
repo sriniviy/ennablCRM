@@ -230,7 +230,7 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
     const [row] = await db
       .update(scheduledExportsTable)
       .set({ paused, updatedAt: new Date() })
-      .where(eq(scheduledExportsTable.id, req.params.id))
+      .where(eq(scheduledExportsTable.id, req.params.id as string))
       .returning();
     if (!row) {
       res.status(404).json({ error: "Not found" });
@@ -251,7 +251,7 @@ router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
     }
     await db
       .delete(scheduledExportsTable)
-      .where(eq(scheduledExportsTable.id, req.params.id));
+      .where(eq(scheduledExportsTable.id, req.params.id as string));
     res.status(204).end();
   } catch {
     res.status(500).json({ error: "Failed to delete scheduled export" });

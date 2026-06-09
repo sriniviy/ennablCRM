@@ -121,7 +121,7 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
 router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
     const dbUser = (req as AuthRequest).dbUser;
-    const { id } = req.params;
+    const id = req.params.id as string;
     const [note] = await db
       .select()
       .from(notesTable)

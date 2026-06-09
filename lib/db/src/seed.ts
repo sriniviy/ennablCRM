@@ -3,16 +3,19 @@ import { db, dealStagesTable, companiesTable, contactsTable, dealsTable, tasksTa
 async function seed() {
   console.log("Seeding database...");
 
-  // Upsert deal stages
+  // Upsert deal stages (Ennabl PRD pipeline order)
   const stages = await db
     .insert(dealStagesTable)
     .values([
-      { name: "Lead", order: 0, color: "#94a3b8" },
-      { name: "Qualified", order: 1, color: "#60a5fa" },
-      { name: "Proposal", order: 2, color: "#a78bfa" },
-      { name: "Negotiation", order: 3, color: "#f59e0b" },
-      { name: "Won", order: 4, color: "#22c55e" },
-      { name: "Lost", order: 5, color: "#ef4444" },
+      { name: "Qualified", order: 0, color: "#60a5fa" },
+      { name: "Discovery", order: 1, color: "#38bdf8" },
+      { name: "Validation", order: 2, color: "#22d3ee" },
+      { name: "Proposal", order: 3, color: "#a78bfa" },
+      { name: "Proof of Concept", order: 4, color: "#c084fc" },
+      { name: "Negotiation", order: 5, color: "#f59e0b" },
+      { name: "Out for Signature", order: 6, color: "#fb923c" },
+      { name: "Closed Won", order: 7, color: "#22c55e" },
+      { name: "Closed Lost", order: 8, color: "#ef4444" },
     ])
     .onConflictDoNothing()
     .returning();
@@ -110,15 +113,14 @@ async function seed() {
 
   console.log("Seeded 4 contacts");
 
-  // Get the qualified and proposal stage IDs
+  // Get stage IDs for seeding demo deals
   const allStages = await db.select().from(dealStagesTable).orderBy(dealStagesTable.order);
-  const leadStage = allStages.find((s) => s.name === "Lead");
+  const discoveryStage = allStages.find((s) => s.name === "Discovery");
   const qualifiedStage = allStages.find((s) => s.name === "Qualified");
   const proposalStage = allStages.find((s) => s.name === "Proposal");
   const negotiationStage = allStages.find((s) => s.name === "Negotiation");
-  const wonStage = allStages.find((s) => s.name === "Won");
 
-  if (!leadStage || !qualifiedStage || !proposalStage || !negotiationStage || !wonStage) {
+  if (!discoveryStage || !qualifiedStage || !proposalStage || !negotiationStage) {
     console.error("Could not find deal stages");
     process.exit(1);
   }
@@ -166,7 +168,7 @@ async function seed() {
         value: 4800,
         currency: "USD",
         probability: 50,
-        stageId: leadStage.id,
+        stageId: discoveryStage.id,
         contactId: dave.id,
         closeDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
         order: 0,

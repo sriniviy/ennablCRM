@@ -7,6 +7,7 @@
  */
 import type { CompanySummary } from './companySummary';
 import type { ContactStatus } from './contactStatus';
+import type { ReviewStatus } from './reviewStatus';
 import type { UserSummary } from './userSummary';
 
 export interface ContactWithRelations {
@@ -17,6 +18,9 @@ export interface ContactWithRelations {
   phone?: string | null;
   title?: string | null;
   status: ContactStatus;
+  reviewStatus?: ReviewStatus;
+  ennablUser?: boolean;
+  emailMarketingContact?: boolean;
   tags: string[];
   notes?: string | null;
   linkedIn?: string | null;

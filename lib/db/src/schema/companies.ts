@@ -1,6 +1,16 @@
-import { pgTable, text, timestamp, index } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  timestamp,
+  index,
+  integer,
+  doublePrecision,
+} from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { companyStatusEnum } from "./enums";
+import { usersTable } from "./users";
 
 export const companiesTable = pgTable(
   "companies",
@@ -10,6 +20,22 @@ export const companiesTable = pgTable(
       .$defaultFn(() => crypto.randomUUID()),
     name: text("name").notNull(),
     domain: text("domain").unique(),
+    domains: text("domains")
+      .array()
+      .notNull()
+      .default(sql`ARRAY[]::text[]`),
+    status: companyStatusEnum("status"),
+    productLicensed: text("product_licensed")
+      .array()
+      .notNull()
+      .default(sql`ARRAY[]::text[]`),
+    memberOf: text("member_of")
+      .array()
+      .notNull()
+      .default(sql`ARRAY[]::text[]`),
+    assignedCsmId: text("assigned_csm_id").references(() => usersTable.id),
+    estimatedAnnualRevenue: doublePrecision("estimated_annual_revenue"),
+    numberOfEmployees: integer("number_of_employees"),
     industry: text("industry"),
     size: text("size"),
     website: text("website"),
@@ -24,7 +50,10 @@ export const companiesTable = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [index("companies_domain_idx").on(t.domain)],
+  (t) => [
+    index("companies_domain_idx").on(t.domain),
+    index("companies_status_idx").on(t.status),
+  ],
 );
 
 export const insertCompanySchema = createInsertSchema(companiesTable).omit({

@@ -10,6 +10,19 @@ export const contactStatusEnum = pgEnum("contact_status", [
   "UNQUALIFIED",
 ]);
 
+export const companyStatusEnum = pgEnum("company_status", [
+  "PROSPECT",
+  "ACTIVE_CUSTOMER",
+  "CHURNED",
+  "DISQUALIFIED",
+]);
+
+export const reviewStatusEnum = pgEnum("review_status", [
+  "AUTO_CREATED",
+  "REVIEWED",
+  "SUPPRESSED",
+]);
+
 export const priorityEnum = pgEnum("priority", [
   "LOW",
   "MEDIUM",

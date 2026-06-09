@@ -24,6 +24,25 @@ export const ContactStatus = {
   UNQUALIFIED: 'UNQUALIFIED',
 } as const;
 
+export type CompanyStatus = typeof CompanyStatus[keyof typeof CompanyStatus];
+
+
+export const CompanyStatus = {
+  PROSPECT: 'PROSPECT',
+  ACTIVE_CUSTOMER: 'ACTIVE_CUSTOMER',
+  CHURNED: 'CHURNED',
+  DISQUALIFIED: 'DISQUALIFIED',
+} as const;
+
+export type ReviewStatus = typeof ReviewStatus[keyof typeof ReviewStatus];
+
+
+export const ReviewStatus = {
+  AUTO_CREATED: 'AUTO_CREATED',
+  REVIEWED: 'REVIEWED',
+  SUPPRESSED: 'SUPPRESSED',
+} as const;
+
 export type UserRole = typeof UserRole[keyof typeof UserRole];
 
 
@@ -115,6 +134,13 @@ export interface Company {
   id: string;
   name: string;
   domain?: string | null;
+  domains?: string[];
+  status?: CompanyStatus | null;
+  productLicensed?: string[];
+  memberOf?: string[];
+  assignedCsmId?: string | null;
+  estimatedAnnualRevenue?: number | null;
+  numberOfEmployees?: number | null;
   industry?: string | null;
   size?: string | null;
   website?: string | null;
@@ -183,6 +209,9 @@ export interface ContactWithRelations {
   phone?: string | null;
   title?: string | null;
   status: ContactStatus;
+  reviewStatus?: ReviewStatus;
+  ennablUser?: boolean;
+  emailMarketingContact?: boolean;
   tags: string[];
   notes?: string | null;
   linkedIn?: string | null;
@@ -232,6 +261,10 @@ export interface ActivityWithRelations {
   type: ActivityType;
   title: string;
   description?: string | null;
+  endDate?: string | null;
+  emailSubject?: string | null;
+  emailBody?: string | null;
+  aiSummary?: string | null;
   metadata?: ActivityWithRelationsMetadata;
   userId?: string | null;
   user?: UserSummary | null;
@@ -337,6 +370,9 @@ export interface CreateContactInput {
   phone?: string;
   title?: string;
   status?: ContactStatus;
+  reviewStatus?: ReviewStatus;
+  ennablUser?: boolean;
+  emailMarketingContact?: boolean;
   companyId?: string;
   tags?: string[];
   notes?: string;
@@ -351,6 +387,9 @@ export interface UpdateContactInput {
   phone?: string;
   title?: string;
   status?: ContactStatus;
+  reviewStatus?: ReviewStatus;
+  ennablUser?: boolean;
+  emailMarketingContact?: boolean;
   companyId?: string | null;
   tags?: string[];
   notes?: string;
@@ -371,10 +410,10 @@ export interface ImportContactsInput {
   mapping: ImportContactsInputMapping;
 }
 
-export interface ImportResultSkippedItem {
+export type ImportResultSkippedItem = {
   row: number;
   reason: string;
-}
+};
 
 export interface ImportResult {
   imported: number;
@@ -384,6 +423,13 @@ export interface ImportResult {
 export interface CreateCompanyInput {
   name: string;
   domain?: string;
+  domains?: string[];
+  status?: CompanyStatus;
+  productLicensed?: string[];
+  memberOf?: string[];
+  assignedCsmId?: string;
+  estimatedAnnualRevenue?: number;
+  numberOfEmployees?: number;
   industry?: string;
   size?: string;
   website?: string;
@@ -395,7 +441,14 @@ export interface CreateCompanyInput {
 
 export interface UpdateCompanyInput {
   name?: string;
-  domain?: string;
+  domain?: string | null;
+  domains?: string[];
+  status?: CompanyStatus | null;
+  productLicensed?: string[];
+  memberOf?: string[];
+  assignedCsmId?: string | null;
+  estimatedAnnualRevenue?: number | null;
+  numberOfEmployees?: number | null;
   industry?: string;
   size?: string;
   website?: string;
@@ -462,6 +515,10 @@ export interface CreateActivityInput {
   type: ActivityType;
   title: string;
   description?: string;
+  endDate?: string;
+  emailSubject?: string;
+  emailBody?: string;
+  aiSummary?: string;
   contactId?: string;
   dealId?: string;
   companyId?: string;

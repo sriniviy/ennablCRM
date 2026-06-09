@@ -93,7 +93,7 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
 router.get("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
     const { dbUser } = req as AuthRequest;
-    const sequence = await getOwnedSequence(req.params.id, dbUser.id);
+    const sequence = await getOwnedSequence(req.params.id as string, dbUser.id);
     if (!sequence) {
       res.status(404).json({ error: "Sequence not found" });
       return;
@@ -141,7 +141,7 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
       res.status(400).json({ error: "name is required" });
       return;
     }
-    const existing = await getOwnedSequence(req.params.id, dbUser.id);
+    const existing = await getOwnedSequence(req.params.id as string, dbUser.id);
     if (!existing) {
       res.status(404).json({ error: "Sequence not found" });
       return;
@@ -151,7 +151,7 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
       .set({ name: name.trim(), updatedAt: new Date() })
       .where(
         and(
-          eq(sequencesTable.id, req.params.id),
+          eq(sequencesTable.id, req.params.id as string),
           eq(sequencesTable.ownerId, dbUser.id),
         ),
       )
@@ -165,7 +165,7 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
 router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
     const { dbUser } = req as AuthRequest;
-    const existing = await getOwnedSequence(req.params.id, dbUser.id);
+    const existing = await getOwnedSequence(req.params.id as string, dbUser.id);
     if (!existing) {
       res.status(404).json({ error: "Sequence not found" });
       return;
@@ -174,7 +174,7 @@ router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
       .delete(sequencesTable)
       .where(
         and(
-          eq(sequencesTable.id, req.params.id),
+          eq(sequencesTable.id, req.params.id as string),
           eq(sequencesTable.ownerId, dbUser.id),
         ),
       );
@@ -189,7 +189,7 @@ router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
 router.post("/:id/steps", requireAuth, async (req: Request, res: Response) => {
   try {
     const { dbUser } = req as AuthRequest;
-    const sequence = await getOwnedSequence(req.params.id, dbUser.id);
+    const sequence = await getOwnedSequence(req.params.id as string, dbUser.id);
     if (!sequence) {
       res.status(404).json({ error: "Sequence not found" });
       return;
@@ -230,7 +230,7 @@ router.patch(
   async (req: Request, res: Response) => {
     try {
       const { dbUser } = req as AuthRequest;
-      const sequence = await getOwnedSequence(req.params.id, dbUser.id);
+      const sequence = await getOwnedSequence(req.params.id as string, dbUser.id);
       if (!sequence) {
         res.status(404).json({ error: "Sequence not found" });
         return;
@@ -250,7 +250,7 @@ router.patch(
         .set(updates)
         .where(
           and(
-            eq(sequenceStepsTable.id, req.params.stepId),
+            eq(sequenceStepsTable.id, req.params.stepId as string),
             eq(sequenceStepsTable.sequenceId, sequence.id),
           ),
         )
@@ -272,7 +272,7 @@ router.delete(
   async (req: Request, res: Response) => {
     try {
       const { dbUser } = req as AuthRequest;
-      const sequence = await getOwnedSequence(req.params.id, dbUser.id);
+      const sequence = await getOwnedSequence(req.params.id as string, dbUser.id);
       if (!sequence) {
         res.status(404).json({ error: "Sequence not found" });
         return;
@@ -281,7 +281,7 @@ router.delete(
         .delete(sequenceStepsTable)
         .where(
           and(
-            eq(sequenceStepsTable.id, req.params.stepId),
+            eq(sequenceStepsTable.id, req.params.stepId as string),
             eq(sequenceStepsTable.sequenceId, sequence.id),
           ),
         );
@@ -298,7 +298,7 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       const { dbUser } = req as AuthRequest;
-      const sequence = await getOwnedSequence(req.params.id, dbUser.id);
+      const sequence = await getOwnedSequence(req.params.id as string, dbUser.id);
       if (!sequence) {
         res.status(404).json({ error: "Sequence not found" });
         return;
@@ -347,7 +347,7 @@ router.post(
         return;
       }
 
-      const sequence = await getOwnedSequence(req.params.id, dbUser.id);
+      const sequence = await getOwnedSequence(req.params.id as string, dbUser.id);
       if (!sequence) {
         res.status(404).json({ error: "Sequence not found" });
         return;
@@ -430,7 +430,7 @@ router.delete(
       const { dbUser } = req as AuthRequest;
 
       // Verify the parent sequence belongs to the requester before touching the enrollment.
-      const sequence = await getOwnedSequence(req.params.id, dbUser.id);
+      const sequence = await getOwnedSequence(req.params.id as string, dbUser.id);
       if (!sequence) {
         res.status(404).json({ error: "Sequence not found" });
         return;
@@ -441,7 +441,7 @@ router.delete(
         .from(sequenceEnrollmentsTable)
         .where(
           and(
-            eq(sequenceEnrollmentsTable.id, req.params.enrollmentId),
+            eq(sequenceEnrollmentsTable.id, req.params.enrollmentId as string),
             eq(sequenceEnrollmentsTable.sequenceId, sequence.id),
           ),
         )
