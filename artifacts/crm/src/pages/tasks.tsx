@@ -1,6 +1,6 @@
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useState, useRef, useEffect } from "react";
-import { useListTasks, useCompleteTask, getListTasksQueryKey, type TaskWithRelations } from "@workspace/api-client-react";
+import { useListTasks, useCompleteTask, useGetTask, getListTasksQueryKey, type TaskWithRelations } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,6 +18,25 @@ const PRIORITY_COLORS: Record<string, string> = {
   HIGH: "bg-orange-100 text-orange-700",
   URGENT: "bg-red-100 text-red-700",
 };
+
+function useTaskDeepLink(onOpen: (t: TaskWithRelations) => void) {
+  const [deepLinkId] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("open");
+    if (id) window.history.replaceState({}, "", window.location.pathname);
+    return id;
+  });
+  const { data: deepTask } = useGetTask(deepLinkId ?? "", {
+    query: { enabled: !!deepLinkId },
+  });
+  const openedRef = useRef(false);
+  useEffect(() => {
+    if (deepTask && !openedRef.current) {
+      openedRef.current = true;
+      onOpen(deepTask);
+    }
+  }, [deepTask, onOpen]);
+}
 
 export function TasksPage() {
   const [filter, setFilter] = useState("open");
@@ -44,15 +63,7 @@ export function TasksPage() {
   const openNew = () => { setEditTask(undefined); setDialogOpen(true); };
   const openEdit = (t: TaskWithRelations) => { setEditTask(t); setDialogOpen(true); };
 
-  useEffect(() => {
-    if (!data?.data) return;
-    const params = new URLSearchParams(window.location.search);
-    const openId = params.get("open");
-    if (!openId) return;
-    const task = data.data.find((t) => t.id === openId);
-    if (task) openEdit(task);
-    window.history.replaceState({}, "", window.location.pathname);
-  }, [data?.data]);
+  useTaskDeepLink(openEdit);
 
   const getDueBadge = (task: TaskWithRelations) => {
     if (!task.dueDate) return null;
