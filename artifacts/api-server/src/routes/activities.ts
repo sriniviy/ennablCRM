@@ -1,9 +1,59 @@
 import { Router, type Request, type Response } from "express";
-import { db, activitiesTable, usersTable, contactsTable, dealsTable } from "@workspace/db";
+import { db, activitiesTable, usersTable, contactsTable, companiesTable, dealsTable } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 
 const router = Router();
+
+router.get("/export", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { contactId, dealId, companyId, type } = req.query as Record<string, string>;
+
+    const conditions = [];
+    if (contactId) conditions.push(eq(activitiesTable.contactId, contactId));
+    if (dealId) conditions.push(eq(activitiesTable.dealId, dealId));
+    if (companyId) conditions.push(eq(activitiesTable.companyId, companyId));
+    if (type) conditions.push(eq(activitiesTable.type, type as typeof activitiesTable.$inferSelect["type"]));
+
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const rows = await db
+      .select({
+        activity: activitiesTable,
+        user: { name: usersTable.name },
+        contact: { firstName: contactsTable.firstName, lastName: contactsTable.lastName },
+        company: { name: companiesTable.name },
+        deal: { title: dealsTable.title },
+      })
+      .from(activitiesTable)
+      .leftJoin(usersTable, eq(activitiesTable.userId, usersTable.id))
+      .leftJoin(contactsTable, eq(activitiesTable.contactId, contactsTable.id))
+      .leftJoin(companiesTable, eq(activitiesTable.companyId, companiesTable.id))
+      .leftJoin(dealsTable, eq(activitiesTable.dealId, dealsTable.id))
+      .where(where)
+      .orderBy(desc(activitiesTable.createdAt));
+
+    const escape = (v: string | null | undefined) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const headers = ["Type", "Title", "Description", "Contact", "Company", "Deal", "User", "Date"];
+    const csvRows = rows.map(({ activity: a, user, contact, company, deal }) => [
+      a.type,
+      a.title,
+      a.description,
+      contact?.firstName ? `${contact.firstName} ${contact.lastName}`.trim() : "",
+      company?.name ?? "",
+      deal?.title ?? "",
+      user?.name ?? "",
+      a.createdAt ? new Date(a.createdAt).toISOString() : "",
+    ].map(escape).join(","));
+
+    const csv = [headers.map(escape).join(","), ...csvRows].join("\n");
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", "attachment; filename=\"activities.csv\"");
+    res.send(csv);
+  } catch {
+    res.status(500).json({ error: "Failed to export activities" });
+  }
+});
 
 router.get("/", requireAuth, async (req: Request, res: Response) => {
   try {

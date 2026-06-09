@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MessageSquare, Trash2, User } from "lucide-react";
+import { MessageSquare, Trash2, User, Download, Loader2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
@@ -34,6 +34,32 @@ export function NotesFeed({ entityType, entityId }: NotesFeedProps) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [draft, setDraft] = useState("");
+  const [exportingNotes, setExportingNotes] = useState(false);
+
+  const handleExportNotes = async () => {
+    setExportingNotes(true);
+    try {
+      const token = await getToken();
+      const params = new URLSearchParams({ entityType, entityId });
+      const res = await fetch(`${BASE}/api/notes/export?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `notes-${entityType}-${entityId}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: "Export failed", variant: "destructive" });
+    } finally {
+      setExportingNotes(false);
+    }
+  };
 
   const authFetch = useCallback(
     async (url: string, options: RequestInit = {}) => {
@@ -118,7 +144,17 @@ export function NotesFeed({ entityType, entityId }: NotesFeedProps) {
           onChange={(e) => setDraft(e.target.value)}
           className="resize-none min-h-[80px]"
         />
-        <div className="flex justify-end">
+        <div className="flex justify-between items-center">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportNotes}
+            disabled={exportingNotes}
+            data-testid="btn-export-notes"
+          >
+            {exportingNotes ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Download className="mr-2 h-3.5 w-3.5" />}
+            Export Notes
+          </Button>
           <Button
             size="sm"
             disabled={!draft.trim() || addNote.isPending}

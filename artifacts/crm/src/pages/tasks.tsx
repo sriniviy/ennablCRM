@@ -1,5 +1,6 @@
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useState, useRef, useEffect } from "react";
+import { useAuth } from "@clerk/react";
 import { useListTasks, useCompleteTask, useGetTask, getListTasksQueryKey, type TaskWithRelations } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -7,10 +8,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Clock, Calendar, CheckCircle2, AlertCircle, Pencil } from "lucide-react";
+import { Plus, Clock, Calendar, CheckCircle2, AlertCircle, Pencil, Download, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { TaskDialog } from "@/components/tasks/task-dialog";
 import { formatDistanceToNow } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 const PRIORITY_COLORS: Record<string, string> = {
   LOW: "bg-gray-100 text-gray-600",
@@ -39,6 +43,8 @@ function useTaskDeepLink(onOpen: (t: TaskWithRelations) => void) {
 }
 
 export function TasksPage() {
+  const { getToken } = useAuth();
+  const { toast } = useToast();
   const [filter, setFilter] = useState("open");
   const { data, isLoading } = useListTasks({ filter, page: 1, pageSize: 50 });
   const completeTask = useCompleteTask();
@@ -46,6 +52,58 @@ export function TasksPage() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTask, setEditTask] = useState<TaskWithRelations | undefined>();
+  const [exportingTasks, setExportingTasks] = useState(false);
+  const [exportingActivities, setExportingActivities] = useState(false);
+
+  const handleExportTasks = async () => {
+    setExportingTasks(true);
+    try {
+      const token = await getToken();
+      const params = new URLSearchParams();
+      if (filter !== "open") params.set("filter", filter);
+      const res = await fetch(`${BASE}/api/tasks/export?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "tasks.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: "Export failed", variant: "destructive" });
+    } finally {
+      setExportingTasks(false);
+    }
+  };
+
+  const handleExportActivities = async () => {
+    setExportingActivities(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${BASE}/api/activities/export`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "activities.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: "Export failed", variant: "destructive" });
+    } finally {
+      setExportingActivities(false);
+    }
+  };
 
   const completeTaskMutate = useRef(completeTask.mutate);
   completeTaskMutate.current = completeTask.mutate;
@@ -84,9 +142,19 @@ export function TasksPage() {
             <h1 className="text-3xl font-bold tracking-tight">Tasks</h1>
             <p className="text-muted-foreground">Stay on top of your to-dos and follow-ups.</p>
           </div>
-          <Button data-testid="btn-new-task" onClick={openNew}>
-            <Plus className="mr-2 h-4 w-4" /> Add Task
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" onClick={handleExportActivities} disabled={exportingActivities} data-testid="btn-export-activities">
+              {exportingActivities ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+              Export Activities
+            </Button>
+            <Button variant="outline" onClick={handleExportTasks} disabled={exportingTasks} data-testid="btn-export-tasks">
+              {exportingTasks ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+              Export Tasks
+            </Button>
+            <Button data-testid="btn-new-task" onClick={openNew}>
+              <Plus className="mr-2 h-4 w-4" /> Add Task
+            </Button>
+          </div>
         </div>
 
         <Tabs value={filter} onValueChange={setFilter}>

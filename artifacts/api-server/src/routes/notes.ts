@@ -6,6 +6,48 @@ import { logActivity } from "../lib/activity";
 
 const router = Router();
 
+router.get("/export", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { entityType, entityId } = req.query as Record<string, string>;
+
+    const conditions = [];
+    if (entityType) conditions.push(eq(notesTable.entityType, entityType));
+    if (entityId) conditions.push(eq(notesTable.entityId, entityId));
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const rows = await db
+      .select({
+        id: notesTable.id,
+        body: notesTable.body,
+        entityType: notesTable.entityType,
+        entityId: notesTable.entityId,
+        createdAt: notesTable.createdAt,
+        authorName: usersTable.name,
+      })
+      .from(notesTable)
+      .leftJoin(usersTable, eq(notesTable.authorId, usersTable.id))
+      .where(where)
+      .orderBy(desc(notesTable.createdAt));
+
+    const escape = (v: string | null | undefined) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const headers = ["Body", "Entity Type", "Entity ID", "Author", "Created At"];
+    const csvRows = rows.map((n) => [
+      n.body,
+      n.entityType,
+      n.entityId,
+      n.authorName ?? "",
+      n.createdAt ? new Date(n.createdAt).toISOString() : "",
+    ].map(escape).join(","));
+
+    const csv = [headers.map(escape).join(","), ...csvRows].join("\n");
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", "attachment; filename=\"notes.csv\"");
+    res.send(csv);
+  } catch {
+    res.status(500).json({ error: "Failed to export notes" });
+  }
+});
+
 router.get("/", requireAuth, async (req: Request, res: Response) => {
   try {
     const { entityType, entityId } = req.query as Record<string, string>;

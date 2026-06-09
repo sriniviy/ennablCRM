@@ -6,6 +6,71 @@ import { logActivity } from "../lib/activity";
 
 const router = Router();
 
+router.get("/export", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { filter, contactId, dealId, assigneeId } = req.query as Record<string, string>;
+    const now = new Date();
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+
+    const conditions = [];
+    if (filter === "overdue") {
+      conditions.push(eq(tasksTable.completed, false));
+      conditions.push(lte(tasksTable.dueDate, now));
+    } else if (filter === "due_today") {
+      conditions.push(eq(tasksTable.completed, false));
+      conditions.push(gte(tasksTable.dueDate, todayStart));
+      conditions.push(lte(tasksTable.dueDate, todayEnd));
+    } else if (filter === "open") {
+      conditions.push(eq(tasksTable.completed, false));
+    } else if (filter === "completed") {
+      conditions.push(eq(tasksTable.completed, true));
+    }
+    if (contactId) conditions.push(eq(tasksTable.contactId, contactId));
+    if (dealId) conditions.push(eq(tasksTable.dealId, dealId));
+    if (assigneeId) conditions.push(eq(tasksTable.assigneeId, assigneeId));
+
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const rows = await db
+      .select({
+        task: tasksTable,
+        contact: { firstName: contactsTable.firstName, lastName: contactsTable.lastName },
+        deal: { title: dealsTable.title },
+        assignee: { name: usersTable.name },
+      })
+      .from(tasksTable)
+      .leftJoin(contactsTable, eq(tasksTable.contactId, contactsTable.id))
+      .leftJoin(dealsTable, eq(tasksTable.dealId, dealsTable.id))
+      .leftJoin(usersTable, eq(tasksTable.assigneeId, usersTable.id))
+      .where(where)
+      .orderBy(asc(tasksTable.dueDate), desc(tasksTable.createdAt));
+
+    const escape = (v: string | null | undefined) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const headers = ["Title", "Description", "Type", "Priority", "Status", "Due Date", "Completed At", "Contact", "Deal", "Assignee", "Created At"];
+    const csvRows = rows.map(({ task: t, contact, deal, assignee }) => [
+      t.title,
+      t.description,
+      t.type,
+      t.priority,
+      t.completed ? "Completed" : "Open",
+      t.dueDate ? new Date(t.dueDate).toISOString() : "",
+      t.completedAt ? new Date(t.completedAt).toISOString() : "",
+      contact?.firstName ? `${contact.firstName} ${contact.lastName}`.trim() : "",
+      deal?.title ?? "",
+      assignee?.name ?? "",
+      t.createdAt ? new Date(t.createdAt).toISOString() : "",
+    ].map(escape).join(","));
+
+    const csv = [headers.map(escape).join(","), ...csvRows].join("\n");
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", "attachment; filename=\"tasks.csv\"");
+    res.send(csv);
+  } catch {
+    res.status(500).json({ error: "Failed to export tasks" });
+  }
+});
+
 router.get("/", requireAuth, async (req: Request, res: Response) => {
   try {
     const { filter, contactId, dealId, assigneeId, page = "1", pageSize = "50" } = req.query as Record<string, string>;
