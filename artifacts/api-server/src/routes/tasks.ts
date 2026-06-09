@@ -8,7 +8,7 @@ const router = Router();
 
 router.get("/export", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { filter, contactId, dealId, assigneeId } = req.query as Record<string, string>;
+    const { filter, contactId, dealId, assigneeId, dateFrom, dateTo } = req.query as Record<string, string>;
     const now = new Date();
     const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
@@ -29,6 +29,12 @@ router.get("/export", requireAuth, async (req: Request, res: Response) => {
     if (contactId) conditions.push(eq(tasksTable.contactId, contactId));
     if (dealId) conditions.push(eq(tasksTable.dealId, dealId));
     if (assigneeId) conditions.push(eq(tasksTable.assigneeId, assigneeId));
+    if (dateFrom) conditions.push(gte(tasksTable.createdAt, new Date(dateFrom)));
+    if (dateTo) {
+      const end = new Date(dateTo);
+      end.setHours(23, 59, 59, 999);
+      conditions.push(lte(tasksTable.createdAt, end));
+    }
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 

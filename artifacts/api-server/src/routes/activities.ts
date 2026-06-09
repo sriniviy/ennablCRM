@@ -1,19 +1,26 @@
 import { Router, type Request, type Response } from "express";
 import { db, activitiesTable, usersTable, contactsTable, companiesTable, dealsTable } from "@workspace/db";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 
 const router = Router();
 
 router.get("/export", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { contactId, dealId, companyId, type } = req.query as Record<string, string>;
+    const { contactId, dealId, companyId, type, assigneeId, dateFrom, dateTo } = req.query as Record<string, string>;
 
     const conditions = [];
     if (contactId) conditions.push(eq(activitiesTable.contactId, contactId));
     if (dealId) conditions.push(eq(activitiesTable.dealId, dealId));
     if (companyId) conditions.push(eq(activitiesTable.companyId, companyId));
     if (type) conditions.push(eq(activitiesTable.type, type as typeof activitiesTable.$inferSelect["type"]));
+    if (assigneeId) conditions.push(eq(activitiesTable.userId, assigneeId));
+    if (dateFrom) conditions.push(gte(activitiesTable.createdAt, new Date(dateFrom)));
+    if (dateTo) {
+      const end = new Date(dateTo);
+      end.setHours(23, 59, 59, 999);
+      conditions.push(lte(activitiesTable.createdAt, end));
+    }
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
