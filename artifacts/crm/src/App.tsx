@@ -21,6 +21,7 @@ import { CampaignNewPage } from "./pages/campaign-new";
 import { CampaignDetailPage } from "./pages/campaign-detail";
 import { LandingPage } from "./pages/landing";
 import { ReportsPage } from "./pages/reports";
+import { SettingsTeamPage } from "./pages/settings-team";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -216,6 +217,7 @@ function ClerkProviderWithRoutes() {
             <Route path="/campaigns/new" component={() => <ProtectedRoute component={CampaignNewPage} />} />
             <Route path="/campaigns/:id" component={() => <ProtectedRoute component={CampaignDetailPage} />} />
             <Route path="/reports" component={() => <ProtectedRoute component={ReportsPage} />} />
+            <Route path="/settings/team" component={() => <ProtectedRoute component={SettingsTeamPage} />} />
           </Switch>
           <Toaster />
         </TooltipProvider>

@@ -9,6 +9,7 @@ import {
   CheckSquare,
   Mail,
   BarChart2,
+  Settings,
   LogOut,
   Menu,
   ChevronLeft,
@@ -44,6 +45,7 @@ const navItems = [
   { name: "Tasks", href: "/tasks", icon: CheckSquare },
   { name: "Campaigns", href: "/campaigns", icon: Mail },
   { name: "Reports", href: "/reports", icon: BarChart2 },
+  { name: "Settings", href: "/settings/team", icon: Settings },
 ];
 
 function getInitialCollapsed(): boolean {

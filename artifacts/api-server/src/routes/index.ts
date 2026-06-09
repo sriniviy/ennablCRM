@@ -13,6 +13,7 @@ import trackingRouter from "./tracking";
 import searchRouter from "./search";
 import notesRouter from "./notes";
 import reportsRouter from "./reports";
+import teamRouter from "./team";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use("/track", trackingRouter);
 router.use("/search", searchRouter);
 router.use("/notes", notesRouter);
 router.use("/reports", reportsRouter);
+router.use("/team", teamRouter);
 
 export default router;
