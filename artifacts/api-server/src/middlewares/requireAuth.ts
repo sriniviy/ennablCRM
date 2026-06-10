@@ -1,5 +1,5 @@
 import { db, usersTable } from "@workspace/db";
-import { eq, or } from "drizzle-orm";
+import { eq, or, sql } from "drizzle-orm";
 import type { Request, Response, NextFunction } from "express";
 import { auth } from "../lib/auth";
 
@@ -59,6 +59,26 @@ export async function requireAuth(
       }
       (req as AuthRequest).userId = existing.id;
       (req as AuthRequest).dbUser = existing;
+      return next();
+    }
+
+    // Bootstrap: auto-provision the very first user as a regular member so they
+    // can sign in and promote themselves to Admin via the bootstrap-admin endpoint.
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(usersTable);
+
+    if (count === 0) {
+      const [provisioned] = await db
+        .insert(usersTable)
+        .values({
+          authId: user.id,
+          email: user.email,
+          name: user.name ?? null,
+        })
+        .returning();
+      (req as AuthRequest).userId = provisioned.id;
+      (req as AuthRequest).dbUser = provisioned;
       return next();
     }
 

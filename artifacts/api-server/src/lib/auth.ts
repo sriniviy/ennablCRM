@@ -36,7 +36,6 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     autoSignIn: true,
-    disableSignUp: true,
   },
   plugins: [bearer(), admin()],
   trustedOrigins: domain ? [`https://${domain}`] : ["*"],
