@@ -1,12 +1,14 @@
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
-import { useGetDashboardStats, useGetDashboardActivityFeed, useListTasks } from "@workspace/api-client-react";
+import { useGetDashboardStats, useGetDashboardActivityFeed, useListTasks, useCompleteTask, getListTasksQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { formatCurrency } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, CircleDollarSign, Target, CheckSquare, Clock, CheckCheck, AlertCircle, CalendarClock, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
+import { useQueryClient } from "@tanstack/react-query";
 
 const PRIORITY_STYLES: Record<string, string> = {
   HIGH:   "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
@@ -31,6 +33,21 @@ export function DashboardPage() {
   const { data: stats, isLoading: statsLoading } = useGetDashboardStats();
   const { data: feed, isLoading: feedLoading } = useGetDashboardActivityFeed({ limit: 10 });
   const { data: tasksData, isLoading: tasksLoading } = useListTasks({ filter: "open", pageSize: 8 });
+  const completeTask = useCompleteTask();
+  const queryClient = useQueryClient();
+
+  const handleComplete = (id: string) => {
+    queryClient.setQueryData(getListTasksQueryKey({ filter: "open", pageSize: 8 }), (old: any) => {
+      if (!old?.data) return old;
+      return { ...old, data: old.data.filter((t: any) => t.id !== id) };
+    });
+    completeTask.mutate({ id, data: { completed: true } }, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListTasksQueryKey() });
+        queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+      },
+    });
+  };
 
   return (
     <SidebarLayout>
@@ -152,16 +169,16 @@ export function DashboardPage() {
                       <div
                         key={task.id}
                         className={cn(
-                          "flex items-start gap-3 rounded-lg px-2 py-2.5 -mx-2 transition-colors hover:bg-muted/50",
+                          "flex items-start gap-3 rounded-lg px-2 py-2.5 -mx-2 transition-colors hover:bg-muted/50 group",
                           isOverdue && "bg-destructive/5 hover:bg-destructive/10"
                         )}
                       >
-                        <div className="mt-0.5 shrink-0">
-                          {isOverdue
-                            ? <AlertCircle className="h-4 w-4 text-destructive" />
-                            : <CalendarClock className="h-4 w-4 text-muted-foreground" />
-                          }
-                        </div>
+                        <Checkbox
+                          className="mt-0.5 shrink-0"
+                          checked={false}
+                          onCheckedChange={() => handleComplete(task.id)}
+                          aria-label={`Complete "${task.title}"`}
+                        />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-sm font-medium leading-tight line-clamp-1">{task.title}</span>
