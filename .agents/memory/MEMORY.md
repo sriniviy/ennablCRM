@@ -1,1 +1,2 @@
 - [api-zod codegen index clash](api-zod-codegen-index-clash.md) — orval codegen re-adds a clashing `export * from './generated/types'` to lib/api-zod/src/index.ts; keep it to one line.
+- [merge handler ordering](merge-handler-ordering.md) — record-merge tx order must be re-point → delete losers → update primary, or unique back-fill (email/domain) collides.

@@ -386,12 +386,6 @@ router.post("/merge", requireAuth, async (req: Request, res: Response) => {
 
       const actualLoserIds = losers.map((l) => l.id);
 
-      const [updated] = await tx
-        .update(contactsTable)
-        .set(merge)
-        .where(eq(contactsTable.id, primaryId))
-        .returning();
-
       // Re-point related records to the primary contact.
       await tx.update(dealsTable).set({ contactId: primaryId }).where(inArray(dealsTable.contactId, actualLoserIds));
       await tx.update(tasksTable).set({ contactId: primaryId }).where(inArray(tasksTable.contactId, actualLoserIds));
@@ -443,6 +437,14 @@ router.post("/merge", requireAuth, async (req: Request, res: Response) => {
 
       await tx.delete(contactsTable).where(inArray(contactsTable.id, actualLoserIds));
 
+      // Update the primary last so back-filled unique fields (e.g. email) do not
+      // collide with loser rows that still exist during the transaction.
+      const [updated] = await tx
+        .update(contactsTable)
+        .set(merge)
+        .where(eq(contactsTable.id, primaryId))
+        .returning();
+
       return { updated, primary, losers };
     });
 
@@ -457,7 +459,37 @@ router.post("/merge", requireAuth, async (req: Request, res: Response) => {
       after: merged.updated,
     });
 
-    res.json(merged.updated);
+    // Return the surviving contact enriched to match ContactWithRelations.
+    const [enriched] = await db
+      .select({
+        contact: contactsTable,
+        company: { id: companiesTable.id, name: companiesTable.name },
+        assignee: { id: usersTable.id, name: usersTable.name, avatarUrl: usersTable.avatarUrl },
+      })
+      .from(contactsTable)
+      .leftJoin(companiesTable, eq(contactsTable.companyId, companiesTable.id))
+      .leftJoin(usersTable, eq(contactsTable.assigneeId, usersTable.id))
+      .where(eq(contactsTable.id, merged.updated.id))
+      .limit(1);
+
+    const [[{ dealCount }], [{ taskCount }]] = await Promise.all([
+      db
+        .select({ dealCount: sql<number>`count(*)::int` })
+        .from(dealsTable)
+        .where(eq(dealsTable.contactId, merged.updated.id)),
+      db
+        .select({ taskCount: sql<number>`count(*)::int` })
+        .from(tasksTable)
+        .where(eq(tasksTable.contactId, merged.updated.id)),
+    ]);
+
+    res.json({
+      ...enriched.contact,
+      company: enriched.company?.id ? enriched.company : null,
+      assignee: enriched.assignee?.id ? enriched.assignee : null,
+      dealCount,
+      taskCount,
+    });
   } catch (e) {
     const msg = (e as Error).message;
     if (msg === "PRIMARY_NOT_FOUND") {

@@ -234,12 +234,6 @@ router.post("/merge", requireAuth, async (req: Request, res: Response) => {
 
       const actualLoserIds = losers.map((l) => l.id);
 
-      const [updated] = await tx
-        .update(companiesTable)
-        .set(merge)
-        .where(eq(companiesTable.id, primaryId))
-        .returning();
-
       // Re-point all related records to the primary company.
       await tx.update(contactsTable).set({ companyId: primaryId }).where(inArray(contactsTable.companyId, actualLoserIds));
       await tx.update(dealsTable).set({ companyId: primaryId }).where(inArray(dealsTable.companyId, actualLoserIds));
@@ -250,6 +244,14 @@ router.post("/merge", requireAuth, async (req: Request, res: Response) => {
         .where(and(eq(notesTable.entityType, "company"), inArray(notesTable.entityId, actualLoserIds)));
 
       await tx.delete(companiesTable).where(inArray(companiesTable.id, actualLoserIds));
+
+      // Update the primary last so back-filled unique fields (e.g. domain) do not
+      // collide with loser rows that still exist during the transaction.
+      const [updated] = await tx
+        .update(companiesTable)
+        .set(merge)
+        .where(eq(companiesTable.id, primaryId))
+        .returning();
 
       return { updated, primary, losers };
     });
