@@ -12,12 +12,13 @@ import {
 } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Plus, Upload, Download } from "lucide-react";
+import { Search, Plus, Upload, Download, CopyCheck } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useUrlFilters } from "@/hooks/use-url-filters";
 import { useTeamMembers } from "@/hooks/use-team-members";
 import { ContactDialog } from "@/components/contacts/contact-dialog";
 import { CsvImportDialog } from "@/components/contacts/csv-import-dialog";
+import { ContactDuplicatesDialog } from "@/components/merge/contact-duplicates";
 import { useToast } from "@/hooks/use-toast";
 import { ExportColumnsDialog, type ColumnDef } from "@/components/export-columns-dialog";
 import { ViewToggle, type ViewMode } from "@/components/view-toggle";
@@ -95,6 +96,7 @@ export function ContactsPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [duplicatesOpen, setDuplicatesOpen] = useState(false);
 
   useEffect(() => {
     set({
@@ -161,6 +163,9 @@ export function ContactsPage() {
             <p className="text-muted-foreground">Manage your people and leads.</p>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setDuplicatesOpen(true)}>
+              <CopyCheck className="mr-2 h-4 w-4" /> Find duplicates
+            </Button>
             <Button variant="outline" onClick={() => setImportOpen(true)}>
               <Upload className="mr-2 h-4 w-4" /> Import CSV
             </Button>
@@ -311,6 +316,7 @@ export function ContactsPage() {
       </div>
 
       <ContactDialog open={dialogOpen} onOpenChange={setDialogOpen} contact={editContact} />
+      <ContactDuplicatesDialog open={duplicatesOpen} onOpenChange={setDuplicatesOpen} />
       <CsvImportDialog open={importOpen} onOpenChange={setImportOpen} />
       <ExportColumnsDialog
         open={exportOpen}

@@ -1,3 +1,1 @@
-- [Better Auth migration](better-auth-migration.md) — drizzle-orm dual-variant TS conflict; kysely must be in lib/db deps too; @opentelemetry/semantic-conventions needed at runtime.
-- [API codegen pitfalls](api-codegen-pitfalls.md) — after orval codegen reset api-zod barrel to only `./generated/api`; use NonNullable<> casting nullable enum cols in eq().
-- [drizzle-push truncation hazard](drizzle-push-truncation.md) — never push/push-force (wants to truncate users over pre-existing drift); add tables via direct SQL + rerun typecheck:libs to rebuild db .d.ts.
+- [api-zod codegen index clash](api-zod-codegen-index-clash.md) — orval codegen re-adds a clashing `export * from './generated/types'` to lib/api-zod/src/index.ts; keep it to one line.

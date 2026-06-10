@@ -6,12 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Globe, MapPin, Phone, Users, Briefcase, Pencil } from "lucide-react";
+import { ArrowLeft, Globe, MapPin, Phone, Users, Briefcase, Pencil, CopyCheck } from "lucide-react";
 import { NotesFeed } from "@/components/notes/notes-feed";
 import { AuditHistory } from "@/components/audit/audit-history";
 import { formatCurrency } from "@/lib/utils";
 import { useState } from "react";
 import { CompanyDialog } from "@/components/companies/company-dialog";
+import { CompanyDuplicatesDialog } from "@/components/merge/company-duplicates";
 import { useTeamMembers } from "@/hooks/use-team-members";
 
 export function CompanyDetailPage() {
@@ -19,6 +20,7 @@ export function CompanyDetailPage() {
   const { data: company, isLoading } = useGetCompany(id);
   const { data: teamMembers = [] } = useTeamMembers();
   const [editOpen, setEditOpen] = useState(false);
+  const [duplicatesOpen, setDuplicatesOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -76,6 +78,9 @@ export function CompanyDetailPage() {
               </div>
             </div>
             <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setDuplicatesOpen(true)}>
+                <CopyCheck className="mr-2 h-4 w-4" /> Merge duplicates
+              </Button>
               <Button onClick={() => setEditOpen(true)}>
                 <Pencil className="mr-2 h-4 w-4" /> Edit
               </Button>
@@ -273,6 +278,7 @@ export function CompanyDetailPage() {
         company={company}
       />
     )}
+    <CompanyDuplicatesDialog open={duplicatesOpen} onOpenChange={setDuplicatesOpen} focusId={id} />
   </>
   );
 }

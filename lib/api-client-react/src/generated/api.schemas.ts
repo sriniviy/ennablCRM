@@ -291,6 +291,52 @@ export type ContactDetail = ContactWithRelations & {
   activities: ActivityWithRelations[];
 };
 
+export interface MergeInput {
+  primaryId: string;
+  /** @minItems 1 */
+  mergeIds: string[];
+}
+
+export type CompanyDuplicateRecord = Company & {
+  contactCount: number;
+  dealCount: number;
+};
+
+export interface CompanyDuplicateGroup {
+  matchedOn: string[];
+  records: CompanyDuplicateRecord[];
+}
+
+export interface CompanyDuplicateGroups {
+  groups: CompanyDuplicateGroup[];
+}
+
+export interface ContactDuplicateRecord {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email?: string | null;
+  phone?: string | null;
+  title?: string | null;
+  status: ContactStatus;
+  ennablUser?: boolean;
+  emailMarketingContact?: boolean;
+  tags: string[];
+  companyId?: string | null;
+  company?: CompanySummary | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ContactDuplicateGroup {
+  matchedOn: string[];
+  records: ContactDuplicateRecord[];
+}
+
+export interface ContactDuplicateGroups {
+  groups: ContactDuplicateGroup[];
+}
+
 export interface PipelineColumn {
   stage: DealStage;
   deals: DealWithRelations[];

@@ -24,8 +24,10 @@ import type {
   CampaignWithStats,
   Company,
   CompanyDetail,
+  CompanyDuplicateGroups,
   CompleteTaskBody,
   ContactDetail,
+  ContactDuplicateGroups,
   ContactWithRelations,
   CreateActivityInput,
   CreateCampaignInput,
@@ -49,6 +51,7 @@ import type {
   ListContactsParams,
   ListDealsParams,
   ListTasksParams,
+  MergeInput,
   MoveDealInput,
   NotFoundResponse,
   PaginatedActivities,
@@ -463,6 +466,154 @@ export const useImportContacts = <TError = ErrorType<UnauthorizedResponse>,
       return useMutation(getImportContactsMutationOptions(options));
     }
 
+export const getListContactDuplicatesUrl = () => {
+
+
+
+
+  return `/api/contacts/duplicates`
+}
+
+/**
+ * @summary List groups of likely-duplicate contacts (by email or name)
+ */
+export const listContactDuplicates = async ( options?: RequestInit): Promise<ContactDuplicateGroups> => {
+
+  return customFetch<ContactDuplicateGroups>(getListContactDuplicatesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListContactDuplicatesQueryKey = () => {
+    return [
+    `/api/contacts/duplicates`
+    ] as const;
+    }
+
+
+export const getListContactDuplicatesQueryOptions = <TData = Awaited<ReturnType<typeof listContactDuplicates>>, TError = ErrorType<UnauthorizedResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContactDuplicates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListContactDuplicatesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listContactDuplicates>>> = ({ signal }) => listContactDuplicates({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listContactDuplicates>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListContactDuplicatesQueryResult = NonNullable<Awaited<ReturnType<typeof listContactDuplicates>>>
+export type ListContactDuplicatesQueryError = ErrorType<UnauthorizedResponse>
+
+
+/**
+ * @summary List groups of likely-duplicate contacts (by email or name)
+ */
+
+export function useListContactDuplicates<TData = Awaited<ReturnType<typeof listContactDuplicates>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContactDuplicates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListContactDuplicatesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getMergeContactsUrl = () => {
+
+
+
+
+  return `/api/contacts/merge`
+}
+
+/**
+ * @summary Merge duplicate contacts into a chosen primary contact
+ */
+export const mergeContacts = async (mergeInput: MergeInput, options?: RequestInit): Promise<ContactWithRelations> => {
+
+  return customFetch<ContactWithRelations>(getMergeContactsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      mergeInput,)
+  }
+);}
+
+
+
+
+export const getMergeContactsMutationOptions = <TError = ErrorType<ErrorResponse | UnauthorizedResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mergeContacts>>, TError,{data: BodyType<MergeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof mergeContacts>>, TError,{data: BodyType<MergeInput>}, TContext> => {
+
+const mutationKey = ['mergeContacts'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof mergeContacts>>, {data: BodyType<MergeInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  mergeContacts(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MergeContactsMutationResult = NonNullable<Awaited<ReturnType<typeof mergeContacts>>>
+    export type MergeContactsMutationBody = BodyType<MergeInput>
+    export type MergeContactsMutationError = ErrorType<ErrorResponse | UnauthorizedResponse | NotFoundResponse>
+
+    /**
+ * @summary Merge duplicate contacts into a chosen primary contact
+ */
+export const useMergeContacts = <TError = ErrorType<ErrorResponse | UnauthorizedResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mergeContacts>>, TError,{data: BodyType<MergeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof mergeContacts>>,
+        TError,
+        {data: BodyType<MergeInput>},
+        TContext
+      > => {
+      return useMutation(getMergeContactsMutationOptions(options));
+    }
+
 export const getGetContactUrl = (id: string,) => {
 
 
@@ -835,6 +986,154 @@ export const useCreateCompany = <TError = ErrorType<UnauthorizedResponse>,
         TContext
       > => {
       return useMutation(getCreateCompanyMutationOptions(options));
+    }
+
+export const getListCompanyDuplicatesUrl = () => {
+
+
+
+
+  return `/api/companies/duplicates`
+}
+
+/**
+ * @summary List groups of likely-duplicate companies (by name or domain)
+ */
+export const listCompanyDuplicates = async ( options?: RequestInit): Promise<CompanyDuplicateGroups> => {
+
+  return customFetch<CompanyDuplicateGroups>(getListCompanyDuplicatesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCompanyDuplicatesQueryKey = () => {
+    return [
+    `/api/companies/duplicates`
+    ] as const;
+    }
+
+
+export const getListCompanyDuplicatesQueryOptions = <TData = Awaited<ReturnType<typeof listCompanyDuplicates>>, TError = ErrorType<UnauthorizedResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCompanyDuplicates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCompanyDuplicatesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCompanyDuplicates>>> = ({ signal }) => listCompanyDuplicates({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCompanyDuplicates>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCompanyDuplicatesQueryResult = NonNullable<Awaited<ReturnType<typeof listCompanyDuplicates>>>
+export type ListCompanyDuplicatesQueryError = ErrorType<UnauthorizedResponse>
+
+
+/**
+ * @summary List groups of likely-duplicate companies (by name or domain)
+ */
+
+export function useListCompanyDuplicates<TData = Awaited<ReturnType<typeof listCompanyDuplicates>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCompanyDuplicates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCompanyDuplicatesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getMergeCompaniesUrl = () => {
+
+
+
+
+  return `/api/companies/merge`
+}
+
+/**
+ * @summary Merge duplicate companies into a chosen primary company
+ */
+export const mergeCompanies = async (mergeInput: MergeInput, options?: RequestInit): Promise<Company> => {
+
+  return customFetch<Company>(getMergeCompaniesUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      mergeInput,)
+  }
+);}
+
+
+
+
+export const getMergeCompaniesMutationOptions = <TError = ErrorType<ErrorResponse | UnauthorizedResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mergeCompanies>>, TError,{data: BodyType<MergeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof mergeCompanies>>, TError,{data: BodyType<MergeInput>}, TContext> => {
+
+const mutationKey = ['mergeCompanies'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof mergeCompanies>>, {data: BodyType<MergeInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  mergeCompanies(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MergeCompaniesMutationResult = NonNullable<Awaited<ReturnType<typeof mergeCompanies>>>
+    export type MergeCompaniesMutationBody = BodyType<MergeInput>
+    export type MergeCompaniesMutationError = ErrorType<ErrorResponse | UnauthorizedResponse | NotFoundResponse>
+
+    /**
+ * @summary Merge duplicate companies into a chosen primary company
+ */
+export const useMergeCompanies = <TError = ErrorType<ErrorResponse | UnauthorizedResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mergeCompanies>>, TError,{data: BodyType<MergeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof mergeCompanies>>,
+        TError,
+        {data: BodyType<MergeInput>},
+        TContext
+      > => {
+      return useMutation(getMergeCompaniesMutationOptions(options));
     }
 
 export const getGetCompanyUrl = (id: string,) => {

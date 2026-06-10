@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
-import { db, contactsTable, companiesTable, usersTable, dealsTable, dealStagesTable, tasksTable, activitiesTable } from "@workspace/db";
-import { eq, ne, ilike, and, or, sql, asc, desc, isNotNull } from "drizzle-orm";
+import { db, contactsTable, companiesTable, usersTable, dealsTable, dealStagesTable, tasksTable, activitiesTable, notesTable } from "@workspace/db";
+import { eq, ne, ilike, and, or, inArray, sql, asc, desc, isNotNull } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 import { logActivity } from "../lib/activity";
 import { logAudit } from "../lib/audit";
@@ -10,6 +10,14 @@ import {
   buildCompanyDomainIndex,
   loadBlockedDomains,
 } from "../lib/domain-matching";
+import {
+  computeDuplicateGroups,
+  resolveScalar,
+  unionArrays,
+  resolveBool,
+  parseMergeInput,
+  type DuplicateKeyRow,
+} from "../lib/merge";
 
 const router = Router();
 
@@ -278,6 +286,189 @@ router.get("/export", requireAuth, async (req: Request, res: Response) => {
     res.send(csv);
   } catch {
     res.status(500).json({ error: "Failed to export contacts" });
+  }
+});
+
+router.get("/duplicates", requireAuth, async (_req: Request, res: Response) => {
+  try {
+    const result = await db.execute(sql`
+      select id, 'email:' || lower(trim(email)) as key
+        from ${contactsTable}
+        where email is not null and trim(email) <> ''
+      union all
+      select id, 'name:' || lower(trim(first_name) || ' ' || trim(last_name)) as key
+        from ${contactsTable}
+        where trim(first_name) <> '' or trim(last_name) <> ''
+    `);
+    const keyRows = (result.rows as { id: string; key: string }[]).map<DuplicateKeyRow>((r) => ({
+      id: r.id,
+      key: r.key,
+    }));
+
+    const groups = computeDuplicateGroups(keyRows);
+    if (groups.length === 0) {
+      res.json({ groups: [] });
+      return;
+    }
+
+    const allIds = [...new Set(groups.flatMap((g) => g.ids))];
+    const records = await db
+      .select({
+        contact: contactsTable,
+        company: { id: companiesTable.id, name: companiesTable.name },
+      })
+      .from(contactsTable)
+      .leftJoin(companiesTable, eq(contactsTable.companyId, companiesTable.id))
+      .where(inArray(contactsTable.id, allIds));
+
+    const byId = new Map(
+      records.map(({ contact, company }) => [
+        contact.id,
+        { ...contact, company: company?.id ? company : null },
+      ]),
+    );
+
+    res.json({
+      groups: groups
+        .map((g) => ({
+          matchedOn: g.matchedOn,
+          records: g.ids.map((id) => byId.get(id)).filter(Boolean),
+        }))
+        .filter((g) => g.records.length > 1),
+    });
+  } catch {
+    res.status(500).json({ error: "Failed to detect duplicate contacts" });
+  }
+});
+
+router.post("/merge", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { dbUser } = req as AuthRequest;
+    let primaryId: string;
+    let loserIds: string[];
+    try {
+      ({ primaryId, loserIds } = parseMergeInput(req.body));
+    } catch (e) {
+      res.status(400).json({ error: (e as Error).message });
+      return;
+    }
+
+    const merged = await db.transaction(async (tx) => {
+      const involved = await tx
+        .select()
+        .from(contactsTable)
+        .where(inArray(contactsTable.id, [primaryId, ...loserIds]));
+
+      const primary = involved.find((c) => c.id === primaryId);
+      const losers = loserIds
+        .map((id) => involved.find((c) => c.id === id))
+        .filter((c): c is NonNullable<typeof c> => Boolean(c));
+
+      if (!primary) throw new Error("PRIMARY_NOT_FOUND");
+      if (losers.length === 0) throw new Error("LOSERS_NOT_FOUND");
+
+      const merge = {
+        firstName: resolveScalar(primary.firstName, losers.map((l) => l.firstName)),
+        lastName: resolveScalar(primary.lastName, losers.map((l) => l.lastName)),
+        email: resolveScalar(primary.email, losers.map((l) => l.email)),
+        phone: resolveScalar(primary.phone, losers.map((l) => l.phone)),
+        title: resolveScalar(primary.title, losers.map((l) => l.title)),
+        status: resolveScalar(primary.status, losers.map((l) => l.status)),
+        ennablUser: resolveBool(primary.ennablUser, losers.map((l) => l.ennablUser)),
+        emailMarketingContact: resolveBool(primary.emailMarketingContact, losers.map((l) => l.emailMarketingContact)),
+        tags: unionArrays(primary.tags, ...losers.map((l) => l.tags)),
+        notes: resolveScalar(primary.notes, losers.map((l) => l.notes)),
+        linkedIn: resolveScalar(primary.linkedIn, losers.map((l) => l.linkedIn)),
+        companyId: resolveScalar(primary.companyId, losers.map((l) => l.companyId)),
+        assigneeId: resolveScalar(primary.assigneeId, losers.map((l) => l.assigneeId)),
+        updatedAt: new Date(),
+      };
+
+      const actualLoserIds = losers.map((l) => l.id);
+
+      const [updated] = await tx
+        .update(contactsTable)
+        .set(merge)
+        .where(eq(contactsTable.id, primaryId))
+        .returning();
+
+      // Re-point related records to the primary contact.
+      await tx.update(dealsTable).set({ contactId: primaryId }).where(inArray(dealsTable.contactId, actualLoserIds));
+      await tx.update(tasksTable).set({ contactId: primaryId }).where(inArray(tasksTable.contactId, actualLoserIds));
+      await tx.update(activitiesTable).set({ contactId: primaryId }).where(inArray(activitiesTable.contactId, actualLoserIds));
+      await tx
+        .update(notesTable)
+        .set({ entityId: primaryId })
+        .where(and(eq(notesTable.entityType, "contact"), inArray(notesTable.entityId, actualLoserIds)));
+
+      const loserList = sql.join(actualLoserIds.map((id) => sql`${id}`), sql`, `);
+      // sequence_enrollments has no unique (sequence, contact) constraint, but
+      // avoid creating duplicate enrollments: drop loser rows whose sequence the
+      // primary (or an earlier-kept loser) already covers, then re-point the rest.
+      await tx.execute(sql`
+        delete from sequence_enrollments
+        where contact_id in (${loserList})
+          and sequence_id in (select sequence_id from sequence_enrollments where contact_id = ${primaryId})
+      `);
+      await tx.execute(sql`
+        delete from sequence_enrollments a using sequence_enrollments b
+        where a.contact_id in (${loserList})
+          and b.contact_id in (${loserList})
+          and a.sequence_id = b.sequence_id
+          and a.id > b.id
+      `);
+      await tx.execute(sql`
+        update sequence_enrollments set contact_id = ${primaryId}
+        where contact_id in (${loserList})
+      `);
+
+      // campaign_contacts has UNIQUE(campaign_id, contact_id): primary wins,
+      // then keep the lowest-id loser row per campaign, then re-point.
+      await tx.execute(sql`
+        delete from campaign_contacts
+        where contact_id in (${loserList})
+          and campaign_id in (select campaign_id from campaign_contacts where contact_id = ${primaryId})
+      `);
+      await tx.execute(sql`
+        delete from campaign_contacts a using campaign_contacts b
+        where a.contact_id in (${loserList})
+          and b.contact_id in (${loserList})
+          and a.campaign_id = b.campaign_id
+          and a.id > b.id
+      `);
+      await tx.execute(sql`
+        update campaign_contacts set contact_id = ${primaryId}
+        where contact_id in (${loserList})
+      `);
+
+      await tx.delete(contactsTable).where(inArray(contactsTable.id, actualLoserIds));
+
+      return { updated, primary, losers };
+    });
+
+    await logAudit({
+      action: "MERGE",
+      objectType: "contact",
+      objectId: merged.updated.id,
+      objectLabel: `${merged.updated.firstName} ${merged.updated.lastName}`.trim(),
+      actorId: dbUser.id,
+      actorName: dbUser.name,
+      before: { primary: merged.primary, merged: merged.losers },
+      after: merged.updated,
+    });
+
+    res.json(merged.updated);
+  } catch (e) {
+    const msg = (e as Error).message;
+    if (msg === "PRIMARY_NOT_FOUND") {
+      res.status(404).json({ error: "Primary contact not found" });
+      return;
+    }
+    if (msg === "LOSERS_NOT_FOUND") {
+      res.status(404).json({ error: "No valid contacts to merge were found" });
+      return;
+    }
+    res.status(500).json({ error: "Failed to merge contacts" });
   }
 });
 

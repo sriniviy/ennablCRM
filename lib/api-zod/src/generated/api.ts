@@ -124,6 +124,78 @@ export const ImportContactsResponse = zod.object({
 
 
 /**
+ * @summary List groups of likely-duplicate contacts (by email or name)
+ */
+export const ListContactDuplicatesResponse = zod.object({
+  "groups": zod.array(zod.object({
+  "matchedOn": zod.array(zod.string()),
+  "records": zod.array(zod.object({
+  "id": zod.string(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "title": zod.string().nullish(),
+  "status": zod.enum(['LEAD', 'PROSPECT', 'CUSTOMER', 'CHURNED', 'UNQUALIFIED']),
+  "ennablUser": zod.boolean().optional(),
+  "emailMarketingContact": zod.boolean().optional(),
+  "tags": zod.array(zod.string()),
+  "companyId": zod.string().nullish(),
+  "company": zod.object({
+  "id": zod.string(),
+  "name": zod.string()
+}).nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}))
+}))
+})
+
+
+/**
+ * @summary Merge duplicate contacts into a chosen primary contact
+ */
+
+
+
+export const MergeContactsBody = zod.object({
+  "primaryId": zod.string(),
+  "mergeIds": zod.array(zod.string()).min(1)
+})
+
+export const MergeContactsResponse = zod.object({
+  "id": zod.string(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "title": zod.string().nullish(),
+  "status": zod.enum(['LEAD', 'PROSPECT', 'CUSTOMER', 'CHURNED', 'UNQUALIFIED']),
+  "reviewStatus": zod.enum(['AUTO_CREATED', 'REVIEWED', 'SUPPRESSED']).optional(),
+  "ennablUser": zod.boolean().optional(),
+  "emailMarketingContact": zod.boolean().optional(),
+  "tags": zod.array(zod.string()),
+  "notes": zod.string().nullish(),
+  "linkedIn": zod.string().nullish(),
+  "assigneeId": zod.string().nullish(),
+  "companyId": zod.string().nullish(),
+  "company": zod.object({
+  "id": zod.string(),
+  "name": zod.string()
+}).nullish(),
+  "assignee": zod.object({
+  "id": zod.string(),
+  "name": zod.string().nullish(),
+  "avatarUrl": zod.string().nullish()
+}).nullish(),
+  "dealCount": zod.number(),
+  "taskCount": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Get a contact with full relations
  */
 export const GetContactParams = zod.object({
@@ -394,6 +466,74 @@ export const CreateCompanyBody = zod.object({
   "address": zod.string().optional(),
   "city": zod.string().optional(),
   "country": zod.string().optional()
+})
+
+
+/**
+ * @summary List groups of likely-duplicate companies (by name or domain)
+ */
+export const ListCompanyDuplicatesResponse = zod.object({
+  "groups": zod.array(zod.object({
+  "matchedOn": zod.array(zod.string()),
+  "records": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "domain": zod.string().nullish(),
+  "domains": zod.array(zod.string()).optional(),
+  "status": zod.enum(['PROSPECT', 'ACTIVE_CUSTOMER', 'CHURNED', 'DISQUALIFIED']).nullish(),
+  "productLicensed": zod.array(zod.string()).optional(),
+  "memberOf": zod.array(zod.string()).optional(),
+  "assignedCsmId": zod.string().nullish(),
+  "estimatedAnnualRevenue": zod.number().nullish(),
+  "numberOfEmployees": zod.number().nullish(),
+  "industry": zod.string().nullish(),
+  "size": zod.string().nullish(),
+  "website": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "city": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "contactCount": zod.number(),
+  "dealCount": zod.number()
+})))
+}))
+})
+
+
+/**
+ * @summary Merge duplicate companies into a chosen primary company
+ */
+
+
+
+export const MergeCompaniesBody = zod.object({
+  "primaryId": zod.string(),
+  "mergeIds": zod.array(zod.string()).min(1)
+})
+
+export const MergeCompaniesResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "domain": zod.string().nullish(),
+  "domains": zod.array(zod.string()).optional(),
+  "status": zod.enum(['PROSPECT', 'ACTIVE_CUSTOMER', 'CHURNED', 'DISQUALIFIED']).nullish(),
+  "productLicensed": zod.array(zod.string()).optional(),
+  "memberOf": zod.array(zod.string()).optional(),
+  "assignedCsmId": zod.string().nullish(),
+  "estimatedAnnualRevenue": zod.number().nullish(),
+  "numberOfEmployees": zod.number().nullish(),
+  "industry": zod.string().nullish(),
+  "size": zod.string().nullish(),
+  "website": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "city": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
 })
 
 

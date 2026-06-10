@@ -1,8 +1,15 @@
 import { Router, type Request, type Response } from "express";
-import { db, companiesTable, contactsTable, dealsTable, dealStagesTable } from "@workspace/db";
-import { eq, ilike, and, sql, desc } from "drizzle-orm";
+import { db, companiesTable, contactsTable, dealsTable, dealStagesTable, activitiesTable, notesTable } from "@workspace/db";
+import { eq, ilike, and, or, inArray, sql, desc } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 import { logAudit } from "../lib/audit";
+import {
+  computeDuplicateGroups,
+  resolveScalar,
+  unionArrays,
+  parseMergeInput,
+  type DuplicateKeyRow,
+} from "../lib/merge";
 
 const router = Router();
 
@@ -112,6 +119,164 @@ router.get("/export", requireAuth, async (req: Request, res: Response) => {
     res.send(csv);
   } catch {
     res.status(500).json({ error: "Failed to export companies" });
+  }
+});
+
+router.get("/duplicates", requireAuth, async (_req: Request, res: Response) => {
+  try {
+    const result = await db.execute(sql`
+      select id, 'name:' || lower(trim(name)) as key
+        from ${companiesTable}
+        where trim(name) <> ''
+      union all
+      select id, 'domain:' || lower(trim(domain)) as key
+        from ${companiesTable}
+        where domain is not null and trim(domain) <> ''
+      union all
+      select c.id, 'domain:' || lower(trim(d)) as key
+        from ${companiesTable} c, unnest(c.domains) as d
+        where trim(d) <> ''
+    `);
+    const keyRows = (result.rows as { id: string; key: string }[]).map<DuplicateKeyRow>((r) => ({
+      id: r.id,
+      key: r.key,
+    }));
+
+    const groups = computeDuplicateGroups(keyRows);
+    if (groups.length === 0) {
+      res.json({ groups: [] });
+      return;
+    }
+
+    const allIds = [...new Set(groups.flatMap((g) => g.ids))];
+    const records = await db
+      .select({
+        company: companiesTable,
+        contactCount: sql<number>`count(distinct ${contactsTable.id})::int`,
+        dealCount: sql<number>`count(distinct ${dealsTable.id})::int`,
+      })
+      .from(companiesTable)
+      .leftJoin(contactsTable, eq(contactsTable.companyId, companiesTable.id))
+      .leftJoin(dealsTable, eq(dealsTable.companyId, companiesTable.id))
+      .where(inArray(companiesTable.id, allIds))
+      .groupBy(companiesTable.id);
+
+    const byId = new Map(
+      records.map(({ company, contactCount, dealCount }) => [
+        company.id,
+        { ...company, contactCount, dealCount },
+      ]),
+    );
+
+    res.json({
+      groups: groups
+        .map((g) => ({
+          matchedOn: g.matchedOn,
+          records: g.ids.map((id) => byId.get(id)).filter(Boolean),
+        }))
+        .filter((g) => g.records.length > 1),
+    });
+  } catch {
+    res.status(500).json({ error: "Failed to detect duplicate companies" });
+  }
+});
+
+router.post("/merge", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { dbUser } = req as AuthRequest;
+    let primaryId: string;
+    let loserIds: string[];
+    try {
+      ({ primaryId, loserIds } = parseMergeInput(req.body));
+    } catch (e) {
+      res.status(400).json({ error: (e as Error).message });
+      return;
+    }
+
+    const merged = await db.transaction(async (tx) => {
+      const involved = await tx
+        .select()
+        .from(companiesTable)
+        .where(inArray(companiesTable.id, [primaryId, ...loserIds]));
+
+      const primary = involved.find((c) => c.id === primaryId);
+      const losers = loserIds
+        .map((id) => involved.find((c) => c.id === id))
+        .filter((c): c is NonNullable<typeof c> => Boolean(c));
+
+      if (!primary) throw new Error("PRIMARY_NOT_FOUND");
+      if (losers.length === 0) throw new Error("LOSERS_NOT_FOUND");
+
+      const merge = {
+        name: resolveScalar(primary.name, losers.map((l) => l.name)),
+        domain: resolveScalar(primary.domain, losers.map((l) => l.domain)),
+        domains: unionArrays(
+          primary.domains,
+          ...losers.map((l) => l.domains),
+          primary.domain ? [primary.domain] : [],
+          ...losers.map((l) => (l.domain ? [l.domain] : [])),
+        ),
+        status: resolveScalar(primary.status, losers.map((l) => l.status)),
+        productLicensed: unionArrays(primary.productLicensed, ...losers.map((l) => l.productLicensed)),
+        memberOf: unionArrays(primary.memberOf, ...losers.map((l) => l.memberOf)),
+        assignedCsmId: resolveScalar(primary.assignedCsmId, losers.map((l) => l.assignedCsmId)),
+        estimatedAnnualRevenue: resolveScalar(primary.estimatedAnnualRevenue, losers.map((l) => l.estimatedAnnualRevenue)),
+        numberOfEmployees: resolveScalar(primary.numberOfEmployees, losers.map((l) => l.numberOfEmployees)),
+        industry: resolveScalar(primary.industry, losers.map((l) => l.industry)),
+        size: resolveScalar(primary.size, losers.map((l) => l.size)),
+        website: resolveScalar(primary.website, losers.map((l) => l.website)),
+        phone: resolveScalar(primary.phone, losers.map((l) => l.phone)),
+        address: resolveScalar(primary.address, losers.map((l) => l.address)),
+        city: resolveScalar(primary.city, losers.map((l) => l.city)),
+        country: resolveScalar(primary.country, losers.map((l) => l.country)),
+        updatedAt: new Date(),
+      };
+
+      const actualLoserIds = losers.map((l) => l.id);
+
+      const [updated] = await tx
+        .update(companiesTable)
+        .set(merge)
+        .where(eq(companiesTable.id, primaryId))
+        .returning();
+
+      // Re-point all related records to the primary company.
+      await tx.update(contactsTable).set({ companyId: primaryId }).where(inArray(contactsTable.companyId, actualLoserIds));
+      await tx.update(dealsTable).set({ companyId: primaryId }).where(inArray(dealsTable.companyId, actualLoserIds));
+      await tx.update(activitiesTable).set({ companyId: primaryId }).where(inArray(activitiesTable.companyId, actualLoserIds));
+      await tx
+        .update(notesTable)
+        .set({ entityId: primaryId })
+        .where(and(eq(notesTable.entityType, "company"), inArray(notesTable.entityId, actualLoserIds)));
+
+      await tx.delete(companiesTable).where(inArray(companiesTable.id, actualLoserIds));
+
+      return { updated, primary, losers };
+    });
+
+    await logAudit({
+      action: "MERGE",
+      objectType: "company",
+      objectId: merged.updated.id,
+      objectLabel: merged.updated.name,
+      actorId: dbUser.id,
+      actorName: dbUser.name,
+      before: { primary: merged.primary, merged: merged.losers },
+      after: merged.updated,
+    });
+
+    res.json(merged.updated);
+  } catch (e) {
+    const msg = (e as Error).message;
+    if (msg === "PRIMARY_NOT_FOUND") {
+      res.status(404).json({ error: "Primary company not found" });
+      return;
+    }
+    if (msg === "LOSERS_NOT_FOUND") {
+      res.status(404).json({ error: "No valid companies to merge were found" });
+      return;
+    }
+    res.status(500).json({ error: "Failed to merge companies" });
   }
 });
 

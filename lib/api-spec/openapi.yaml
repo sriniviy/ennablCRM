@@ -155,6 +155,50 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /contacts/duplicates:
+    get:
+      operationId: listContactDuplicates
+      tags: [contacts]
+      summary: List groups of likely-duplicate contacts (by email or name)
+      responses:
+        "200":
+          description: Duplicate contact groups
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactDuplicateGroups"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /contacts/merge:
+    post:
+      operationId: mergeContacts
+      tags: [contacts]
+      summary: Merge duplicate contacts into a chosen primary contact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MergeInput"
+      responses:
+        "200":
+          description: The surviving merged contact
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactWithRelations"
+        "400":
+          description: Invalid merge request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /contacts/{id}:
     get:
       operationId: getContact
@@ -266,6 +310,50 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Company"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /companies/duplicates:
+    get:
+      operationId: listCompanyDuplicates
+      tags: [companies]
+      summary: List groups of likely-duplicate companies (by name or domain)
+      responses:
+        "200":
+          description: Duplicate company groups
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanyDuplicateGroups"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /companies/merge:
+    post:
+      operationId: mergeCompanies
+      tags: [companies]
+      summary: Merge duplicate companies into a chosen primary company
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MergeInput"
+      responses:
+        "200":
+          description: The surviving merged company
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+        "400":
+          description: Invalid merge request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
 
@@ -1334,6 +1422,117 @@ components:
               items:
                 $ref: "#/components/schemas/ActivityWithRelations"
           required: [deals, tasks, activities]
+
+    # ── Duplicate detection & merge ──────────────────────────────────────────
+
+    MergeInput:
+      type: object
+      properties:
+        primaryId:
+          type: string
+        mergeIds:
+          type: array
+          items:
+            type: string
+          minItems: 1
+      required: [primaryId, mergeIds]
+
+    CompanyDuplicateRecord:
+      allOf:
+        - $ref: "#/components/schemas/Company"
+        - type: object
+          properties:
+            contactCount:
+              type: integer
+            dealCount:
+              type: integer
+          required: [contactCount, dealCount]
+
+    CompanyDuplicateGroup:
+      type: object
+      properties:
+        matchedOn:
+          type: array
+          items:
+            type: string
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompanyDuplicateRecord"
+      required: [matchedOn, records]
+
+    CompanyDuplicateGroups:
+      type: object
+      properties:
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompanyDuplicateGroup"
+      required: [groups]
+
+    ContactDuplicateRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        status:
+          $ref: "#/components/schemas/ContactStatus"
+        ennablUser:
+          type: boolean
+        emailMarketingContact:
+          type: boolean
+        tags:
+          type: array
+          items:
+            type: string
+        companyId:
+          type: string
+          nullable: true
+        company:
+          $ref: "#/components/schemas/CompanySummary"
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, firstName, lastName, status, tags, createdAt, updatedAt]
+
+    ContactDuplicateGroup:
+      type: object
+      properties:
+        matchedOn:
+          type: array
+          items:
+            type: string
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContactDuplicateRecord"
+      required: [matchedOn, records]
+
+    ContactDuplicateGroups:
+      type: object
+      properties:
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContactDuplicateGroup"
+      required: [groups]
 
     DealStage:
       type: object

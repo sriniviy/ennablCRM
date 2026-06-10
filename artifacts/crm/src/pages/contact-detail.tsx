@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Mail, Phone, Building2, Calendar, MessageSquare, Linkedin, CheckSquare, Pencil } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Building2, Calendar, MessageSquare, Linkedin, CheckSquare, Pencil, CopyCheck } from "lucide-react";
 import { NotesFeed } from "@/components/notes/notes-feed";
 import { AuditHistory } from "@/components/audit/audit-history";
 import { formatCurrency } from "@/lib/utils";
@@ -18,11 +18,13 @@ import { useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { ContactDialog } from "@/components/contacts/contact-dialog";
+import { ContactDuplicatesDialog } from "@/components/merge/contact-duplicates";
 
 export function ContactDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: contact, isLoading } = useGetContact(id);
   const [editOpen, setEditOpen] = useState(false);
+  const [duplicatesOpen, setDuplicatesOpen] = useState(false);
   const [actType, setActType] = useState<string>("NOTE");
   const [actTitle, setActTitle] = useState("");
   const [note, setNote] = useState("");
@@ -127,6 +129,9 @@ export function ContactDetailPage() {
               <Badge variant="outline" className="text-sm px-3 py-1">
                 {contact.status}
               </Badge>
+              <Button variant="outline" onClick={() => setDuplicatesOpen(true)}>
+                <CopyCheck className="mr-2 h-4 w-4" /> Merge duplicates
+              </Button>
               <Button onClick={() => setEditOpen(true)}>
                 <Pencil className="mr-2 h-4 w-4" /> Edit
               </Button>
@@ -382,6 +387,7 @@ export function ContactDetailPage() {
         contact={contact}
       />
     )}
+    <ContactDuplicatesDialog open={duplicatesOpen} onOpenChange={setDuplicatesOpen} focusId={id} />
   </>
   );
 }

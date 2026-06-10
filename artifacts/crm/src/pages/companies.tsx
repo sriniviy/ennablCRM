@@ -14,10 +14,11 @@ import {
 } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Plus, Globe, Building2, Download } from "lucide-react";
+import { Search, Plus, Globe, Building2, Download, CopyCheck } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useUrlFilters } from "@/hooks/use-url-filters";
 import { CompanyDialog } from "@/components/companies/company-dialog";
+import { CompanyDuplicatesDialog } from "@/components/merge/company-duplicates";
 import { useToast } from "@/hooks/use-toast";
 import { ExportColumnsDialog, type ColumnDef } from "@/components/export-columns-dialog";
 import { ViewToggle, type ViewMode } from "@/components/view-toggle";
@@ -89,6 +90,7 @@ export function CompaniesPage() {
   const [editCompany, setEditCompany] = useState<Company | undefined>();
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [duplicatesOpen, setDuplicatesOpen] = useState(false);
 
   useEffect(() => {
     set({
@@ -149,6 +151,10 @@ export function CompaniesPage() {
             <p className="text-muted-foreground">Manage your accounts and organizations.</p>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setDuplicatesOpen(true)}>
+              <CopyCheck className="mr-2 h-4 w-4" />
+              Find duplicates
+            </Button>
             <Button variant="outline" onClick={() => setExportOpen(true)}>
               <Download className="mr-2 h-4 w-4" />
               Export CSV
@@ -281,6 +287,7 @@ export function CompaniesPage() {
       </div>
 
       <CompanyDialog open={dialogOpen} onOpenChange={setDialogOpen} company={editCompany} />
+      <CompanyDuplicatesDialog open={duplicatesOpen} onOpenChange={setDuplicatesOpen} />
       <ExportColumnsDialog
         open={exportOpen}
         onOpenChange={setExportOpen}
