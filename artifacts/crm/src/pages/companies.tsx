@@ -1,8 +1,10 @@
 import { useSessionToken } from "@/hooks/use-session-token";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 
 import { useListCompanies, CompanyStatus, type Company } from "@workspace/api-client-react";
+import { useTeamMembers } from "@/hooks/use-team-members";
+import { formatCurrency } from "@/lib/utils";
 import { Link } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -39,26 +41,41 @@ const COMPANY_COLUMNS: ColumnDef[] = [
 ];
 
 const dash = (v: unknown) => (v === null || v === undefined || v === "" ? "—" : String(v));
+const arr = (v: string[] | null | undefined) => (v && v.length ? v.join(", ") : "—");
 
-const CARD_FIELDS: CardField<Company>[] = [
+const buildCompanyCardFields = (ownerName: (id: string | null | undefined) => string): CardField<Company>[] => [
   { label: "Domain", render: c => dash(c.domain) },
+  { label: "All domains", render: c => arr(c.domains) },
   { label: "Status", render: c => (c.status ? c.status.replace(/_/g, " ") : "—") },
   { label: "Industry", render: c => dash(c.industry) },
   { label: "Size", render: c => dash(c.size) },
-  { label: "Member of", render: c => (c.memberOf && c.memberOf.length ? c.memberOf.join(", ") : "—") },
-  { label: "Products", render: c => (c.productLicensed && c.productLicensed.length ? c.productLicensed.join(", ") : "—") },
+  { label: "Member of", render: c => arr(c.memberOf) },
+  { label: "Products licensed", render: c => arr(c.productLicensed) },
+  { label: "Est. annual revenue", render: c => (c.estimatedAnnualRevenue != null ? formatCurrency(c.estimatedAnnualRevenue) : "—") },
+  { label: "Employees", render: c => dash(c.numberOfEmployees) },
   { label: "Website", render: c => dash(c.website) },
   { label: "Phone", render: c => dash(c.phone) },
-  { label: "Employees", render: c => dash(c.numberOfEmployees) },
+  { label: "Address", render: c => dash(c.address) },
   { label: "City", render: c => dash(c.city) },
   { label: "Country", render: c => dash(c.country) },
-  { label: "Created", render: c => (c.createdAt ? new Date(c.createdAt).toLocaleDateString() : "—") },
+  { label: "Assigned CSM", render: c => ownerName(c.assignedCsmId) },
+  { label: "Assigned CSM ID", render: c => dash(c.assignedCsmId) },
+  { label: "Created", render: c => (c.createdAt ? new Date(c.createdAt).toLocaleString() : "—") },
+  { label: "Updated", render: c => (c.updatedAt ? new Date(c.updatedAt).toLocaleString() : "—") },
+  { label: "ID", render: c => dash(c.id) },
 ];
 
 export function CompaniesPage() {
   const getToken = useSessionToken();
   const { toast } = useToast();
   const { get, set } = useUrlFilters();
+  const { data: members } = useTeamMembers();
+
+  const cardFields = useMemo(() => {
+    const ownerName = (id: string | null | undefined) =>
+      id ? (members ?? []).find(m => m.id === id)?.name ?? "—" : "—";
+    return buildCompanyCardFields(ownerName);
+  }, [members]);
 
   const [search, setSearch] = useState(() => get("search"));
   const [statusFilter, setStatusFilter] = useState(() => get("status") || "ALL");
@@ -185,7 +202,7 @@ export function CompaniesPage() {
                   {c.name}
                 </Link>
               )}
-              fields={CARD_FIELDS}
+              fields={cardFields}
               onItemClick={openEdit}
               emptyMessage="No companies found."
             />

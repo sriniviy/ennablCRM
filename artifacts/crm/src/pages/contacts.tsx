@@ -57,12 +57,21 @@ const CARD_FIELDS: CardField<ContactWithRelations>[] = [
   { label: "Phone", render: c => dash(c.phone) },
   { label: "Title", render: c => dash(c.title) },
   { label: "Status", render: c => dash(c.status) },
-  { label: "Review", render: c => (c.reviewStatus ? c.reviewStatus.replace(/_/g, " ") : "—") },
+  { label: "Review status", render: c => (c.reviewStatus ? c.reviewStatus.replace(/_/g, " ") : "—") },
   { label: "Company", render: c => dash(c.company?.name) },
   { label: "Owner", render: c => dash(c.assignee?.name) },
+  { label: "Ennabl user", render: c => (c.ennablUser ? "Yes" : "No") },
+  { label: "Marketing contact", render: c => (c.emailMarketingContact ? "Yes" : "No") },
   { label: "Tags", render: c => (c.tags && c.tags.length ? c.tags.join(", ") : "—") },
   { label: "LinkedIn", render: c => dash(c.linkedIn) },
-  { label: "Created", render: c => (c.createdAt ? new Date(c.createdAt).toLocaleDateString() : "—") },
+  { label: "Notes", render: c => dash(c.notes) },
+  { label: "Deals", render: c => dash(c.dealCount) },
+  { label: "Tasks", render: c => dash(c.taskCount) },
+  { label: "Company ID", render: c => dash(c.companyId) },
+  { label: "Owner ID", render: c => dash(c.assigneeId) },
+  { label: "Created", render: c => (c.createdAt ? new Date(c.createdAt).toLocaleString() : "—") },
+  { label: "Updated", render: c => (c.updatedAt ? new Date(c.updatedAt).toLocaleString() : "—") },
+  { label: "ID", render: c => dash(c.id) },
 ];
 
 export function ContactsPage() {

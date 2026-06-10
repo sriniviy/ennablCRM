@@ -13,6 +13,7 @@ import { ContactDetailPage } from "./pages/contact-detail";
 import { CompaniesPage } from "./pages/companies";
 import { CompanyDetailPage } from "./pages/company-detail";
 import { DealsPage } from "./pages/deals";
+import { ActivitiesPage } from "./pages/activities";
 import { TasksPage } from "./pages/tasks";
 import { CampaignsPage } from "./pages/campaigns";
 import { CampaignNewPage } from "./pages/campaign-new";
@@ -122,6 +123,7 @@ function AppRoutes() {
           <Route path="/companies" component={() => <ProtectedRoute component={CompaniesPage} />} />
           <Route path="/companies/:id" component={() => <ProtectedRoute component={CompanyDetailPage} />} />
           <Route path="/deals" component={() => <ProtectedRoute component={DealsPage} />} />
+          <Route path="/activities" component={() => <ProtectedRoute component={ActivitiesPage} />} />
           <Route path="/tasks" component={() => <ProtectedRoute component={TasksPage} />} />
           <Route path="/campaigns" component={() => <ProtectedRoute component={CampaignsPage} />} />
           <Route path="/campaigns/new" component={() => <ProtectedRoute component={CampaignNewPage} />} />

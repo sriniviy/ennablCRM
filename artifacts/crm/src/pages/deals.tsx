@@ -41,11 +41,19 @@ const CARD_FIELDS: CardField<DealWithRelations>[] = [
   { label: "Value", render: d => formatCurrency(d.value || 0) },
   { label: "Currency", render: d => dash(d.currency) },
   { label: "Probability", render: d => `${d.probability ?? 0}%` },
-  { label: "Close Date", render: d => (d.closeDate ? new Date(d.closeDate).toLocaleDateString() : "—") },
+  { label: "Close date", render: d => (d.closeDate ? new Date(d.closeDate).toLocaleDateString() : "—") },
   { label: "Contact", render: d => (d.contact ? `${d.contact.firstName ?? ""} ${d.contact.lastName ?? ""}`.trim() || "—" : "—") },
   { label: "Company", render: d => dash(d.company?.name) },
   { label: "Owner", render: d => dash(d.assignee?.name) },
-  { label: "Created", render: d => (d.createdAt ? new Date(d.createdAt).toLocaleDateString() : "—") },
+  { label: "Notes", render: d => dash(d.notes) },
+  { label: "Order", render: d => dash(d.order) },
+  { label: "Stage ID", render: d => dash(d.stageId) },
+  { label: "Contact ID", render: d => dash(d.contactId) },
+  { label: "Company ID", render: d => dash(d.companyId) },
+  { label: "Owner ID", render: d => dash(d.assigneeId) },
+  { label: "Created", render: d => (d.createdAt ? new Date(d.createdAt).toLocaleString() : "—") },
+  { label: "Updated", render: d => (d.updatedAt ? new Date(d.updatedAt).toLocaleString() : "—") },
+  { label: "ID", render: d => dash(d.id) },
 ];
 
 export function DealsPage() {

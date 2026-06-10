@@ -17,8 +17,9 @@ The second line causes duplicate-export TS errors (e.g. `CompleteTaskBody`,
 **Rule:** reset `lib/api-zod/src/index.ts` to contain ONLY
 `export * from "./generated/api";` after codegen, then re-run `pnpm -w run typecheck:libs`.
 
-**Why:** the generated `types` and `api` modules re-declare some of the same names.
-Only `health.ts` consumes api-zod, so dropping the types barrel is safe.
+**Why:** the generated `types` and `api` modules re-declare some of the same names,
+so exporting both barrels produces duplicate-export errors. The `api` barrel is the
+canonical one; drop the `types` barrel.
 
 # Nullable enum columns in eq() filters
 
