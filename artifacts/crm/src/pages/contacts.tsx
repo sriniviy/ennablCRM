@@ -2,7 +2,7 @@ import { useSessionToken } from "@/hooks/use-session-token";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useState, useEffect } from "react";
 
-import { useListContacts, ContactStatus, ReviewStatus, type ContactWithRelations } from "@workspace/api-client-react";
+import { useListContacts, ContactStatus, ReviewStatus, useGetMe, type ContactWithRelations } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -154,6 +154,9 @@ export function ContactsPage() {
 
   const contacts = data?.data ?? [];
 
+  const { data: me } = useGetMe();
+  const isAdmin = me?.role === "ADMIN";
+
   return (
     <SidebarLayout>
       <div className="space-y-6">
@@ -163,9 +166,11 @@ export function ContactsPage() {
             <p className="text-muted-foreground">Manage your people and leads.</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setDuplicatesOpen(true)}>
-              <CopyCheck className="mr-2 h-4 w-4" /> Find duplicates
-            </Button>
+            {isAdmin && (
+              <Button variant="outline" onClick={() => setDuplicatesOpen(true)}>
+                <CopyCheck className="mr-2 h-4 w-4" /> Find duplicates
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setImportOpen(true)}>
               <Upload className="mr-2 h-4 w-4" /> Import CSV
             </Button>

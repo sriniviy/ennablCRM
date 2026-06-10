@@ -1,6 +1,6 @@
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useParams, Link } from "wouter";
-import { useGetContact, useCreateActivity, getGetContactQueryKey, type ActivityType } from "@workspace/api-client-react";
+import { useGetContact, useCreateActivity, getGetContactQueryKey, useGetMe, type ActivityType } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,6 +47,8 @@ export function ContactDetailPage() {
   const { data: contact, isLoading } = useGetContact(id);
   const [editOpen, setEditOpen] = useState(false);
   const [duplicatesOpen, setDuplicatesOpen] = useState(false);
+  const { data: me } = useGetMe();
+  const isAdmin = me?.role === "ADMIN";
   const [actType, setActType] = useState<string>("NOTE");
   const [actTitle, setActTitle] = useState("");
   const [note, setNote] = useState("");
@@ -158,9 +160,11 @@ export function ContactDetailPage() {
               <Badge variant="outline" className="text-sm px-3 py-1">
                 {contact.status}
               </Badge>
-              <Button variant="outline" onClick={() => setDuplicatesOpen(true)}>
-                <CopyCheck className="mr-2 h-4 w-4" /> Merge duplicates
-              </Button>
+              {isAdmin && (
+                <Button variant="outline" onClick={() => setDuplicatesOpen(true)}>
+                  <CopyCheck className="mr-2 h-4 w-4" /> Merge duplicates
+                </Button>
+              )}
               <Button onClick={() => setEditOpen(true)}>
                 <Pencil className="mr-2 h-4 w-4" /> Edit
               </Button>

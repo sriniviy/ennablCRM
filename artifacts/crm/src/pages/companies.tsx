@@ -2,7 +2,7 @@ import { useSessionToken } from "@/hooks/use-session-token";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useState, useEffect, useMemo } from "react";
 
-import { useListCompanies, CompanyStatus, type Company } from "@workspace/api-client-react";
+import { useListCompanies, CompanyStatus, useGetMe, type Company } from "@workspace/api-client-react";
 import { useTeamMembers } from "@/hooks/use-team-members";
 import { formatCurrency } from "@/lib/utils";
 import { Link } from "wouter";
@@ -142,6 +142,9 @@ export function CompaniesPage() {
 
   const companies = data?.data ?? [];
 
+  const { data: me } = useGetMe();
+  const isAdmin = me?.role === "ADMIN";
+
   return (
     <SidebarLayout>
       <div className="space-y-6">
@@ -151,10 +154,12 @@ export function CompaniesPage() {
             <p className="text-muted-foreground">Manage your accounts and organizations.</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setDuplicatesOpen(true)}>
-              <CopyCheck className="mr-2 h-4 w-4" />
-              Find duplicates
-            </Button>
+            {isAdmin && (
+              <Button variant="outline" onClick={() => setDuplicatesOpen(true)}>
+                <CopyCheck className="mr-2 h-4 w-4" />
+                Find duplicates
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setExportOpen(true)}>
               <Download className="mr-2 h-4 w-4" />
               Export CSV

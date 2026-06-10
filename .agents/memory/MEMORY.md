@@ -1,3 +1,1 @@
-- [api-zod codegen index quirk](api-codegen-quirks.md) — orval codegen rewrites lib/api-zod/src/index.ts with a duplicate export that breaks typecheck; restore the one-liner.
-- [drizzle push drift](drizzle-push-drift.md) — `db push` is interactive-blocked by unrelated pending schema drift; apply additive column changes via direct ALTER instead.
-- [TS project references & stale db types](ts-project-references.md) — editing lib/db schema needs `tsc --build` (not `--noEmit`) so api-server refreshes referenced .d.ts; else TS2339.
+- [Delete/admin permission policy](delete-permission-policy.md) — hard deletes are admin-only, but notes & attachments use author-or-admin ownership; merge endpoints are a delete-bypass that must also be admin-gated.

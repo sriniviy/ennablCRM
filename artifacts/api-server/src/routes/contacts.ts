@@ -371,7 +371,7 @@ router.get("/duplicates", requireAuth, async (_req: Request, res: Response) => {
   }
 });
 
-router.post("/merge", requireAuth, async (req: Request, res: Response) => {
+router.post("/merge", requireAuth, requireAdmin, async (req: Request, res: Response) => {
   try {
     const { dbUser } = req as AuthRequest;
     let primaryId: string;

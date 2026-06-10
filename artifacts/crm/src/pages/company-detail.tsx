@@ -1,6 +1,6 @@
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useParams, Link } from "wouter";
-import { useGetCompany } from "@workspace/api-client-react";
+import { useGetCompany, useGetMe } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -39,6 +39,8 @@ export function CompanyDetailPage() {
   const { data: teamMembers = [] } = useTeamMembers();
   const [editOpen, setEditOpen] = useState(false);
   const [duplicatesOpen, setDuplicatesOpen] = useState(false);
+  const { data: me } = useGetMe();
+  const isAdmin = me?.role === "ADMIN";
 
   if (isLoading) {
     return (
@@ -96,9 +98,11 @@ export function CompanyDetailPage() {
               </div>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setDuplicatesOpen(true)}>
-                <CopyCheck className="mr-2 h-4 w-4" /> Merge duplicates
-              </Button>
+              {isAdmin && (
+                <Button variant="outline" onClick={() => setDuplicatesOpen(true)}>
+                  <CopyCheck className="mr-2 h-4 w-4" /> Merge duplicates
+                </Button>
+              )}
               <Button onClick={() => setEditOpen(true)}>
                 <Pencil className="mr-2 h-4 w-4" /> Edit
               </Button>
