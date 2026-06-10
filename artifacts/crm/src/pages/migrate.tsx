@@ -106,6 +106,14 @@ interface StepResult {
 
 interface CrmUser { id: string; name: string; email: string }
 interface CrmStage { id: string; name: string }
+interface CustomFieldDef { id: string; label: string; objectType: string }
+
+const CF_OBJECT_TYPE: Record<Exclude<MigrateStep, "summary">, string> = {
+  companies: "company",
+  contacts: "contact",
+  deals: "deal",
+  activities: "activity",
+};
 
 // ── CSV parser ─────────────────────────────────────────────────────────────────
 
@@ -208,6 +216,7 @@ export function MigratePage() {
   // reference data for owner / stage mapping
   const [users, setUsers] = useState<CrmUser[]>([]);
   const [stages, setStages] = useState<CrmStage[]>([]);
+  const [customFields, setCustomFields] = useState<CustomFieldDef[]>([]);
 
   // per-step state
   const [headers, setHeaders] = useState<string[]>([]);
@@ -228,15 +237,17 @@ export function MigratePage() {
       try {
         const token = await getToken();
         const headersInit = { Authorization: `Bearer ${token}` };
-        const [teamRes, stageRes] = await Promise.all([
+        const [teamRes, stageRes, cfRes] = await Promise.all([
           fetch(`${BASE}/api/team`, { headers: headersInit }),
           fetch(`${BASE}/api/migrate/stages`, { headers: headersInit }),
+          fetch(`${BASE}/api/custom-fields`, { headers: headersInit }),
         ]);
         if (teamRes.ok) {
           const data = await teamRes.json() as { members?: CrmUser[] };
           setUsers(data.members ?? []);
         }
         if (stageRes.ok) setStages(await stageRes.json() as CrmStage[]);
+        if (cfRes.ok) setCustomFields(await cfRes.json() as CustomFieldDef[]);
       } catch {
         // non-fatal — mapping UIs degrade to manual matching by name
       }
@@ -396,6 +407,9 @@ export function MigratePage() {
 
   const currentStepDef = STEPS.find(s => s.id === currentStep)!;
   const fields = currentStep !== "summary" ? FIELDS_FOR_STEP[currentStep] : [];
+  const stepCustomFields = currentStep !== "summary"
+    ? customFields.filter(cf => cf.objectType === CF_OBJECT_TYPE[currentStep])
+    : [];
   const hasResults = (["companies", "contacts", "deals", "activities"] as const).some(s => results[s]);
 
   return (
@@ -587,6 +601,11 @@ export function MigratePage() {
                                   {fields.map(f => (
                                     <SelectItem key={f.key} value={f.key}>
                                       {f.label}{f.required ? " *" : ""}
+                                    </SelectItem>
+                                  ))}
+                                  {stepCustomFields.map(cf => (
+                                    <SelectItem key={cf.id} value={`cf_${cf.id}`}>
+                                      {cf.label} (custom)
                                     </SelectItem>
                                   ))}
                                 </SelectContent>

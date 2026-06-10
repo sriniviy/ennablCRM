@@ -6,6 +6,7 @@ import {
   dealsTable,
   tasksTable,
   activitiesTable,
+  customFieldValuesTable,
 } from "@workspace/db";
 import { ilike, or, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -29,6 +30,9 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
 
     const pattern = `%${q}%`;
 
+    const cfMatch = (objectType: string, idColumn: unknown) =>
+      sql`exists (select 1 from ${customFieldValuesTable} where ${customFieldValuesTable.recordId} = ${idColumn} and ${customFieldValuesTable.objectType} = ${objectType} and ${customFieldValuesTable.value} ilike ${pattern})`;
+
     const [contacts, companies, deals, activities, tasks] = await Promise.all([
       db
         .select({
@@ -43,6 +47,7 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
             ilike(contactsTable.firstName, pattern),
             ilike(contactsTable.lastName, pattern),
             ilike(contactsTable.email, pattern),
+            cfMatch("contact", contactsTable.id),
           ),
         )
         .limit(LIMIT),
@@ -60,6 +65,7 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
             ilike(companiesTable.name, pattern),
             ilike(companiesTable.domain, pattern),
             sql`array_to_string(${companiesTable.domains}, ' ') ilike ${pattern}`,
+            cfMatch("company", companiesTable.id),
           ),
         )
         .limit(LIMIT),
@@ -67,7 +73,7 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
       db
         .select({ id: dealsTable.id, title: dealsTable.title, value: dealsTable.value })
         .from(dealsTable)
-        .where(ilike(dealsTable.title, pattern))
+        .where(or(ilike(dealsTable.title, pattern), cfMatch("deal", dealsTable.id)))
         .limit(LIMIT),
 
       db
@@ -86,6 +92,7 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
             ilike(activitiesTable.title, pattern),
             ilike(activitiesTable.emailSubject, pattern),
             ilike(activitiesTable.emailBody, pattern),
+            cfMatch("activity", activitiesTable.id),
           ),
         )
         .limit(LIMIT),

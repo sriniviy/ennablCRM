@@ -14,6 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTeamMembers } from "@/hooks/use-team-members";
+import { CustomFieldsForm } from "@/components/custom-fields/custom-fields-form";
+import { useCustomFieldValues, useSaveCustomFieldValuesForRecord } from "@/hooks/use-custom-fields";
 
 const STATUSES = Object.values(CompanyStatus);
 const toList = (s: string) => s.split(",").map(v => v.trim()).filter(Boolean);
@@ -46,6 +48,7 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
   const [country, setCountry] = useState("");
   const [assignedCsmId, setAssignedCsmId] = useState<string>("none");
   const [showDelete, setShowDelete] = useState(false);
+  const [cfValues, setCfValues] = useState<Record<string, string | null>>({});
 
   const { data: teamMembers = [] } = useTeamMembers();
   const create = useCreateCompany();
@@ -53,6 +56,8 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
   const remove = useDeleteCompany();
   const { data: me } = useGetMe();
   const isAdmin = me?.role === "ADMIN";
+  const { data: existingCf } = useCustomFieldValues("company", company?.id);
+  const saveCf = useSaveCustomFieldValuesForRecord("company");
 
   useEffect(() => {
     if (open) {
@@ -71,8 +76,23 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
       setCity(company?.city ?? "");
       setCountry(company?.country ?? "");
       setAssignedCsmId(company?.assignedCsmId ?? "none");
+      if (!company) setCfValues({});
     }
   }, [open, company]);
+
+  useEffect(() => {
+    if (open && existingCf) {
+      const map: Record<string, string | null> = {};
+      for (const f of existingCf) map[f.id] = f.value;
+      setCfValues(map);
+    }
+  }, [open, existingCf]);
+
+  const persistCf = (recordId: string) => {
+    const values = Object.entries(cfValues).map(([fieldId, value]) => ({ fieldId, value }));
+    if (values.length === 0) return Promise.resolve();
+    return saveCf.mutateAsync({ recordId, values }).catch(() => undefined);
+  };
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: getListCompaniesQueryKey() });
@@ -101,12 +121,12 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
     if (isEdit) {
       const updateData = { ...data, assignedCsmId: assignedCsmId === "none" ? null : assignedCsmId };
       update.mutate({ id: company.id, data: updateData }, {
-        onSuccess: () => { toast({ title: "Company updated" }); invalidate(); onOpenChange(false); },
+        onSuccess: async () => { await persistCf(company.id); toast({ title: "Company updated" }); invalidate(); onOpenChange(false); },
         onError: () => toast({ title: "Error", description: "Failed to update company", variant: "destructive" }),
       });
     } else {
       create.mutate({ data }, {
-        onSuccess: () => { toast({ title: "Company created" }); invalidate(); onOpenChange(false); },
+        onSuccess: async (created) => { await persistCf(created.id); toast({ title: "Company created" }); invalidate(); onOpenChange(false); },
         onError: () => toast({ title: "Error", description: "Failed to create company", variant: "destructive" }),
       });
     }
@@ -215,6 +235,7 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
               <Label htmlFor="co-country">Country</Label>
               <Input id="co-country" value={country} onChange={e => setCountry(e.target.value)} />
             </div>
+            <CustomFieldsForm objectType="company" values={cfValues} onChange={(id, v) => setCfValues(p => ({ ...p, [id]: v }))} />
             <DialogFooter className="gap-2 sm:gap-0">
               {isEdit && isAdmin && (
                 <Button type="button" variant="destructive" size="icon" className="mr-auto" onClick={() => setShowDelete(true)}>

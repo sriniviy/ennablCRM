@@ -22,6 +22,8 @@ import { AuditHistory } from "@/components/audit/audit-history";
 import { AttachmentsPanel } from "@/components/attachments/attachments-panel";
 import { AiSuggestions } from "@/components/ai/ai-suggestions";
 import { CustomFieldsSection } from "@/components/custom-fields/custom-fields-section";
+import { CustomFieldsForm } from "@/components/custom-fields/custom-fields-form";
+import { useSaveCustomFieldValuesForRecord } from "@/hooks/use-custom-fields";
 
 function memberInitials(name: string | null | undefined) {
   if (!name) return "?";
@@ -50,6 +52,8 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
   const [notes, setNotes] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
   const [showDelete, setShowDelete] = useState(false);
+  const [cfValues, setCfValues] = useState<Record<string, string | null>>({});
+  const saveCf = useSaveCustomFieldValuesForRecord("deal");
 
   const { data: stages } = useListDealStages();
   const { data: contacts } = useListContacts({ page: 1, pageSize: 200 });
@@ -72,8 +76,15 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
       setCompanyId(deal?.company?.id ?? "");
       setNotes(deal?.notes ?? "");
       setAssigneeId((deal as unknown as { assigneeId?: string })?.assigneeId ?? "");
+      if (!deal) setCfValues({});
     }
   }, [open, deal, defaultStageId]);
+
+  const persistCf = (recordId: string) => {
+    const values = Object.entries(cfValues).map(([fieldId, value]) => ({ fieldId, value }));
+    if (values.length === 0) return Promise.resolve();
+    return saveCf.mutateAsync({ recordId, values }).catch(() => undefined);
+  };
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: getListDealsQueryKey() });
@@ -104,7 +115,7 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
       });
     } else {
       create.mutate({ data }, {
-        onSuccess: () => { toast({ title: "Deal created" }); invalidate(); onOpenChange(false); },
+        onSuccess: async (created) => { await persistCf(created.id); toast({ title: "Deal created" }); invalidate(); onOpenChange(false); },
         onError: () => toast({ title: "Error", description: "Failed to create deal", variant: "destructive" }),
       });
     }
@@ -363,6 +374,7 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
                 <Label htmlFor="d-notes">Deal Notes</Label>
                 <Textarea id="d-notes" value={notes} onChange={e => setNotes(e.target.value)} rows={2} />
               </div>
+              <CustomFieldsForm objectType="deal" values={cfValues} onChange={(id, v) => setCfValues(p => ({ ...p, [id]: v }))} />
               <DialogFooter className="gap-2 sm:gap-0">
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
                 <Button type="submit" disabled={isPending}>{isPending ? "Saving…" : "Create Deal"}</Button>

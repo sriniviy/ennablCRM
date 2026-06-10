@@ -21,6 +21,8 @@ import { useToast } from "@/hooks/use-toast";
 import { ContactDialog } from "@/components/contacts/contact-dialog";
 import { ContactDuplicatesDialog } from "@/components/merge/contact-duplicates";
 import { CustomFieldsSection } from "@/components/custom-fields/custom-fields-section";
+import { CustomFieldsForm } from "@/components/custom-fields/custom-fields-form";
+import { useSaveCustomFieldValuesForRecord } from "@/hooks/use-custom-fields";
 import { AiSuggestions } from "@/components/ai/ai-suggestions";
 import { ActivitySummary } from "@/components/ai/activity-summary";
 import { AttachmentsPanel } from "@/components/attachments/attachments-panel";
@@ -52,7 +54,9 @@ export function ContactDetailPage() {
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [aiSummary, setAiSummary] = useState("");
+  const [actCfValues, setActCfValues] = useState<Record<string, string | null>>({});
   const createActivity = useCreateActivity();
+  const saveActivityCf = useSaveCustomFieldValuesForRecord("activity");
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -63,7 +67,7 @@ export function ContactDetailPage() {
 
   const resetActivityForm = () => {
     setActType("NOTE"); setActTitle(""); setNote(""); setEndDate("");
-    setEmailSubject(""); setEmailBody(""); setAiSummary("");
+    setEmailSubject(""); setEmailBody(""); setAiSummary(""); setActCfValues({});
   };
 
   const canLog = !!(note.trim() || actTitle.trim() || emailSubject.trim());
@@ -76,7 +80,7 @@ export function ContactDetailPage() {
       note.trim().slice(0, 60) ||
       "Activity logged";
     try {
-      await createActivityMutate.current({
+      const created = await createActivityMutate.current({
         data: {
           type: actType as ActivityType,
           title,
@@ -88,6 +92,10 @@ export function ContactDetailPage() {
           contactId: id,
         }
       });
+      const cfEntries = Object.entries(actCfValues).map(([fieldId, value]) => ({ fieldId, value }));
+      if (created?.id && cfEntries.length > 0) {
+        await saveActivityCf.mutateAsync({ recordId: created.id, values: cfEntries }).catch(() => undefined);
+      }
       resetActivityForm();
       queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) });
       queryClient.invalidateQueries({ queryKey: ["ai-suggestions", "contact", id] });
@@ -304,6 +312,7 @@ export function ContactDetailPage() {
                         <Label htmlFor="act-ai">AI summary</Label>
                         <Textarea id="act-ai" placeholder="Leave blank to auto-generate for emails & meetings" value={aiSummary} onChange={e => setAiSummary(e.target.value)} className="resize-none" />
                       </div>
+                      <CustomFieldsForm objectType="activity" values={actCfValues} onChange={(fid, v) => setActCfValues(p => ({ ...p, [fid]: v }))} />
                       <div className="flex justify-end">
                         <Button 
                           onClick={handleLogActivity} 

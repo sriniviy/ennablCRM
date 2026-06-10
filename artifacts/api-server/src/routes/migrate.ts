@@ -7,7 +7,11 @@ import {
   dealStagesTable,
   activitiesTable,
   usersTable,
+  customFieldDefinitionsTable,
+  customFieldValuesTable,
+  type CustomFieldObjectType,
 } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 import { logAudit } from "../lib/audit";
 import { buildCompanyDomainIndex, loadBlockedDomains, matchContactCompany } from "../lib/domain-matching";
@@ -22,6 +26,53 @@ function mapRow(row: Record<string, string>, mapping: Record<string, string>): R
     if (field && field !== "skip") out[field] = row[col] ?? "";
   }
   return out;
+}
+
+/** Load the set of custom-field definition ids for an object type. */
+async function loadCustomFieldIds(objectType: CustomFieldObjectType): Promise<Set<string>> {
+  const defs = await db
+    .select({ id: customFieldDefinitionsTable.id })
+    .from(customFieldDefinitionsTable)
+    .where(eq(customFieldDefinitionsTable.objectType, objectType));
+  return new Set(defs.map((d) => d.id));
+}
+
+/** Build custom-field value rows from a source CSV row for an inserted record.
+ *  Mapping entries whose target is `cf_<fieldId>` carry custom-field values. */
+function customFieldValuesForRow(
+  raw: Record<string, string>,
+  mapping: Record<string, string>,
+  cfFieldIds: Set<string>,
+  objectType: CustomFieldObjectType,
+  recordId: string,
+): Array<typeof customFieldValuesTable.$inferInsert> {
+  const out: Array<typeof customFieldValuesTable.$inferInsert> = [];
+  for (const [col, field] of Object.entries(mapping)) {
+    if (!field?.startsWith("cf_")) continue;
+    const fieldId = field.slice(3);
+    if (!cfFieldIds.has(fieldId)) continue;
+    const v = raw[col]?.trim();
+    if (v) out.push({ fieldId, objectType, recordId, value: v });
+  }
+  return out;
+}
+
+/** Persist custom-field values for a batch of inserted records (index-aligned
+ *  with their source rows). No-op when nothing is mapped. */
+async function persistCustomFieldValues(
+  cfFieldIds: Set<string>,
+  mapping: Record<string, string>,
+  objectType: CustomFieldObjectType,
+  pairs: Array<{ recordId: string; raw: Record<string, string> }>,
+): Promise<void> {
+  if (cfFieldIds.size === 0) return;
+  const cfRows: Array<typeof customFieldValuesTable.$inferInsert> = [];
+  for (const { recordId, raw } of pairs) {
+    cfRows.push(...customFieldValuesForRow(raw, mapping, cfFieldIds, objectType, recordId));
+  }
+  if (cfRows.length > 0) {
+    await db.insert(customFieldValuesTable).values(cfRows).onConflictDoNothing();
+  }
 }
 
 /** Read the raw value of the CSV column mapped to a given logical field. */
@@ -81,8 +132,9 @@ router.post("/companies", requireAuth, async (req: Request, res: Response) => {
     const existing = await db.select({ name: companiesTable.name, domain: companiesTable.domain, id: companiesTable.id }).from(companiesTable);
     const existingByName = new Map(existing.map(c => [c.name.toLowerCase().trim(), c.id]));
     const existingByDomain = new Map(existing.filter(c => c.domain).map(c => [c.domain!.toLowerCase().trim(), c.id]));
+    const cfFieldIds = await loadCustomFieldIds("company");
 
-    const toInsert: Array<typeof companiesTable.$inferInsert & { __hubId?: string }> = [];
+    const toInsert: Array<typeof companiesTable.$inferInsert & { __hubId?: string; __row?: Record<string, string> }> = [];
     const skipped: RowIssue[] = [];
     const warnings: RowIssue[] = [];
     const idMap: Record<string, string> = {};
@@ -125,12 +177,13 @@ router.post("/companies", requireAuth, async (req: Request, res: Response) => {
         country: mapped["country"] || null,
         assignedCsmId: ownerId,
         __hubId: hubId,
-      } as typeof companiesTable.$inferInsert & { __hubId?: string });
+        __row: rows[i],
+      } as typeof companiesTable.$inferInsert & { __hubId?: string; __row?: Record<string, string> });
     }
 
     let imported = 0;
     if (toInsert.length > 0) {
-      const insertData = toInsert.map(({ __hubId: _h, ...rest }) => rest);
+      const insertData = toInsert.map(({ __hubId: _h, __row: _r, ...rest }) => rest);
       const inserted = await db.insert(companiesTable).values(insertData).returning();
       imported = inserted.length;
       for (let i = 0; i < inserted.length; i++) {
@@ -139,6 +192,8 @@ router.post("/companies", requireAuth, async (req: Request, res: Response) => {
         existingByName.set(inserted[i].name.toLowerCase().trim(), inserted[i].id);
         if (inserted[i].domain) existingByDomain.set(inserted[i].domain!.toLowerCase(), inserted[i].id);
       }
+      await persistCustomFieldValues(cfFieldIds, mapping, "company",
+        inserted.map((c, i) => ({ recordId: c.id, raw: toInsert[i].__row! })));
       await Promise.all(inserted.map(c => logAudit({
         action: "CREATE", objectType: "company", objectId: c.id,
         objectLabel: c.name, actorId: dbUser.id, actorName: dbUser.name,
@@ -181,8 +236,9 @@ router.post("/contacts", requireAuth, async (req: Request, res: Response) => {
     // Name index lets associations resolve by exact company name (deferred: it
     // reflects companies already imported in the previous step).
     const companyByName = new Map(companies.map(c => [c.name.toLowerCase().trim(), c.id]));
+    const cfFieldIds = await loadCustomFieldIds("contact");
 
-    const toInsert: Array<typeof contactsTable.$inferInsert & { __hubId?: string }> = [];
+    const toInsert: Array<typeof contactsTable.$inferInsert & { __hubId?: string; __row?: Record<string, string> }> = [];
     const skipped: RowIssue[] = [];
     const warnings: RowIssue[] = [];
     const idMap: Record<string, string> = {};
@@ -237,20 +293,23 @@ router.post("/contacts", requireAuth, async (req: Request, res: Response) => {
         companyId,
         assigneeId: ownerId,
         __hubId: hubId,
-      } as typeof contactsTable.$inferInsert & { __hubId?: string });
+        __row: raw,
+      } as typeof contactsTable.$inferInsert & { __hubId?: string; __row?: Record<string, string> });
 
       if (email) existingEmails.set(email, "pending");
     }
 
     let imported = 0;
     if (toInsert.length > 0) {
-      const insertData = toInsert.map(({ __hubId: _h, ...rest }) => rest);
+      const insertData = toInsert.map(({ __hubId: _h, __row: _r, ...rest }) => rest);
       const inserted = await db.insert(contactsTable).values(insertData).returning();
       imported = inserted.length;
       for (let i = 0; i < inserted.length; i++) {
         const hubId = toInsert[i].__hubId;
         if (hubId) idMap[hubId] = inserted[i].id;
       }
+      await persistCustomFieldValues(cfFieldIds, mapping, "contact",
+        inserted.map((c, i) => ({ recordId: c.id, raw: toInsert[i].__row! })));
       await Promise.all(inserted.map(c => logAudit({
         action: "CREATE", objectType: "contact", objectId: c.id,
         objectLabel: `${c.firstName} ${c.lastName}`.trim(),
@@ -300,8 +359,9 @@ router.post("/deals", requireAuth, async (req: Request, res: Response) => {
       res.status(400).json({ error: "No deal stages configured — create at least one stage first" });
       return;
     }
+    const cfFieldIds = await loadCustomFieldIds("deal");
 
-    const toInsert: Array<typeof dealsTable.$inferInsert & { __hubId?: string }> = [];
+    const toInsert: Array<typeof dealsTable.$inferInsert & { __hubId?: string; __row?: Record<string, string> }> = [];
     const skipped: RowIssue[] = [];
     const warnings: RowIssue[] = [];
     const idMap: Record<string, string> = {};
@@ -370,18 +430,21 @@ router.post("/deals", requireAuth, async (req: Request, res: Response) => {
         companyId,
         assigneeId: ownerId,
         __hubId: hubId,
-      } as typeof dealsTable.$inferInsert & { __hubId?: string });
+        __row: raw,
+      } as typeof dealsTable.$inferInsert & { __hubId?: string; __row?: Record<string, string> });
     }
 
     let imported = 0;
     if (toInsert.length > 0) {
-      const insertData = toInsert.map(({ __hubId: _h, ...rest }) => rest);
+      const insertData = toInsert.map(({ __hubId: _h, __row: _r, ...rest }) => rest);
       const inserted = await db.insert(dealsTable).values(insertData).returning();
       imported = inserted.length;
       for (let i = 0; i < inserted.length; i++) {
         const hubId = toInsert[i].__hubId;
         if (hubId) idMap[hubId] = inserted[i].id;
       }
+      await persistCustomFieldValues(cfFieldIds, mapping, "deal",
+        inserted.map((d, i) => ({ recordId: d.id, raw: toInsert[i].__row! })));
       await Promise.all(inserted.map(d => logAudit({
         action: "CREATE", objectType: "deal", objectId: d.id,
         objectLabel: d.title, actorId: dbUser.id, actorName: dbUser.name,
@@ -429,8 +492,10 @@ router.post("/activities", requireAuth, async (req: Request, res: Response) => {
     const companyByName = new Map(companies.map(c => [c.name.toLowerCase().trim(), c.id]));
     const contactByEmail = new Map(contacts.filter(c => c.email).map(c => [c.email!.toLowerCase().trim(), c.id]));
     const dealByTitle = new Map(deals.map(d => [d.title.toLowerCase().trim(), d.id]));
+    const cfFieldIds = await loadCustomFieldIds("activity");
 
     const toInsert: Array<typeof activitiesTable.$inferInsert> = [];
+    const insertRows: Array<Record<string, string>> = [];
     const skipped: RowIssue[] = [];
     const warnings: RowIssue[] = [];
 
@@ -484,12 +549,15 @@ router.post("/activities", requireAuth, async (req: Request, res: Response) => {
         companyId,
         dealId,
       });
+      insertRows.push(raw);
     }
 
     let imported = 0;
     if (toInsert.length > 0) {
       const inserted = await db.insert(activitiesTable).values(toInsert).returning();
       imported = inserted.length;
+      await persistCustomFieldValues(cfFieldIds, mapping, "activity",
+        inserted.map((a, i) => ({ recordId: a.id, raw: insertRows[i] })));
     }
 
     res.json({ received: rows.length, imported, skipped, warnings, idMap: {} });

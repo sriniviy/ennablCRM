@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
-import { db, activitiesTable, usersTable, contactsTable, companiesTable, dealsTable } from "@workspace/db";
-import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
+import { db, activitiesTable, usersTable, contactsTable, companiesTable, dealsTable, customFieldDefinitionsTable, customFieldValuesTable } from "@workspace/db";
+import { eq, and, asc, desc, sql, gte, lte, inArray } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 import { logAudit } from "../lib/audit";
 import { isSummarizable, isThreadedEmail, refreshActivitySummary } from "../lib/activity-summary";
@@ -53,17 +53,41 @@ router.get("/export", requireAuth, async (req: Request, res: Response) => {
       .orderBy(desc(activitiesTable.createdAt));
 
     const escape = (v: string | null | undefined) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const headers = ["Type", "Title", "Description", "Contact", "Company", "Deal", "User", "Date"];
-    const csvRows = rows.map(({ activity: a, user, contact, company, deal }) => [
-      a.type,
-      a.title,
-      a.description,
-      contact?.firstName ? `${contact.firstName} ${contact.lastName}`.trim() : "",
-      company?.name ?? "",
-      deal?.title ?? "",
-      user?.name ?? "",
-      a.createdAt ? new Date(a.createdAt).toISOString() : "",
-    ].map(escape).join(","));
+
+    const [cfDefs, cfValues] = await Promise.all([
+      db.select().from(customFieldDefinitionsTable)
+        .where(eq(customFieldDefinitionsTable.objectType, "activity"))
+        .orderBy(asc(customFieldDefinitionsTable.displayOrder)),
+      rows.length > 0
+        ? db.select().from(customFieldValuesTable)
+            .where(and(
+              eq(customFieldValuesTable.objectType, "activity"),
+              inArray(customFieldValuesTable.recordId, rows.map(r => r.activity.id)),
+            ))
+        : Promise.resolve([]),
+    ]);
+
+    const cfValueMap = new Map<string, Map<string, string | null>>();
+    for (const v of cfValues) {
+      if (!cfValueMap.has(v.recordId)) cfValueMap.set(v.recordId, new Map());
+      cfValueMap.get(v.recordId)!.set(v.fieldId, v.value);
+    }
+
+    const headers = ["Type", "Title", "Description", "Contact", "Company", "Deal", "User", "Date", ...cfDefs.map((d) => d.label)];
+    const csvRows = rows.map(({ activity: a, user, contact, company, deal }) => {
+      const cfRow = cfValueMap.get(a.id) ?? new Map<string, string | null>();
+      return [
+        a.type,
+        a.title,
+        a.description,
+        contact?.firstName ? `${contact.firstName} ${contact.lastName}`.trim() : "",
+        company?.name ?? "",
+        deal?.title ?? "",
+        user?.name ?? "",
+        a.createdAt ? new Date(a.createdAt).toISOString() : "",
+        ...cfDefs.map((d) => cfRow.get(d.id) ?? null),
+      ].map(escape).join(",");
+    });
 
     const csv = [headers.map(escape).join(","), ...csvRows].join("\n");
     res.setHeader("Content-Type", "text/csv");

@@ -16,6 +16,8 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { CustomFieldsForm } from "@/components/custom-fields/custom-fields-form";
+import { useCustomFieldValues, useSaveCustomFieldValuesForRecord } from "@/hooks/use-custom-fields";
 
 interface ContactDialogProps {
   open: boolean;
@@ -44,6 +46,7 @@ export function ContactDialog({ open, onOpenChange, contact }: ContactDialogProp
   const [tags, setTags] = useState("");
   const [notes, setNotes] = useState("");
   const [showDelete, setShowDelete] = useState(false);
+  const [cfValues, setCfValues] = useState<Record<string, string | null>>({});
 
   const { data: companies } = useListCompanies({ page: 1, pageSize: 200 });
   const create = useCreateContact();
@@ -51,6 +54,8 @@ export function ContactDialog({ open, onOpenChange, contact }: ContactDialogProp
   const remove = useDeleteContact();
   const { data: me } = useGetMe();
   const isAdmin = me?.role === "ADMIN";
+  const { data: existingCf } = useCustomFieldValues("contact", contact?.id);
+  const saveCf = useSaveCustomFieldValuesForRecord("contact");
 
   useEffect(() => {
     if (open) {
@@ -66,8 +71,23 @@ export function ContactDialog({ open, onOpenChange, contact }: ContactDialogProp
       setCompanyId(contact?.company?.id ?? "");
       setTags((contact?.tags ?? []).join(", "));
       setNotes(contact?.notes ?? "");
+      if (!contact) setCfValues({});
     }
   }, [open, contact]);
+
+  useEffect(() => {
+    if (open && existingCf) {
+      const map: Record<string, string | null> = {};
+      for (const f of existingCf) map[f.id] = f.value;
+      setCfValues(map);
+    }
+  }, [open, existingCf]);
+
+  const persistCf = (recordId: string) => {
+    const values = Object.entries(cfValues).map(([fieldId, value]) => ({ fieldId, value }));
+    if (values.length === 0) return Promise.resolve();
+    return saveCf.mutateAsync({ recordId, values }).catch(() => undefined);
+  };
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: getListContactsQueryKey() });
@@ -91,12 +111,12 @@ export function ContactDialog({ open, onOpenChange, contact }: ContactDialogProp
     };
     if (isEdit) {
       update.mutate({ id: contact.id, data }, {
-        onSuccess: () => { toast({ title: "Contact updated" }); invalidate(); onOpenChange(false); },
+        onSuccess: async () => { await persistCf(contact.id); toast({ title: "Contact updated" }); invalidate(); onOpenChange(false); },
         onError: () => toast({ title: "Error", description: "Failed to update contact", variant: "destructive" }),
       });
     } else {
       create.mutate({ data }, {
-        onSuccess: () => { toast({ title: "Contact created" }); invalidate(); onOpenChange(false); },
+        onSuccess: async (created) => { await persistCf(created.id); toast({ title: "Contact created" }); invalidate(); onOpenChange(false); },
         onError: () => toast({ title: "Error", description: "Failed to create contact", variant: "destructive" }),
       });
     }
@@ -189,6 +209,7 @@ export function ContactDialog({ open, onOpenChange, contact }: ContactDialogProp
               <Label htmlFor="c-notes">Notes</Label>
               <Textarea id="c-notes" value={notes} onChange={e => setNotes(e.target.value)} rows={2} />
             </div>
+            <CustomFieldsForm objectType="contact" values={cfValues} onChange={(id, v) => setCfValues(p => ({ ...p, [id]: v }))} />
             <DialogFooter className="gap-2 sm:gap-0">
               {isEdit && isAdmin && (
                 <Button type="button" variant="destructive" size="icon" className="mr-auto" onClick={() => setShowDelete(true)}>

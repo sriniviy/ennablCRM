@@ -90,6 +90,31 @@ export function useSaveCustomFieldValues(
   });
 }
 
+export function useSaveCustomFieldValuesForRecord(
+  objectType: CustomFieldObjectType,
+) {
+  const authFetch = useAuthFetch();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      recordId,
+      values,
+    }: {
+      recordId: string;
+      values: Array<{ fieldId: string; value: string | null }>;
+    }) =>
+      authFetch(`/values/${objectType}/${recordId}`, {
+        method: "PUT",
+        body: JSON.stringify({ values }),
+      }),
+    onSuccess: (_data, { recordId }) => {
+      qc.invalidateQueries({
+        queryKey: ["custom-field-values", objectType, recordId],
+      });
+    },
+  });
+}
+
 export function useCreateCustomFieldDefinition() {
   const authFetch = useAuthFetch();
   const qc = useQueryClient();
