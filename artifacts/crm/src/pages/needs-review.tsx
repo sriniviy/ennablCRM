@@ -8,6 +8,7 @@ import {
   ReviewStatus,
   getListContactsQueryKey,
   type ContactWithRelations,
+  type Company,
 } from "@workspace/api-client-react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { ContactDialog } from "@/components/contacts/contact-dialog";
@@ -29,14 +30,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { CheckCircle2, EyeOff, Pencil } from "lucide-react";
+import { CheckCircle2, EyeOff, Pencil, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-function ReviewRow({ contact }: { contact: ContactWithRelations }) {
+const PAGE_SIZE = 50;
+
+interface ReviewRowProps {
+  contact: ContactWithRelations;
+  companies: Company[];
+}
+
+function ReviewRow({ contact, companies }: ReviewRowProps) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const update = useUpdateContact();
-  const { data: companiesData } = useListCompanies({ page: 1, pageSize: 200 });
   const [selectedCompanyId, setSelectedCompanyId] = useState(
     contact.company?.id ?? "",
   );
@@ -116,7 +123,7 @@ function ReviewRow({ contact }: { contact: ContactWithRelations }) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">No company</SelectItem>
-              {(companiesData?.data ?? []).map((c) => (
+              {companies.map((c) => (
                 <SelectItem key={c.id} value={c.id}>
                   {c.name}
                 </SelectItem>
@@ -167,14 +174,25 @@ function ReviewRow({ contact }: { contact: ContactWithRelations }) {
 }
 
 export function NeedsReviewPage() {
+  const [page, setPage] = useState(1);
+
   const { data, isLoading } = useListContacts({
     reviewStatus: ReviewStatus.AUTO_CREATED,
-    page: 1,
-    pageSize: 50,
+    page,
+    pageSize: PAGE_SIZE,
   });
+
+  // Load companies once at the page level — shared across all rows.
+  const { data: companiesData } = useListCompanies({ page: 1, pageSize: 500 });
+  const companies = companiesData?.data ?? [];
 
   const contacts = data?.data ?? [];
   const total = data?.total ?? 0;
+  const hasMore = data?.hasMore ?? false;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const from = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const to = Math.min(page * PAGE_SIZE, total);
 
   return (
     <SidebarLayout>
@@ -218,7 +236,11 @@ export function NeedsReviewPage() {
                 ))
               ) : contacts.length > 0 ? (
                 contacts.map((contact) => (
-                  <ReviewRow key={contact.id} contact={contact} />
+                  <ReviewRow
+                    key={contact.id}
+                    contact={contact}
+                    companies={companies}
+                  />
                 ))
               ) : (
                 <TableRow>
@@ -233,6 +255,39 @@ export function NeedsReviewPage() {
             </TableBody>
           </Table>
         </div>
+
+        {total > PAGE_SIZE && (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              Showing {from}–{to} of {total} contacts
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1 || isLoading}
+                className="gap-1"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Previous
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Page {page} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => p + 1)}
+                disabled={!hasMore || isLoading}
+                className="gap-1"
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </SidebarLayout>
   );
