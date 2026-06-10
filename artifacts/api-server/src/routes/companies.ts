@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { db, companiesTable, contactsTable, dealsTable, dealStagesTable, activitiesTable, notesTable, customFieldDefinitionsTable, customFieldValuesTable } from "@workspace/db";
 import { eq, ilike, and, or, inArray, sql, desc, asc } from "drizzle-orm";
-import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
+import { requireAuth, requireAdmin, type AuthRequest } from "../middlewares/requireAuth";
 import { logAudit } from "../lib/audit";
 import {
   computeDuplicateGroups,
@@ -467,7 +467,7 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
+router.delete("/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
   try {
     const { dbUser } = req as AuthRequest;
     const id = req.params.id as string;

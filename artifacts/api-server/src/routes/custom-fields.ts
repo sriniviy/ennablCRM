@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { db, customFieldDefinitionsTable, customFieldValuesTable } from "@workspace/db";
 import { eq, and, inArray, asc, sql } from "drizzle-orm";
-import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
+import { requireAuth, requireAdmin, type AuthRequest } from "../middlewares/requireAuth";
 import type { CustomFieldObjectType, CustomFieldType } from "@workspace/db";
 
 const router = Router();
@@ -39,13 +39,8 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.post("/", requireAuth, async (req: Request, res: Response) => {
+router.post("/", requireAuth, requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { dbUser } = req as AuthRequest;
-    if (dbUser.role !== "ADMIN") {
-      res.status(403).json({ error: "Admin only" });
-      return;
-    }
     const { objectType, label, fieldType = "text", options, required = false } = req.body;
     if (!objectType || !label) {
       res.status(400).json({ error: "objectType and label are required" });
@@ -85,13 +80,8 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
+router.patch("/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { dbUser } = req as AuthRequest;
-    if (dbUser.role !== "ADMIN") {
-      res.status(403).json({ error: "Admin only" });
-      return;
-    }
     const id = req.params.id as string;
     const { label, options, required, displayOrder } = req.body;
 
@@ -122,13 +112,8 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
+router.delete("/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { dbUser } = req as AuthRequest;
-    if (dbUser.role !== "ADMIN") {
-      res.status(403).json({ error: "Admin only" });
-      return;
-    }
     const id = req.params.id as string;
     const [deleted] = await db
       .delete(customFieldDefinitionsTable)

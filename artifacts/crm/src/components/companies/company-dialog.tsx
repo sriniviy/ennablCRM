@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  useCreateCompany, useUpdateCompany, useDeleteCompany,
+  useCreateCompany, useUpdateCompany, useDeleteCompany, useGetMe,
   getListCompaniesQueryKey, getGetCompanyQueryKey,
   CompanyStatus, type Company,
 } from "@workspace/api-client-react";
@@ -51,6 +51,8 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
   const create = useCreateCompany();
   const update = useUpdateCompany();
   const remove = useDeleteCompany();
+  const { data: me } = useGetMe();
+  const isAdmin = me?.role === "ADMIN";
 
   useEffect(() => {
     if (open) {
@@ -214,7 +216,7 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
               <Input id="co-country" value={country} onChange={e => setCountry(e.target.value)} />
             </div>
             <DialogFooter className="gap-2 sm:gap-0">
-              {isEdit && (
+              {isEdit && isAdmin && (
                 <Button type="button" variant="destructive" size="icon" className="mr-auto" onClick={() => setShowDelete(true)}>
                   <Trash2 className="h-4 w-4" />
                 </Button>

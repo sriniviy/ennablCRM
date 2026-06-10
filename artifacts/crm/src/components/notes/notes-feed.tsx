@@ -1,4 +1,5 @@
 import { useSessionToken } from "@/hooks/use-session-token";
+import { useGetMe } from "@workspace/api-client-react";
 import { useState, useCallback } from "react";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -34,6 +35,8 @@ export function NotesFeed({ entityType, entityId }: NotesFeedProps) {
   const getToken = useSessionToken();
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { data: me } = useGetMe();
+  const isAdmin = me?.role === "ADMIN";
   const [draft, setDraft] = useState("");
   const [exportingNotes, setExportingNotes] = useState(false);
 
@@ -197,15 +200,17 @@ export function NotesFeed({ entityType, entityId }: NotesFeedProps) {
                       })}
                     </span>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
-                    onClick={() => deleteNote.mutate(note.id)}
-                    disabled={deleteNote.isPending}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  {isAdmin && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
+                      onClick={() => deleteNote.mutate(note.id)}
+                      disabled={deleteNote.isPending}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
                 <p className="text-sm mt-1 whitespace-pre-wrap">{note.body}</p>
               </div>

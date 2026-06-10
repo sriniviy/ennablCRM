@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { db, tasksTable, contactsTable, dealsTable, usersTable } from "@workspace/db";
 import { eq, and, lte, gte, isNull, isNotNull, desc, asc, sql } from "drizzle-orm";
-import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
+import { requireAuth, requireAdmin, type AuthRequest } from "../middlewares/requireAuth";
 import { logActivity } from "../lib/activity";
 
 const router = Router();
@@ -277,7 +277,7 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
+router.delete("/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
   try {
     const id = req.params.id as string;
     const [existing] = await db.select().from(tasksTable).where(eq(tasksTable.id, id)).limit(1);

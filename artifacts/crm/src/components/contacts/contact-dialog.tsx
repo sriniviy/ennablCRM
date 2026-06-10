@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useCreateContact, useUpdateContact, useDeleteContact,
-  useListCompanies,
+  useListCompanies, useGetMe,
   getListContactsQueryKey, getGetContactQueryKey,
   ContactStatus, ReviewStatus, type ContactWithRelations,
 } from "@workspace/api-client-react";
@@ -49,6 +49,8 @@ export function ContactDialog({ open, onOpenChange, contact }: ContactDialogProp
   const create = useCreateContact();
   const update = useUpdateContact();
   const remove = useDeleteContact();
+  const { data: me } = useGetMe();
+  const isAdmin = me?.role === "ADMIN";
 
   useEffect(() => {
     if (open) {
@@ -188,7 +190,7 @@ export function ContactDialog({ open, onOpenChange, contact }: ContactDialogProp
               <Textarea id="c-notes" value={notes} onChange={e => setNotes(e.target.value)} rows={2} />
             </div>
             <DialogFooter className="gap-2 sm:gap-0">
-              {isEdit && (
+              {isEdit && isAdmin && (
                 <Button type="button" variant="destructive" size="icon" className="mr-auto" onClick={() => setShowDelete(true)}>
                   <Trash2 className="h-4 w-4" />
                 </Button>

@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { db, notesTable, usersTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
-import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
+import { requireAuth, requireAdmin, type AuthRequest } from "../middlewares/requireAuth";
 import { logActivity } from "../lib/activity";
 
 const router = Router();
@@ -118,9 +118,8 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
+router.delete("/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
   try {
-    const dbUser = (req as AuthRequest).dbUser;
     const id = req.params.id as string;
     const [note] = await db
       .select()
@@ -129,10 +128,6 @@ router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
       .limit(1);
     if (!note) {
       res.status(404).json({ error: "Note not found" });
-      return;
-    }
-    if (note.authorId !== dbUser.id) {
-      res.status(403).json({ error: "Not authorized to delete this note" });
       return;
     }
     await db.delete(notesTable).where(eq(notesTable.id, id));

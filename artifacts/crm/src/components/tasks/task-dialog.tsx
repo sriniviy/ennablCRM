@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useCreateTask, useUpdateTask, useDeleteTask,
-  useListContacts, useListDeals,
+  useListContacts, useListDeals, useGetMe,
   getListTasksQueryKey,
   Priority, TaskType,
   type TaskWithRelations,
@@ -44,6 +44,8 @@ export function TaskDialog({ open, onOpenChange, task, defaultContactId, default
   const create = useCreateTask();
   const update = useUpdateTask();
   const remove = useDeleteTask();
+  const { data: me } = useGetMe();
+  const isAdmin = me?.role === "ADMIN";
 
   const allDeals = dealsData?.flatMap(col => col.deals) ?? [];
 
@@ -157,7 +159,7 @@ export function TaskDialog({ open, onOpenChange, task, defaultContactId, default
               </div>
             </div>
             <DialogFooter className="gap-2 sm:gap-0">
-              {isEdit && (
+              {isEdit && isAdmin && (
                 <Button type="button" variant="destructive" size="icon" className="mr-auto" onClick={() => setShowDelete(true)}>
                   <Trash2 className="h-4 w-4" />
                 </Button>

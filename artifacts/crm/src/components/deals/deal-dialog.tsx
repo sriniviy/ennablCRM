@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useCreateDeal, useUpdateDeal, useDeleteDeal,
-  useListDealStages, useListContacts, useListCompanies,
+  useListDealStages, useListContacts, useListCompanies, useGetMe,
   getListDealsQueryKey,
   type DealWithRelations,
 } from "@workspace/api-client-react";
@@ -47,6 +47,8 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
   const create = useCreateDeal();
   const update = useUpdateDeal();
   const remove = useDeleteDeal();
+  const { data: me } = useGetMe();
+  const isAdmin = me?.role === "ADMIN";
 
   useEffect(() => {
     if (open) {
@@ -177,9 +179,11 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
                     <Textarea id="d-notes" value={notes} onChange={e => setNotes(e.target.value)} rows={2} />
                   </div>
                   <DialogFooter className="gap-2 sm:gap-0">
-                    <Button type="button" variant="destructive" size="icon" className="mr-auto" onClick={() => setShowDelete(true)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {isAdmin && (
+                      <Button type="button" variant="destructive" size="icon" className="mr-auto" onClick={() => setShowDelete(true)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                     <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
                     <Button type="submit" disabled={isPending}>{isPending ? "Saving…" : "Save Changes"}</Button>
                   </DialogFooter>

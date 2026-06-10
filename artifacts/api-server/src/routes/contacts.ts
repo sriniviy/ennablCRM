@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { db, contactsTable, companiesTable, usersTable, dealsTable, dealStagesTable, tasksTable, activitiesTable, notesTable, customFieldDefinitionsTable, customFieldValuesTable } from "@workspace/db";
 import { eq, ne, ilike, and, or, inArray, sql, asc, desc, isNotNull } from "drizzle-orm";
-import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
+import { requireAuth, requireAdmin, type AuthRequest } from "../middlewares/requireAuth";
 import { logActivity } from "../lib/activity";
 import { logAudit } from "../lib/audit";
 import {
@@ -710,7 +710,7 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
+router.delete("/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
   try {
     const { dbUser } = req as AuthRequest;
     const id = req.params.id as string;

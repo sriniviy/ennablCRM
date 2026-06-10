@@ -8,6 +8,19 @@ export type AuthRequest = Request & {
   dbUser: typeof usersTable.$inferSelect;
 };
 
+export function requireAdmin(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  const { dbUser } = req as AuthRequest;
+  if (dbUser.role !== "ADMIN") {
+    res.status(403).json({ error: "Admin only" });
+    return;
+  }
+  next();
+}
+
 export async function requireAuth(
   req: Request,
   res: Response,
