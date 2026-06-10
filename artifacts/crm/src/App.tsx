@@ -27,6 +27,7 @@ import { AuditLogPage } from "./pages/audit-log";
 import { NeedsReviewPage } from "./pages/needs-review";
 import { SignInPage } from "./pages/sign-in";
 import { SignUpPage } from "./pages/sign-up";
+import { MigratePage } from "./pages/migrate";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -135,6 +136,7 @@ function AppRoutes() {
           <Route path="/sequences" component={() => <ProtectedRoute component={SequencesPage} />} />
           <Route path="/sequences/:id" component={() => <ProtectedRoute component={SequenceDetailPage} />} />
           <Route path="/admin/audit-log" component={() => <ProtectedRoute component={AuditLogPage} />} />
+          <Route path="/admin/migrate" component={() => <ProtectedRoute component={MigratePage} />} />
         </Switch>
         <Toaster />
       </TooltipProvider>

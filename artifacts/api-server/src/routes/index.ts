@@ -22,6 +22,7 @@ import customFieldsRouter from "./custom-fields";
 import aiSuggestionsRouter from "./ai-suggestions";
 import storageRouter from "./storage";
 import attachmentsRouter from "./attachments";
+import migrateRouter from "./migrate";
 
 const router: IRouter = Router();
 
@@ -48,5 +49,6 @@ router.use("/custom-fields", customFieldsRouter);
 router.use("/ai/suggestions", aiSuggestionsRouter);
 router.use(storageRouter);
 router.use("/attachments", attachmentsRouter);
+router.use("/migrate", migrateRouter);
 
 export default router;

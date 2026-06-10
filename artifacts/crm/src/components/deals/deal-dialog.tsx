@@ -20,6 +20,7 @@ import { NotesFeed } from "@/components/notes/notes-feed";
 import { AuditHistory } from "@/components/audit/audit-history";
 import { AttachmentsPanel } from "@/components/attachments/attachments-panel";
 import { AiSuggestions } from "@/components/ai/ai-suggestions";
+import { CustomFieldsSection } from "@/components/custom-fields/custom-fields-section";
 
 interface DealDialogProps {
   open: boolean;
@@ -127,6 +128,9 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
                 <TabsTrigger value="history" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-2 pt-1">
                   History
                 </TabsTrigger>
+                <TabsTrigger value="fields" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-2 pt-1">
+                  Custom Fields
+                </TabsTrigger>
                 <TabsTrigger value="files" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-2 pt-1">
                   Files
                 </TabsTrigger>
@@ -205,6 +209,9 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
               </TabsContent>
               <TabsContent value="history">
                 <AuditHistory objectType="deal" objectId={deal.id} />
+              </TabsContent>
+              <TabsContent value="fields">
+                <CustomFieldsSection objectType="deal" recordId={deal.id} />
               </TabsContent>
               <TabsContent value="files">
                 <AttachmentsPanel objectType="deal" recordId={deal.id} />

@@ -19,6 +19,7 @@ import {
   Sun,
   Moon,
   ClipboardCheck,
+  ArrowDownToLine,
 } from "lucide-react";
 import { GlobalSearch } from "@/components/global-search";
 import { Button } from "@/components/ui/button";
@@ -50,6 +51,7 @@ const navItems = [
   { name: "Tasks", href: "/tasks", icon: CheckSquare },
   { name: "Campaigns", href: "/campaigns", icon: Mail },
   { name: "Reports", href: "/reports", icon: BarChart2 },
+  { name: "HubSpot Import", href: "/admin/migrate", icon: ArrowDownToLine, adminOnly: true },
   { name: "Audit Log", href: "/admin/audit-log", icon: ScrollText, adminOnly: true },
   { name: "Settings", href: "/settings/team", icon: Settings },
 ];
