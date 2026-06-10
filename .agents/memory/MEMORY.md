@@ -1,2 +1,6 @@
 - [api-zod codegen index clash](api-zod-codegen-index-clash.md) — orval codegen re-adds a clashing `export * from './generated/types'` to lib/api-zod/src/index.ts; keep it to one line.
 - [merge handler ordering](merge-handler-ordering.md) — record-merge tx order must be re-point → delete losers → update primary, or unique back-fill (email/domain) collides.
+- [AI integration setup](ai-integration.md) — Replit OpenAI integration uses setupReplitAIIntegrations(); simple completions need only a thin openai-client.ts, not the full template with DB schemas.
+- [Drizzle push TTY issue](drizzle-push.md) — drizzle push fails non-interactively; use executeSql via code_execution instead.
+- [lib/db rebuild pattern](lib-db-rebuild.md) — after schema changes run: pnpm --filter @workspace/db exec tsc -p tsconfig.json to regenerate dist/*.d.ts before api-server can typecheck.
+- [Object storage setup](object-storage-setup.md) — key steps + gotchas for GCS presigned URL flow; object-storage-web tsconfig needs composite:true; React 19 satisfies Uppy peer dep.

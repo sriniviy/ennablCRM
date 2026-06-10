@@ -19,6 +19,9 @@ import scheduledExportsRouter from "./scheduled-exports";
 import auditRouter from "./audit";
 import blockedDomainsRouter from "./blocked-domains";
 import customFieldsRouter from "./custom-fields";
+import aiSuggestionsRouter from "./ai-suggestions";
+import storageRouter from "./storage";
+import attachmentsRouter from "./attachments";
 
 const router: IRouter = Router();
 
@@ -42,5 +45,8 @@ router.use("/scheduled-exports", scheduledExportsRouter);
 router.use("/audit", auditRouter);
 router.use("/blocked-domains", blockedDomainsRouter);
 router.use("/custom-fields", customFieldsRouter);
+router.use("/ai/suggestions", aiSuggestionsRouter);
+router.use(storageRouter);
+router.use("/attachments", attachmentsRouter);
 
 export default router;

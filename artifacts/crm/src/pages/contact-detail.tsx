@@ -20,6 +20,8 @@ import { useToast } from "@/hooks/use-toast";
 import { ContactDialog } from "@/components/contacts/contact-dialog";
 import { ContactDuplicatesDialog } from "@/components/merge/contact-duplicates";
 import { CustomFieldsSection } from "@/components/custom-fields/custom-fields-section";
+import { AiSuggestions } from "@/components/ai/ai-suggestions";
+import { AttachmentsPanel } from "@/components/attachments/attachments-panel";
 
 export function ContactDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -201,6 +203,7 @@ export function ContactDetailPage() {
             )}
 
             <CustomFieldsSection objectType="contact" recordId={id} />
+            <AiSuggestions objectType="contact" recordId={id} contactId={id} />
           </div>
 
           {/* Right Column - Tabs */}
@@ -221,6 +224,9 @@ export function ContactDetailPage() {
                 </TabsTrigger>
                 <TabsTrigger value="history" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   History
+                </TabsTrigger>
+                <TabsTrigger value="files" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
+                  Files
                 </TabsTrigger>
               </TabsList>
               
@@ -376,6 +382,9 @@ export function ContactDetailPage() {
 
               <TabsContent value="history" className="pt-6">
                 <AuditHistory objectType="contact" objectId={contact.id} />
+              </TabsContent>
+              <TabsContent value="files" className="pt-6">
+                <AttachmentsPanel objectType="contact" recordId={contact.id} />
               </TabsContent>
             </Tabs>
           </div>

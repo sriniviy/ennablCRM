@@ -15,3 +15,4 @@ export * from "./scheduled_exports";
 export * from "./audit_log";
 export * from "./auth";
 export * from "./custom_fields";
+export * from "./attachments";

@@ -14,6 +14,7 @@ import { useState } from "react";
 import { CompanyDialog } from "@/components/companies/company-dialog";
 import { CompanyDuplicatesDialog } from "@/components/merge/company-duplicates";
 import { CustomFieldsSection } from "@/components/custom-fields/custom-fields-section";
+import { AttachmentsPanel } from "@/components/attachments/attachments-panel";
 import { useTeamMembers } from "@/hooks/use-team-members";
 
 export function CompanyDetailPage() {
@@ -211,6 +212,9 @@ export function CompanyDetailPage() {
                 <TabsTrigger value="history" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   History
                 </TabsTrigger>
+                <TabsTrigger value="files" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
+                  Files
+                </TabsTrigger>
               </TabsList>
               
               <TabsContent value="contacts" className="pt-6">
@@ -267,6 +271,9 @@ export function CompanyDetailPage() {
               </TabsContent>
               <TabsContent value="history" className="pt-6">
                 <AuditHistory objectType="company" objectId={id} />
+              </TabsContent>
+              <TabsContent value="files" className="pt-6">
+                <AttachmentsPanel objectType="company" recordId={id} />
               </TabsContent>
             </Tabs>
           </div>

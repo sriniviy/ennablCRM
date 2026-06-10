@@ -18,6 +18,8 @@ import { Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { NotesFeed } from "@/components/notes/notes-feed";
 import { AuditHistory } from "@/components/audit/audit-history";
+import { AttachmentsPanel } from "@/components/attachments/attachments-panel";
+import { AiSuggestions } from "@/components/ai/ai-suggestions";
 
 interface DealDialogProps {
   open: boolean;
@@ -116,11 +118,17 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
                 <TabsTrigger value="details" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-2 pt-1">
                   Details
                 </TabsTrigger>
+                <TabsTrigger value="suggestions" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-2 pt-1">
+                  AI Suggestions
+                </TabsTrigger>
                 <TabsTrigger value="notes" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-2 pt-1">
                   Notes
                 </TabsTrigger>
                 <TabsTrigger value="history" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-2 pt-1">
                   History
+                </TabsTrigger>
+                <TabsTrigger value="files" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-2 pt-1">
+                  Files
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="details">
@@ -189,11 +197,17 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
                   </DialogFooter>
                 </form>
               </TabsContent>
+              <TabsContent value="suggestions">
+                <AiSuggestions objectType="deal" recordId={deal.id} dealId={deal.id} contactId={deal.contact?.id} />
+              </TabsContent>
               <TabsContent value="notes">
                 <NotesFeed entityType="deal" entityId={deal.id} />
               </TabsContent>
               <TabsContent value="history">
                 <AuditHistory objectType="deal" objectId={deal.id} />
+              </TabsContent>
+              <TabsContent value="files">
+                <AttachmentsPanel objectType="deal" recordId={deal.id} />
               </TabsContent>
             </Tabs>
           ) : (
