@@ -17,6 +17,7 @@ import teamRouter from "./team";
 import sequencesRouter from "./sequences";
 import scheduledExportsRouter from "./scheduled-exports";
 import auditRouter from "./audit";
+import blockedDomainsRouter from "./blocked-domains";
 
 const router: IRouter = Router();
 
@@ -38,5 +39,6 @@ router.use("/team", teamRouter);
 router.use("/sequences", sequencesRouter);
 router.use("/scheduled-exports", scheduledExportsRouter);
 router.use("/audit", auditRouter);
+router.use("/blocked-domains", blockedDomainsRouter);
 
 export default router;

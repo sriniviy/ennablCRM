@@ -4,6 +4,12 @@ import { eq, ilike, and, or, sql, asc, desc, isNotNull } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 import { logActivity } from "../lib/activity";
 import { logAudit } from "../lib/audit";
+import {
+  resolveContactCompany,
+  matchContactCompany,
+  buildCompanyDomainIndex,
+  loadBlockedDomains,
+} from "../lib/domain-matching";
 
 const router = Router();
 
@@ -108,6 +114,11 @@ router.post("/import", requireAuth, async (req: Request, res: Response) => {
       .where(isNotNull(contactsTable.email));
     const existingEmails = new Set(existingRows.map((c) => c.email?.toLowerCase()));
 
+    const [domainIndex, blockedDomains] = await Promise.all([
+      buildCompanyDomainIndex(),
+      loadBlockedDomains(),
+    ]);
+
     const toInsert: Array<typeof contactsTable.$inferInsert> = [];
     const skipped: Array<{ row: number; reason: string }> = [];
 
@@ -131,6 +142,8 @@ router.post("/import", requireAuth, async (req: Request, res: Response) => {
         continue;
       }
 
+      const match = matchContactCompany(email, { domainIndex, blockedDomains });
+
       toInsert.push({
         firstName: firstName || "Unknown",
         lastName: lastName || "",
@@ -138,6 +151,8 @@ router.post("/import", requireAuth, async (req: Request, res: Response) => {
         phone: mapped["phone"] || null,
         title: mapped["title"] || null,
         status: "LEAD",
+        companyId: match.isInternal ? null : match.companyId,
+        reviewStatus: match.isInternal ? "AUTO_CREATED" : (match.reviewStatus ?? "AUTO_CREATED"),
       });
 
       if (email) existingEmails.add(email);
@@ -345,6 +360,23 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
       return;
     }
 
+    let companyId: string | null = body.companyId ?? null;
+    let reviewStatus = body.reviewStatus ?? "REVIEWED";
+
+    // Auto-match to a company by email domain when no company was explicitly
+    // provided. Internal (@ennabl.com) addresses are never auto-associated and
+    // are flagged for review, consistent with the bulk import path. An explicit
+    // reviewStatus in the request body always wins.
+    if (!companyId && body.email) {
+      const match = await resolveContactCompany(body.email);
+      companyId = match.isInternal ? null : match.companyId;
+      if (body.reviewStatus === undefined) {
+        reviewStatus = match.isInternal
+          ? "AUTO_CREATED"
+          : (match.reviewStatus ?? "REVIEWED");
+      }
+    }
+
     const [contact] = await db.insert(contactsTable).values({
       firstName: body.firstName,
       lastName: body.lastName,
@@ -352,13 +384,13 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
       phone: body.phone ?? null,
       title: body.title ?? null,
       status: body.status ?? "LEAD",
-      reviewStatus: body.reviewStatus ?? "REVIEWED",
+      reviewStatus,
       ennablUser: body.ennablUser ?? false,
       emailMarketingContact: body.emailMarketingContact ?? false,
       tags: body.tags ?? [],
       notes: body.notes ?? null,
       linkedIn: body.linkedIn ?? null,
-      companyId: body.companyId ?? null,
+      companyId,
       assigneeId: body.assigneeId ?? null,
     }).returning();
 

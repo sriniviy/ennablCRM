@@ -1,4 +1,27 @@
-import { db, dealStagesTable, companiesTable, contactsTable, dealsTable, tasksTable, activitiesTable } from "./index";
+import { db, dealStagesTable, companiesTable, contactsTable, dealsTable, tasksTable, activitiesTable, blockedDomainsTable } from "./index";
+
+const DEFAULT_FREE_EMAIL_DOMAINS = [
+  "gmail.com",
+  "googlemail.com",
+  "outlook.com",
+  "hotmail.com",
+  "live.com",
+  "msn.com",
+  "yahoo.com",
+  "yahoo.co.uk",
+  "ymail.com",
+  "aol.com",
+  "icloud.com",
+  "me.com",
+  "mac.com",
+  "proton.me",
+  "protonmail.com",
+  "gmx.com",
+  "zoho.com",
+  "yandex.com",
+  "mail.com",
+  "fastmail.com",
+];
 
 async function seed() {
   console.log("Seeding database...");
@@ -21,6 +44,14 @@ async function seed() {
     .returning();
 
   console.log(`Seeded ${stages.length > 0 ? stages.length : "existing"} deal stages`);
+
+  // Seed the editable free/public email domain blocklist (idempotent).
+  const blocked = await db
+    .insert(blockedDomainsTable)
+    .values(DEFAULT_FREE_EMAIL_DOMAINS.map((domain) => ({ domain })))
+    .onConflictDoNothing()
+    .returning();
+  console.log(`Seeded ${blocked.length > 0 ? blocked.length : "existing"} blocked domains`);
 
   // Check if we already have seed data
   const existingCompanies = await db.select().from(companiesTable).limit(1);
