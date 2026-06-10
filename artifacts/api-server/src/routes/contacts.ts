@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { db, contactsTable, companiesTable, usersTable, dealsTable, dealStagesTable, tasksTable, activitiesTable } from "@workspace/db";
-import { eq, ilike, and, or, sql, asc, desc, isNotNull } from "drizzle-orm";
+import { eq, ne, ilike, and, or, sql, asc, desc, isNotNull } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 import { logActivity } from "../lib/activity";
 import { logAudit } from "../lib/audit";
@@ -35,6 +35,10 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
     }
     if (reviewStatus) {
       conditions.push(eq(contactsTable.reviewStatus, reviewStatus as typeof contactsTable.$inferSelect["reviewStatus"]));
+    } else {
+      // By default hide suppressed contacts from normal lists. Suppressed contacts are
+      // only visible when explicitly filtering by reviewStatus=SUPPRESSED.
+      conditions.push(ne(contactsTable.reviewStatus, "SUPPRESSED" as typeof contactsTable.$inferSelect["reviewStatus"]));
     }
     if (assigneeId) {
       conditions.push(eq(contactsTable.assigneeId, assigneeId));
@@ -211,6 +215,8 @@ router.get("/export", requireAuth, async (req: Request, res: Response) => {
     if (tag) {
       conditions.push(sql`${contactsTable.tags} @> ARRAY[${tag}]::text[]`);
     }
+    // Suppressed contacts are never included in exports.
+    conditions.push(ne(contactsTable.reviewStatus, "SUPPRESSED" as typeof contactsTable.$inferSelect["reviewStatus"]));
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
     const rows = await db

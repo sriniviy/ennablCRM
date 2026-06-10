@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { useGetMe } from "@workspace/api-client-react";
+import { useGetMe, useListContacts, ReviewStatus } from "@workspace/api-client-react";
 import { authClient } from "@/lib/auth-client";
 import {
   LayoutDashboard,
@@ -18,6 +18,7 @@ import {
   ChevronRight,
   Sun,
   Moon,
+  ClipboardCheck,
 } from "lucide-react";
 import { GlobalSearch } from "@/components/global-search";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,7 @@ import { useTheme } from "@/hooks/use-theme";
 const navItems = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Contacts", href: "/contacts", icon: Users },
+  { name: "Needs Review", href: "/needs-review", icon: ClipboardCheck },
   { name: "Companies", href: "/companies", icon: Building2 },
   { name: "Deals", href: "/deals", icon: CircleDollarSign },
   { name: "Activities", href: "/activities", icon: Activity },
@@ -64,6 +66,12 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const { data: user } = useGetMe();
   const { theme, toggle: toggleTheme } = useTheme();
+  const { data: reviewData } = useListContacts({
+    reviewStatus: ReviewStatus.AUTO_CREATED,
+    page: 1,
+    pageSize: 1,
+  });
+  const reviewCount = reviewData?.total ?? 0;
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(getInitialCollapsed);
@@ -101,6 +109,11 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
           >
             <item.icon className="h-4 w-4 shrink-0" />
             {item.name}
+            {item.href === "/needs-review" && reviewCount > 0 && (
+              <span className="ml-auto bg-amber-500 text-white rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none">
+                {reviewCount > 99 ? "99+" : reviewCount}
+              </span>
+            )}
           </Link>
         );
       })}
@@ -129,7 +142,12 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                   className={linkClass}
                   style={{ height: "36px" }}
                 >
-                  <item.icon className="h-4 w-4 shrink-0" />
+                  <span className="relative">
+                    <item.icon className="h-4 w-4 shrink-0" />
+                    {item.href === "/needs-review" && reviewCount > 0 && (
+                      <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-500" />
+                    )}
+                  </span>
                 </Link>
               </TooltipTrigger>
               <TooltipContent side="right">{item.name}</TooltipContent>
@@ -146,6 +164,11 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
           >
             <item.icon className="h-4 w-4 shrink-0" />
             {item.name}
+            {item.href === "/needs-review" && reviewCount > 0 && (
+              <span className="ml-auto bg-amber-500 text-white rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none">
+                {reviewCount > 99 ? "99+" : reviewCount}
+              </span>
+            )}
           </Link>
         );
       })}

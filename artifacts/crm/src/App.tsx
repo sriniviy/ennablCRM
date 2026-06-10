@@ -24,6 +24,7 @@ import { SettingsTeamPage } from "./pages/settings-team";
 import { SequencesPage } from "./pages/sequences";
 import { SequenceDetailPage } from "./pages/sequence-detail";
 import { AuditLogPage } from "./pages/audit-log";
+import { NeedsReviewPage } from "./pages/needs-review";
 import { SignInPage } from "./pages/sign-in";
 import { SignUpPage } from "./pages/sign-up";
 
@@ -120,6 +121,7 @@ function AppRoutes() {
           <Route path="/dashboard" component={() => <ProtectedRoute component={DashboardPage} />} />
           <Route path="/contacts" component={() => <ProtectedRoute component={ContactsPage} />} />
           <Route path="/contacts/:id" component={() => <ProtectedRoute component={ContactDetailPage} />} />
+          <Route path="/needs-review" component={() => <ProtectedRoute component={NeedsReviewPage} />} />
           <Route path="/companies" component={() => <ProtectedRoute component={CompaniesPage} />} />
           <Route path="/companies/:id" component={() => <ProtectedRoute component={CompanyDetailPage} />} />
           <Route path="/deals" component={() => <ProtectedRoute component={DealsPage} />} />
