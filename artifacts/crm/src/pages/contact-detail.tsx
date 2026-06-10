@@ -90,6 +90,7 @@ export function ContactDetailPage() {
       });
       resetActivityForm();
       queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) });
+      queryClient.invalidateQueries({ queryKey: ["ai-suggestions", "contact", id] });
       toast({ title: "Activity logged" });
     } catch (e) {
       toast({ title: "Error", description: "Could not save activity", variant: "destructive" });

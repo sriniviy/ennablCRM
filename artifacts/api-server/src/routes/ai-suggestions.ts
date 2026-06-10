@@ -171,14 +171,33 @@ Only return the JSON object, no markdown.`;
     });
 
     const raw = completion.choices[0]?.message?.content ?? "{}";
-    let parsed: { suggestions: { id: string; text: string; action: string }[] };
+    const VALID_ACTIONS = new Set(["task", "email", "call", "follow_up", "meeting", "other"]);
+    let suggestions: { id: string; text: string; action: string }[] = [];
     try {
-      parsed = JSON.parse(raw);
+      const parsed = JSON.parse(raw) as { suggestions?: unknown };
+      if (Array.isArray(parsed.suggestions)) {
+        suggestions = parsed.suggestions
+          .filter(
+            (s): s is { text: string; id?: unknown; action?: unknown } =>
+              !!s &&
+              typeof s === "object" &&
+              typeof (s as { text?: unknown }).text === "string" &&
+              (s as { text: string }).text.trim().length > 0,
+          )
+          // Spec: 1-2 suggestions. Clamp to a max of 2 regardless of model output.
+          .slice(0, 2)
+          .map((s, i) => ({
+            id: typeof s.id === "string" && s.id ? s.id : String(i + 1),
+            text: s.text.trim(),
+            action:
+              typeof s.action === "string" && VALID_ACTIONS.has(s.action) ? s.action : "other",
+          }));
+      }
     } catch {
-      parsed = { suggestions: [] };
+      suggestions = [];
     }
 
-    res.json(parsed);
+    res.json({ suggestions });
   } catch (err) {
     const e = err as Error;
     res.status(500).json({ error: e.message ?? "Failed to generate suggestions" });

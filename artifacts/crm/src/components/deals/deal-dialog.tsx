@@ -75,7 +75,10 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
     }
   }, [open, deal, defaultStageId]);
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: getListDealsQueryKey() });
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: getListDealsQueryKey() });
+    if (deal?.id) qc.invalidateQueries({ queryKey: ["ai-suggestions", "deal", deal.id] });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

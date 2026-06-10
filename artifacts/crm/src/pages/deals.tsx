@@ -148,6 +148,7 @@ export function DealsPage() {
     });
 
     moveDealMutate.current({ id: draggableId, data: { stageId: destStageId, order: destIndex } });
+    queryClient.invalidateQueries({ queryKey: ["ai-suggestions", "deal", draggableId] });
   };
 
   const openNew = (stageId?: string) => {
