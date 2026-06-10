@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Mail, Phone, Building2, Calendar, MessageSquare, Linkedin, CheckSquare, Pencil, CopyCheck } from "lucide-react";
+import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { NotesFeed } from "@/components/notes/notes-feed";
 import { useNotesCount } from "@/hooks/use-notes-count";
 import { AuditHistory } from "@/components/audit/audit-history";
@@ -175,49 +176,44 @@ export function ContactDetailPage() {
         <div className="grid gap-6 md:grid-cols-3">
           {/* Left Column - Info */}
           <div className="space-y-6 md:col-span-1">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Contact Info</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {contact.email && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <Mail className="h-4 w-4 text-muted-foreground" />
-                    <a href={`mailto:${contact.email}`} className="hover:underline">{contact.email}</a>
-                  </div>
-                )}
-                {contact.phone && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <Phone className="h-4 w-4 text-muted-foreground" />
-                    <a href={`tel:${contact.phone}`} className="hover:underline">{contact.phone}</a>
-                  </div>
-                )}
-                {contact.company && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <Building2 className="h-4 w-4 text-muted-foreground" />
-                    <Link href={`/companies/${contact.companyId}`} className="hover:underline">{contact.company.name}</Link>
-                  </div>
-                )}
-                {contact.linkedIn && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <Linkedin className="h-4 w-4 text-muted-foreground" />
-                    <a href={contact.linkedIn} target="_blank" rel="noreferrer" className="hover:underline text-blue-600">LinkedIn Profile</a>
-                  </div>
-                )}
-                <div className="flex items-center justify-between text-sm pt-3 border-t">
-                  <span className="text-muted-foreground">Review status</span>
-                  <Badge variant="outline" className="font-normal">{(contact.reviewStatus ?? "REVIEWED").replace(/_/g, " ")}</Badge>
+            <CollapsibleCard title="Contact Info" previewHeight={120} contentClassName="space-y-4">
+              {contact.email && (
+                <div className="flex items-center gap-3 text-sm">
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                  <a href={`mailto:${contact.email}`} className="hover:underline">{contact.email}</a>
                 </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Ennabl user</span>
-                  <span className="font-medium">{contact.ennablUser ? "Yes" : "No"}</span>
+              )}
+              {contact.phone && (
+                <div className="flex items-center gap-3 text-sm">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  <a href={`tel:${contact.phone}`} className="hover:underline">{contact.phone}</a>
                 </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Email marketing</span>
-                  <span className="font-medium">{contact.emailMarketingContact ? "Subscribed" : "No"}</span>
+              )}
+              {contact.company && (
+                <div className="flex items-center gap-3 text-sm">
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                  <Link href={`/companies/${contact.companyId}`} className="hover:underline">{contact.company.name}</Link>
                 </div>
-              </CardContent>
-            </Card>
+              )}
+              {contact.linkedIn && (
+                <div className="flex items-center gap-3 text-sm">
+                  <Linkedin className="h-4 w-4 text-muted-foreground" />
+                  <a href={contact.linkedIn} target="_blank" rel="noreferrer" className="hover:underline text-blue-600">LinkedIn Profile</a>
+                </div>
+              )}
+              <div className="flex items-center justify-between text-sm pt-3 border-t">
+                <span className="text-muted-foreground">Review status</span>
+                <Badge variant="outline" className="font-normal">{(contact.reviewStatus ?? "REVIEWED").replace(/_/g, " ")}</Badge>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Ennabl user</span>
+                <span className="font-medium">{contact.ennablUser ? "Yes" : "No"}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Email marketing</span>
+                <span className="font-medium">{contact.emailMarketingContact ? "Subscribed" : "No"}</span>
+              </div>
+            </CollapsibleCard>
 
             {contact.tags && contact.tags.length > 0 && (
               <Card>

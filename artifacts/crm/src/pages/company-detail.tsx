@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Globe, MapPin, Phone, Users, Briefcase, Pencil, CopyCheck } from "lucide-react";
+import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { NotesFeed } from "@/components/notes/notes-feed";
 import { useNotesCount } from "@/hooks/use-notes-count";
 import { AuditHistory } from "@/components/audit/audit-history";
@@ -113,93 +114,83 @@ export function CompanyDetailPage() {
         <div className="grid gap-6 md:grid-cols-3">
           {/* Left Column - Info */}
           <div className="space-y-6 md:col-span-1">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Company Info</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {company.domain && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <Globe className="h-4 w-4 text-muted-foreground" />
-                    <a href={`https://${company.domain}`} target="_blank" rel="noreferrer" className="hover:underline">{company.domain}</a>
+            <CollapsibleCard title="Company Info" previewHeight={110} contentClassName="space-y-4">
+              {company.domain && (
+                <div className="flex items-center gap-3 text-sm">
+                  <Globe className="h-4 w-4 text-muted-foreground" />
+                  <a href={`https://${company.domain}`} target="_blank" rel="noreferrer" className="hover:underline">{company.domain}</a>
+                </div>
+              )}
+              {company.phone && (
+                <div className="flex items-center gap-3 text-sm">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  <a href={`tel:${company.phone}`} className="hover:underline">{company.phone}</a>
+                </div>
+              )}
+              {(company.address || company.city || company.country) && (
+                <div className="flex items-start gap-3 text-sm">
+                  <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                  <div>
+                    {company.address && <div>{company.address}</div>}
+                    <div>{[company.city, company.country].filter(Boolean).join(", ")}</div>
                   </div>
-                )}
-                {company.phone && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <Phone className="h-4 w-4 text-muted-foreground" />
-                    <a href={`tel:${company.phone}`} className="hover:underline">{company.phone}</a>
-                  </div>
-                )}
-                {(company.address || company.city || company.country) && (
-                  <div className="flex items-start gap-3 text-sm">
-                    <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                    <div>
-                      {company.address && <div>{company.address}</div>}
-                      <div>{[company.city, company.country].filter(Boolean).join(", ")}</div>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                </div>
+              )}
+            </CollapsibleCard>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                {company.status ? (
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Status</span>
-                    <Badge variant="outline">{company.status.replace(/_/g, " ")}</Badge>
+            <CollapsibleCard title="Details" previewHeight={120}>
+              {company.status ? (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Status</span>
+                  <Badge variant="outline">{company.status.replace(/_/g, " ")}</Badge>
+                </div>
+              ) : null}
+              {csmName ? (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Assigned CSM</span>
+                  <span className="font-medium">{csmName}</span>
+                </div>
+              ) : null}
+              {company.estimatedAnnualRevenue != null ? (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Est. Annual Revenue</span>
+                  <span className="font-medium">{formatCurrency(company.estimatedAnnualRevenue)}</span>
+                </div>
+              ) : null}
+              {company.numberOfEmployees != null ? (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Employees</span>
+                  <span className="font-medium">{company.numberOfEmployees}</span>
+                </div>
+              ) : null}
+              {company.domains && company.domains.length > 0 ? (
+                <div>
+                  <span className="text-muted-foreground">Domains</span>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {company.domains.map(d => <Badge key={d} variant="secondary" className="text-xs">{d}</Badge>)}
                   </div>
-                ) : null}
-                {csmName ? (
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Assigned CSM</span>
-                    <span className="font-medium">{csmName}</span>
+                </div>
+              ) : null}
+              {company.productLicensed && company.productLicensed.length > 0 ? (
+                <div>
+                  <span className="text-muted-foreground">Products Licensed</span>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {company.productLicensed.map(p => <Badge key={p} variant="secondary" className="text-xs">{p}</Badge>)}
                   </div>
-                ) : null}
-                {company.estimatedAnnualRevenue != null ? (
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Est. Annual Revenue</span>
-                    <span className="font-medium">{formatCurrency(company.estimatedAnnualRevenue)}</span>
+                </div>
+              ) : null}
+              {company.memberOf && company.memberOf.length > 0 ? (
+                <div>
+                  <span className="text-muted-foreground">Member Of</span>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {company.memberOf.map(m => <Badge key={m} variant="secondary" className="text-xs">{m}</Badge>)}
                   </div>
-                ) : null}
-                {company.numberOfEmployees != null ? (
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Employees</span>
-                    <span className="font-medium">{company.numberOfEmployees}</span>
-                  </div>
-                ) : null}
-                {company.domains && company.domains.length > 0 ? (
-                  <div>
-                    <span className="text-muted-foreground">Domains</span>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {company.domains.map(d => <Badge key={d} variant="secondary" className="text-xs">{d}</Badge>)}
-                    </div>
-                  </div>
-                ) : null}
-                {company.productLicensed && company.productLicensed.length > 0 ? (
-                  <div>
-                    <span className="text-muted-foreground">Products Licensed</span>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {company.productLicensed.map(p => <Badge key={p} variant="secondary" className="text-xs">{p}</Badge>)}
-                    </div>
-                  </div>
-                ) : null}
-                {company.memberOf && company.memberOf.length > 0 ? (
-                  <div>
-                    <span className="text-muted-foreground">Member Of</span>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {company.memberOf.map(m => <Badge key={m} variant="secondary" className="text-xs">{m}</Badge>)}
-                    </div>
-                  </div>
-                ) : null}
-                {!company.status && !csmName && company.estimatedAnnualRevenue == null && company.numberOfEmployees == null && !(company.domains?.length) && !(company.productLicensed?.length) && !(company.memberOf?.length) ? (
-                  <p className="text-muted-foreground">No additional details.</p>
-                ) : null}
-              </CardContent>
-            </Card>
+                </div>
+              ) : null}
+              {!company.status && !csmName && company.estimatedAnnualRevenue == null && company.numberOfEmployees == null && !(company.domains?.length) && !(company.productLicensed?.length) && !(company.memberOf?.length) ? (
+                <p className="text-muted-foreground">No additional details.</p>
+              ) : null}
+            </CollapsibleCard>
 
             <Card>
               <CardHeader>
