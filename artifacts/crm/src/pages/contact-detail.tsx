@@ -22,6 +22,7 @@ import { ContactDialog } from "@/components/contacts/contact-dialog";
 import { ContactDuplicatesDialog } from "@/components/merge/contact-duplicates";
 import { CustomFieldsSection } from "@/components/custom-fields/custom-fields-section";
 import { AiSuggestions } from "@/components/ai/ai-suggestions";
+import { ActivitySummary } from "@/components/ai/activity-summary";
 import { AttachmentsPanel } from "@/components/attachments/attachments-panel";
 
 function NotesTabLabel({ entityType, entityId }: { entityType: string; entityId: string }) {
@@ -300,7 +301,7 @@ export function ContactDetailPage() {
                       </div>
                       <div className="space-y-1.5">
                         <Label htmlFor="act-ai">AI summary</Label>
-                        <Textarea id="act-ai" placeholder="Optional summary" value={aiSummary} onChange={e => setAiSummary(e.target.value)} className="resize-none" />
+                        <Textarea id="act-ai" placeholder="Leave blank to auto-generate for emails & meetings" value={aiSummary} onChange={e => setAiSummary(e.target.value)} className="resize-none" />
                       </div>
                       <div className="flex justify-end">
                         <Button 
@@ -334,9 +335,12 @@ export function ContactDetailPage() {
                             {activity.emailBody && (
                               <p className="text-sm mt-1 text-muted-foreground whitespace-pre-wrap">{activity.emailBody}</p>
                             )}
-                            {activity.aiSummary && (
-                              <p className="text-sm mt-2 rounded bg-muted px-2 py-1"><span className="font-medium">AI summary: </span>{activity.aiSummary}</p>
-                            )}
+                            <ActivitySummary
+                              activityId={activity.id}
+                              type={activity.type}
+                              summary={activity.aiSummary}
+                              onUpdated={() => queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) })}
+                            />
                             <p className="text-xs text-muted-foreground mt-2">
                               {new Date(activity.createdAt).toLocaleString()}
                               {activity.endDate ? ` · ends ${new Date(activity.endDate).toLocaleString()}` : ""}

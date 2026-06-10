@@ -3,6 +3,7 @@ import { db, activitiesTable, usersTable, contactsTable, companiesTable, dealsTa
 import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 import { logAudit } from "../lib/audit";
+import { isSummarizable, isThreadedEmail, refreshActivitySummary } from "../lib/activity-summary";
 
 const router = Router();
 
@@ -180,9 +181,51 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
       after: activity,
     });
 
-    res.status(201).json(activity);
+    let result = activity;
+    // Threaded emails always refresh so the whole thread's summary stays current
+    // when a new message arrives. Other types respect a manually-supplied summary.
+    if (isSummarizable(activity) && (!body.aiSummary || isThreadedEmail(activity))) {
+      try {
+        const summary = await refreshActivitySummary(activity.id);
+        if (summary) result = { ...activity, aiSummary: summary };
+      } catch (err) {
+        console.error("Failed to auto-generate activity summary:", err);
+      }
+    }
+
+    res.status(201).json(result);
   } catch {
     res.status(500).json({ error: "Failed to create activity" });
+  }
+});
+
+router.post("/:id/summarize", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const [activity] = await db
+      .select()
+      .from(activitiesTable)
+      .where(eq(activitiesTable.id, id))
+      .limit(1);
+
+    if (!activity) {
+      res.status(404).json({ error: "Activity not found" });
+      return;
+    }
+    if (!isSummarizable(activity)) {
+      res.status(400).json({ error: "This activity type cannot be summarized" });
+      return;
+    }
+
+    const summary = await refreshActivitySummary(id);
+    if (!summary) {
+      res.status(422).json({ error: "Could not generate a summary for this activity" });
+      return;
+    }
+
+    res.json({ id, aiSummary: summary });
+  } catch {
+    res.status(500).json({ error: "Failed to summarize activity" });
   }
 });
 

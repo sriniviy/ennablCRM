@@ -1,15 +1,22 @@
 ---
-name: AI integration setup
-description: How to set up Replit OpenAI integration for simple completions without the full template
+name: AI integration decisions
+description: Durable conventions for how AI features are wired in this CRM.
 ---
 
-For simple, non-streaming AI features (suggestions, classification, enrichment):
+# AI integration decisions
 
-1. Call `setupReplitAIIntegrations({ providerSlug: "openai", providerUrlEnvVarName: "AI_INTEGRATIONS_OPENAI_BASE_URL", providerApiKeyEnvVarName: "AI_INTEGRATIONS_OPENAI_API_KEY" })` via code_execution.
-2. Install `openai` in api-server: `pnpm --filter @workspace/api-server add openai`.
-3. Create `artifacts/api-server/src/lib/openai-client.ts` with the pre-configured client.
-4. Use `model: "gpt-5-mini"` for cost-effective tasks; `"gpt-5.4"` for complex reasoning.
+- AI endpoints intentionally **bypass the OpenAPI codegen client**. The frontend calls
+  them with an authenticated raw `fetch` (`import.meta.env.BASE_URL` + `useSessionToken()`),
+  not `@workspace/api-client-react` hooks.
+  **Why:** keeps AI-only endpoints out of the OpenAPI spec/codegen pipeline; matches the
+  original `ai-suggestions` precedent. **How to apply:** add the route, then call it from
+  the frontend with a plain authenticated fetch — don't regenerate the client.
 
-**Why:** The full skill template (conversations/messages DB tables, SSE streaming, React hooks) is overkill for advisory features. A thin client + direct route is sufficient.
+- The server uses Replit's AI Integrations proxy (no user key) via the shared `openai`
+  client. It throws on import if its env vars are missing, so a clean server start proves
+  the credentials exist — no need to test connectivity separately.
 
-**How to apply:** Any time you need AI in the backend without streaming or persistent chat history.
+- Email "threads" are grouped by a metadata thread id, but the key is **not normalized**:
+  it may be `metadata.threadId` or `metadata.thread_id`. Any thread query must match BOTH
+  (e.g. `coalesce(metadata->>'threadId', metadata->>'thread_id')`), or threaded logic
+  silently degrades to single-message handling.
