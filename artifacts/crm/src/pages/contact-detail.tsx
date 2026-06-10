@@ -19,6 +19,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { ContactDialog } from "@/components/contacts/contact-dialog";
 import { ContactDuplicatesDialog } from "@/components/merge/contact-duplicates";
+import { CustomFieldsSection } from "@/components/custom-fields/custom-fields-section";
 
 export function ContactDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -198,6 +199,8 @@ export function ContactDetailPage() {
                 </CardContent>
               </Card>
             )}
+
+            <CustomFieldsSection objectType="contact" recordId={id} />
           </div>
 
           {/* Right Column - Tabs */}

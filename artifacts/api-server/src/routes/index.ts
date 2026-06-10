@@ -18,6 +18,7 @@ import sequencesRouter from "./sequences";
 import scheduledExportsRouter from "./scheduled-exports";
 import auditRouter from "./audit";
 import blockedDomainsRouter from "./blocked-domains";
+import customFieldsRouter from "./custom-fields";
 
 const router: IRouter = Router();
 
@@ -40,5 +41,6 @@ router.use("/sequences", sequencesRouter);
 router.use("/scheduled-exports", scheduledExportsRouter);
 router.use("/audit", auditRouter);
 router.use("/blocked-domains", blockedDomainsRouter);
+router.use("/custom-fields", customFieldsRouter);
 
 export default router;

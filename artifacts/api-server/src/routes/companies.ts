@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
-import { db, companiesTable, contactsTable, dealsTable, dealStagesTable, activitiesTable, notesTable } from "@workspace/db";
-import { eq, ilike, and, or, inArray, sql, desc } from "drizzle-orm";
+import { db, companiesTable, contactsTable, dealsTable, dealStagesTable, activitiesTable, notesTable, customFieldDefinitionsTable, customFieldValuesTable } from "@workspace/db";
+import { eq, ilike, and, or, inArray, sql, desc, asc } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 import { logAudit } from "../lib/audit";
 import {
@@ -108,10 +108,36 @@ router.get("/export", requireAuth, async (req: Request, res: Response) => {
       }
     };
 
-    const headers = cols.map((c) => c.header);
-    const csvRows = rows.map((c) =>
-      cols.map((col) => escape(getValue(col.key, c))).join(",")
-    );
+    const [cfDefs, cfValues] = await Promise.all([
+      db.select().from(customFieldDefinitionsTable)
+        .where(eq(customFieldDefinitionsTable.objectType, "company"))
+        .orderBy(asc(customFieldDefinitionsTable.displayOrder)),
+      rows.length > 0
+        ? db.select().from(customFieldValuesTable)
+            .where(and(
+              eq(customFieldValuesTable.objectType, "company"),
+              inArray(customFieldValuesTable.recordId, rows.map(r => r.id)),
+            ))
+        : Promise.resolve([]),
+    ]);
+
+    const cfValueMap = new Map<string, Map<string, string | null>>();
+    for (const v of cfValues) {
+      if (!cfValueMap.has(v.recordId)) cfValueMap.set(v.recordId, new Map());
+      cfValueMap.get(v.recordId)!.set(v.fieldId, v.value);
+    }
+
+    const headers = [
+      ...cols.map((c) => c.header),
+      ...cfDefs.map((d) => d.label),
+    ];
+    const csvRows = rows.map((c) => {
+      const cfRow = cfValueMap.get(c.id) ?? new Map<string, string | null>();
+      return [
+        ...cols.map((col) => escape(getValue(col.key, c))),
+        ...cfDefs.map((d) => escape(cfRow.get(d.id) ?? null)),
+      ].join(",");
+    });
 
     const csv = [headers.map(escape).join(","), ...csvRows].join("\n");
     res.setHeader("Content-Type", "text/csv");

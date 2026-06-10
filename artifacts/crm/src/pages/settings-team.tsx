@@ -36,6 +36,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useGetMe } from "@workspace/api-client-react";
 import { Users, UserPlus, Trash2, Shield, CalendarClock, Pause, Play } from "lucide-react";
+import { CustomFieldsSettings } from "@/components/custom-fields/custom-fields-settings";
 import { format } from "date-fns";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -523,6 +524,9 @@ export function SettingsTeamPage() {
 
         {/* Scheduled Exports — admins only */}
         {isAdmin && <ScheduledExportsSection />}
+
+        {/* Custom Fields — admins only */}
+        {isAdmin && <CustomFieldsSettings />}
 
         {/* Non-admin: read-only notice */}
         {!isAdmin && !isLoading && (

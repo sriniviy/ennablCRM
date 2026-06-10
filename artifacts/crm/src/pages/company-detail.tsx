@@ -13,6 +13,7 @@ import { formatCurrency } from "@/lib/utils";
 import { useState } from "react";
 import { CompanyDialog } from "@/components/companies/company-dialog";
 import { CompanyDuplicatesDialog } from "@/components/merge/company-duplicates";
+import { CustomFieldsSection } from "@/components/custom-fields/custom-fields-section";
 import { useTeamMembers } from "@/hooks/use-team-members";
 
 export function CompanyDetailPage() {
@@ -190,6 +191,8 @@ export function CompanyDetailPage() {
                 <p className="text-xs text-muted-foreground mt-1">Open pipeline value</p>
               </CardContent>
             </Card>
+
+            <CustomFieldsSection objectType="company" recordId={id} />
           </div>
 
           {/* Right Column - Tabs */}
