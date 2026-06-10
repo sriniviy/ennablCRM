@@ -38,17 +38,32 @@ export function isInternalDomain(domain: string): boolean {
   return INTERNAL_DOMAINS.includes(domain.toLowerCase());
 }
 
+function defaultBlockedDomains(): Set<string> {
+  return new Set(DEFAULT_FREE_EMAIL_DOMAINS.map((d) => d.toLowerCase()));
+}
+
 /**
  * Load the set of free/public email domains from the editable blocklist table.
- * Falls back to the built-in defaults when the table has not been seeded.
+ * Falls back to the built-in defaults when the table has not been seeded, or
+ * when the table is missing entirely (e.g. mid-rollout before provisioning has
+ * run) so contact create/import never hard-fails with a 500.
  */
 export async function loadBlockedDomains(): Promise<Set<string>> {
-  const rows = await db
-    .select({ domain: blockedDomainsTable.domain })
-    .from(blockedDomainsTable);
+  let rows: { domain: string }[];
+  try {
+    rows = await db
+      .select({ domain: blockedDomainsTable.domain })
+      .from(blockedDomainsTable);
+  } catch (err) {
+    // Postgres 42P01 = undefined_table. Degrade gracefully to built-in defaults.
+    if ((err as { code?: string })?.code === "42P01") {
+      return defaultBlockedDomains();
+    }
+    throw err;
+  }
   const set = new Set(rows.map((r) => r.domain.toLowerCase()));
   if (set.size === 0) {
-    for (const d of DEFAULT_FREE_EMAIL_DOMAINS) set.add(d);
+    return defaultBlockedDomains();
   }
   return set;
 }
