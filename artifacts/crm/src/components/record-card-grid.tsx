@@ -89,7 +89,7 @@ export function RecordCardGrid<T>({
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 items-start">
       {items.map((item) => (
         <RecordCard
           key={getKey(item)}
