@@ -1,30 +1,7 @@
-import { db, companiesTable, blockedDomainsTable } from "@workspace/db";
+import { db, companiesTable, blockedDomainsTable, DEFAULT_FREE_EMAIL_DOMAINS } from "@workspace/db";
 import { eq, or, sql } from "drizzle-orm";
 
 export const INTERNAL_DOMAINS = ["ennabl.com"];
-
-export const DEFAULT_FREE_EMAIL_DOMAINS = [
-  "gmail.com",
-  "googlemail.com",
-  "outlook.com",
-  "hotmail.com",
-  "live.com",
-  "msn.com",
-  "yahoo.com",
-  "yahoo.co.uk",
-  "ymail.com",
-  "aol.com",
-  "icloud.com",
-  "me.com",
-  "mac.com",
-  "proton.me",
-  "protonmail.com",
-  "gmx.com",
-  "zoho.com",
-  "yandex.com",
-  "mail.com",
-  "fastmail.com",
-];
 
 export type ReviewStatusFlag = "AUTO_CREATED" | "REVIEWED";
 

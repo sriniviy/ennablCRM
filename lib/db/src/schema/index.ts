@@ -3,6 +3,7 @@ export * from "./users";
 export * from "./companies";
 export * from "./contacts";
 export * from "./blocked_domains";
+export * from "../constants";
 export * from "./deal_stages";
 export * from "./deals";
 export * from "./tasks";

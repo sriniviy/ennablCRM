@@ -1,27 +1,4 @@
-import { db, dealStagesTable, companiesTable, contactsTable, dealsTable, tasksTable, activitiesTable, blockedDomainsTable } from "./index";
-
-const DEFAULT_FREE_EMAIL_DOMAINS = [
-  "gmail.com",
-  "googlemail.com",
-  "outlook.com",
-  "hotmail.com",
-  "live.com",
-  "msn.com",
-  "yahoo.com",
-  "yahoo.co.uk",
-  "ymail.com",
-  "aol.com",
-  "icloud.com",
-  "me.com",
-  "mac.com",
-  "proton.me",
-  "protonmail.com",
-  "gmx.com",
-  "zoho.com",
-  "yandex.com",
-  "mail.com",
-  "fastmail.com",
-];
+import { db, dealStagesTable, companiesTable, contactsTable, dealsTable, tasksTable, activitiesTable, blockedDomainsTable, DEFAULT_FREE_EMAIL_DOMAINS } from "./index";
 
 async function seed() {
   console.log("Seeding database...");
