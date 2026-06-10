@@ -22,6 +22,8 @@ export interface ContactWithRelations {
   ennablUser?: boolean;
   emailMarketingContact?: boolean;
   tags: string[];
+  /** Names of fields whose values were auto-derived (e.g. by AI signature parsing) and have not yet been verified by a human. */
+  enrichedFields?: string[];
   notes?: string | null;
   linkedIn?: string | null;
   assigneeId?: string | null;

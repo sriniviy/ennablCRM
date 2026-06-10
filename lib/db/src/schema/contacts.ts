@@ -29,6 +29,10 @@ export const contactsTable = pgTable(
       .array()
       .notNull()
       .default(sql`ARRAY[]::text[]`),
+    enrichedFields: text("enriched_fields")
+      .array()
+      .notNull()
+      .default(sql`ARRAY[]::text[]`),
     notes: text("notes"),
     linkedIn: text("linked_in"),
     assigneeId: text("assignee_id").references(() => usersTable.id),

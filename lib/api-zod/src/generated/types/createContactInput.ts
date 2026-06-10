@@ -23,4 +23,6 @@ export interface CreateContactInput {
   notes?: string;
   linkedIn?: string;
   assigneeId?: string;
+  /** Raw body of the email that triggered an auto-creation. When present, the sender's signature is parsed by AI to fill any empty title, phone, or company fields; populated fields are marked auto-derived. */
+  emailBody?: string;
 }

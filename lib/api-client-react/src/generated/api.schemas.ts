@@ -223,6 +223,8 @@ export interface ContactWithRelations {
   ennablUser?: boolean;
   emailMarketingContact?: boolean;
   tags: string[];
+  /** Names of fields whose values were auto-derived (e.g. by AI signature parsing) and have not yet been verified by a human. */
+  enrichedFields?: string[];
   notes?: string | null;
   linkedIn?: string | null;
   assigneeId?: string | null;
@@ -501,6 +503,8 @@ export interface CreateContactInput {
   notes?: string;
   linkedIn?: string;
   assigneeId?: string;
+  /** Raw body of the email that triggered an auto-creation. When present, the sender's signature is parsed by AI to fill any empty title, phone, or company fields; populated fields are marked auto-derived. */
+  emailBody?: string;
 }
 
 export interface UpdateContactInput {

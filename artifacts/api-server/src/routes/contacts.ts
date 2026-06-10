@@ -11,6 +11,10 @@ import {
   loadBlockedDomains,
 } from "../lib/domain-matching";
 import {
+  parseSignature,
+  resolveCompanyByName,
+} from "../lib/signature-enrichment";
+import {
   computeDuplicateGroups,
   resolveScalar,
   unionArrays,
@@ -632,17 +636,53 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
       }
     }
 
+    // AI signature enrichment. When the request carries the raw email body that
+    // triggered an auto-creation, parse the sender's signature and fill ONLY the
+    // fields the caller left empty — human-entered values are never overwritten.
+    // Each field we populate this way is recorded in `enrichedFields` so the
+    // needs-review queue can flag it as auto-derived for a human to verify.
+    let title: string | null = body.title ?? null;
+    let phone: string | null = body.phone ?? null;
+    const enrichedFields: string[] = [];
+
+    if (body.emailBody) {
+      const sig = await parseSignature(body.emailBody);
+
+      if (!title && sig.title) {
+        title = sig.title;
+        enrichedFields.push("title");
+      }
+      if (!phone && sig.phone) {
+        phone = sig.phone;
+        enrichedFields.push("phone");
+      }
+      if (!companyId && sig.companyName) {
+        const resolvedId = await resolveCompanyByName(sig.companyName);
+        if (resolvedId) {
+          companyId = resolvedId;
+          enrichedFields.push("companyId");
+        }
+      }
+
+      // Surface enriched contacts in the needs-review queue so a human verifies
+      // the auto-derived values, unless the caller pinned an explicit status.
+      if (enrichedFields.length > 0 && body.reviewStatus === undefined) {
+        reviewStatus = "AUTO_CREATED";
+      }
+    }
+
     const [contact] = await db.insert(contactsTable).values({
       firstName: body.firstName,
       lastName: body.lastName,
       email: body.email ?? null,
-      phone: body.phone ?? null,
-      title: body.title ?? null,
+      phone,
+      title,
       status: body.status ?? "LEAD",
       reviewStatus,
       ennablUser: body.ennablUser ?? false,
       emailMarketingContact: body.emailMarketingContact ?? false,
       tags: body.tags ?? [],
+      enrichedFields,
       notes: body.notes ?? null,
       linkedIn: body.linkedIn ?? null,
       companyId,
@@ -684,10 +724,39 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
       return;
     }
 
+    // Keep the auto-derived markers accurate as a human reviews the contact.
+    // Callers may resend the full record on save, so we clear a marker only when
+    // the field's value actually CHANGED (a human edited it), not merely when the
+    // key is present. Marking the contact REVIEWED clears all remaining markers,
+    // since that is an explicit human verification of the whole record.
+    const { enrichedFields: _ignoredEnriched, ...patch } = body as Record<
+      string,
+      unknown
+    >;
+    const norm = (v: unknown): string | null => {
+      if (v === null || v === undefined) return null;
+      const s = String(v).trim();
+      return s.length > 0 ? s : null;
+    };
+    let enrichedFields = existing.enrichedFields;
+    if (enrichedFields.length > 0) {
+      const existingRecord = existing as unknown as Record<string, unknown>;
+      const explicitlyReviewed =
+        Object.prototype.hasOwnProperty.call(patch, "reviewStatus") &&
+        patch.reviewStatus === "REVIEWED";
+      enrichedFields = explicitlyReviewed
+        ? []
+        : enrichedFields.filter((field) => {
+            if (!Object.prototype.hasOwnProperty.call(patch, field)) return true;
+            return norm(patch[field]) === norm(existingRecord[field]);
+          });
+    }
+
     const [updated] = await db
       .update(contactsTable)
       .set({
-        ...body,
+        ...patch,
+        enrichedFields,
         updatedAt: new Date(),
       })
       .where(eq(contactsTable.id, id))

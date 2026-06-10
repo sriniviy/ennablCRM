@@ -30,10 +30,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { CheckCircle2, EyeOff, Pencil, ChevronLeft, ChevronRight } from "lucide-react";
+import { CheckCircle2, EyeOff, Pencil, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const PAGE_SIZE = 50;
+
+const ENRICHED_FIELD_LABELS: Record<string, string> = {
+  title: "Title",
+  phone: "Phone",
+  companyId: "Company",
+};
+
+function enrichedLabels(fields: string[] | undefined): string[] {
+  return (fields ?? [])
+    .map((f) => ENRICHED_FIELD_LABELS[f])
+    .filter((label): label is string => Boolean(label));
+}
 
 interface ReviewRowProps {
   contact: ContactWithRelations;
@@ -48,6 +60,8 @@ function ReviewRow({ contact, companies }: ReviewRowProps) {
     contact.company?.id ?? "",
   );
   const [editOpen, setEditOpen] = useState(false);
+
+  const autoFilled = enrichedLabels(contact.enrichedFields);
 
   const invalidate = () =>
     qc.invalidateQueries({ queryKey: getListContactsQueryKey() });
@@ -107,6 +121,12 @@ function ReviewRow({ contact, companies }: ReviewRowProps) {
           <div className="text-xs text-muted-foreground mt-0.5">
             {contact.email ?? "—"}
           </div>
+          {autoFilled.length > 0 && (
+            <div className="mt-1.5 flex items-center gap-1 text-xs text-violet-600 dark:text-violet-400">
+              <Sparkles className="h-3 w-3 shrink-0" />
+              <span>Auto-filled: {autoFilled.join(", ")} — verify</span>
+            </div>
+          )}
         </TableCell>
         <TableCell className="text-sm text-muted-foreground">
           {contact.title ?? "—"}

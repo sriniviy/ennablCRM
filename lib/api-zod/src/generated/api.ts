@@ -60,6 +60,7 @@ export const ListContactsResponse = zod.object({
   "ennablUser": zod.boolean().optional(),
   "emailMarketingContact": zod.boolean().optional(),
   "tags": zod.array(zod.string()),
+  "enrichedFields": zod.array(zod.string()).optional().describe('Names of fields whose values were auto-derived (e.g. by AI signature parsing) and have not yet been verified by a human.'),
   "notes": zod.string().nullish(),
   "linkedIn": zod.string().nullish(),
   "assigneeId": zod.string().nullish(),
@@ -102,7 +103,8 @@ export const CreateContactBody = zod.object({
   "tags": zod.array(zod.string()).optional(),
   "notes": zod.string().optional(),
   "linkedIn": zod.string().optional(),
-  "assigneeId": zod.string().optional()
+  "assigneeId": zod.string().optional(),
+  "emailBody": zod.string().optional().describe('Raw body of the email that triggered an auto-creation. When present, the sender\'s signature is parsed by AI to fill any empty title, phone, or company fields; populated fields are marked auto-derived.')
 })
 
 
@@ -175,6 +177,7 @@ export const MergeContactsResponse = zod.object({
   "ennablUser": zod.boolean().optional(),
   "emailMarketingContact": zod.boolean().optional(),
   "tags": zod.array(zod.string()),
+  "enrichedFields": zod.array(zod.string()).optional().describe('Names of fields whose values were auto-derived (e.g. by AI signature parsing) and have not yet been verified by a human.'),
   "notes": zod.string().nullish(),
   "linkedIn": zod.string().nullish(),
   "assigneeId": zod.string().nullish(),
@@ -214,6 +217,7 @@ export const GetContactResponse = zod.object({
   "ennablUser": zod.boolean().optional(),
   "emailMarketingContact": zod.boolean().optional(),
   "tags": zod.array(zod.string()),
+  "enrichedFields": zod.array(zod.string()).optional().describe('Names of fields whose values were auto-derived (e.g. by AI signature parsing) and have not yet been verified by a human.'),
   "notes": zod.string().nullish(),
   "linkedIn": zod.string().nullish(),
   "assigneeId": zod.string().nullish(),
@@ -375,6 +379,7 @@ export const UpdateContactResponse = zod.object({
   "ennablUser": zod.boolean().optional(),
   "emailMarketingContact": zod.boolean().optional(),
   "tags": zod.array(zod.string()),
+  "enrichedFields": zod.array(zod.string()).optional().describe('Names of fields whose values were auto-derived (e.g. by AI signature parsing) and have not yet been verified by a human.'),
   "notes": zod.string().nullish(),
   "linkedIn": zod.string().nullish(),
   "assigneeId": zod.string().nullish(),
