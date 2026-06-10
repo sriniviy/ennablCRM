@@ -1,7 +1,6 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -36,6 +35,7 @@ const COMPANY_FIELDS: FieldDef[] = [
   { key: "address", label: "Address" },
   { key: "city", label: "City" },
   { key: "country", label: "Country" },
+  { key: "owner", label: "Owner (assign to user)", hint: "HubSpot owner column — mapped to a CRM user below" },
 ];
 
 const CONTACT_FIELDS: FieldDef[] = [
@@ -46,7 +46,9 @@ const CONTACT_FIELDS: FieldDef[] = [
   { key: "title", label: "Job Title" },
   { key: "notes", label: "Notes" },
   { key: "linkedIn", label: "LinkedIn URL" },
-  { key: "__hubCompanyId", label: "Company ID (association)", hint: "HubSpot company ID column for linking contacts → companies" },
+  { key: "owner", label: "Owner (assign to user)", hint: "HubSpot owner column — mapped to a CRM user below" },
+  { key: "__hubCompanyId", label: "Company by Record ID", hint: "HubSpot company ID column for linking contacts → companies" },
+  { key: "__companyName", label: "Company by exact name", hint: "Company name column — matched to an existing company by exact name" },
 ];
 
 const DEAL_FIELDS: FieldDef[] = [
@@ -55,9 +57,12 @@ const DEAL_FIELDS: FieldDef[] = [
   { key: "probability", label: "Probability (%)" },
   { key: "closeDate", label: "Close Date" },
   { key: "notes", label: "Notes" },
-  { key: "__hubStage", label: "Pipeline Stage (HubSpot name)", hint: "Maps HubSpot stage names to your stages" },
-  { key: "__hubContactId", label: "Contact ID (association)", hint: "HubSpot contact ID column for linking deals → contacts" },
-  { key: "__hubCompanyId", label: "Company ID (association)", hint: "HubSpot company ID column for linking deals → companies" },
+  { key: "owner", label: "Owner (assign to user)", hint: "HubSpot owner column — mapped to a CRM user below" },
+  { key: "__hubStage", label: "Pipeline Stage (HubSpot name)", hint: "Maps HubSpot stage names to your stages below" },
+  { key: "__hubContactId", label: "Contact by Record ID", hint: "HubSpot contact ID column for linking deals → contacts" },
+  { key: "__contactEmail", label: "Contact by exact email", hint: "Contact email column — matched to an existing contact by exact email" },
+  { key: "__hubCompanyId", label: "Company by Record ID", hint: "HubSpot company ID column for linking deals → companies" },
+  { key: "__companyName", label: "Company by exact name", hint: "Company name column — matched to an existing company by exact name" },
 ];
 
 const ACTIVITY_FIELDS: FieldDef[] = [
@@ -67,9 +72,13 @@ const ACTIVITY_FIELDS: FieldDef[] = [
   { key: "date", label: "Date" },
   { key: "emailSubject", label: "Email Subject" },
   { key: "emailBody", label: "Email Body" },
-  { key: "__hubContactId", label: "Contact ID (association)" },
-  { key: "__hubCompanyId", label: "Company ID (association)" },
-  { key: "__hubDealId", label: "Deal ID (association)" },
+  { key: "owner", label: "Owner (logged as user)", hint: "HubSpot owner column — mapped to a CRM user below" },
+  { key: "__hubContactId", label: "Contact by Record ID" },
+  { key: "__contactEmail", label: "Contact by exact email" },
+  { key: "__hubCompanyId", label: "Company by Record ID" },
+  { key: "__companyName", label: "Company by exact name" },
+  { key: "__hubDealId", label: "Deal by Record ID" },
+  { key: "__dealTitle", label: "Deal by exact title" },
 ];
 
 const FIELDS_FOR_STEP: Record<Exclude<MigrateStep, "summary">, FieldDef[]> = {
@@ -86,11 +95,17 @@ const HUB_ID_HINT: Record<Exclude<MigrateStep, "summary">, string> = {
   activities: "",
 };
 
+interface RowIssue { row: number; reason: string }
 interface StepResult {
+  received: number;
   imported: number;
-  skipped: Array<{ row: number; reason: string }>;
+  skipped: RowIssue[];
+  warnings: RowIssue[];
   idMap: Record<string, string>;
 }
+
+interface CrmUser { id: string; name: string; email: string }
+interface CrmStage { id: string; name: string }
 
 // ── CSV parser ─────────────────────────────────────────────────────────────────
 
@@ -142,10 +157,16 @@ function autoMap(headers: string[], step: Exclude<MigrateStep, "summary">): Reco
     title: ["title", "jobtitle", "position", "role"],
     notes: ["notes", "description", "memo"],
     linkedIn: ["linkedin", "linkedinurl", "linkedinprofile"],
+    // owner + associations by name
+    owner: ["owner", "dealowner", "contactowner", "companyowner", "hubspotowner", "ownername", "assignedto", "assignee"],
+    __companyName: ["associatedcompany", "associatedcompanyname", "companyname", "primarycompany"],
+    __contactEmail: ["associatedcontact", "primarycontact", "contactemail", "primarycontactemail"],
+    __dealTitle: ["associateddeal", "dealname", "associateddealname"],
     // deals
     value: ["amount", "dealamount", "value", "dealvalue", "revenue"],
     probability: ["probability", "closeprobability", "winprobability"],
     closeDate: ["closedate", "expectedclosedate", "closeddate", "duedate"],
+    __hubStage: ["dealstage", "stage", "pipelinestage", "stagename"],
     // activities
     type: ["type", "activitytype", "engagementtype", "kind"],
     description: ["description", "body", "notes", "content", "activitybody"],
@@ -184,11 +205,17 @@ export function MigratePage() {
   const [results, setResults] = useState<Partial<Record<Exclude<MigrateStep, "summary">, StepResult>>>({});
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // reference data for owner / stage mapping
+  const [users, setUsers] = useState<CrmUser[]>([]);
+  const [stages, setStages] = useState<CrmStage[]>([]);
+
   // per-step state
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [hubIdField, setHubIdField] = useState<string>("");
+  const [ownerMapping, setOwnerMapping] = useState<Record<string, string>>({});
+  const [stageMapping, setStageMapping] = useState<Record<string, string>>({});
   const [phase, setPhase] = useState<"upload" | "map" | "importing" | "done">("upload");
   const [progress, setProgress] = useState(0);
   const [stepResult, setStepResult] = useState<StepResult | null>(null);
@@ -196,8 +223,29 @@ export function MigratePage() {
   const stepIndex = STEPS.findIndex(s => s.id === currentStep);
   const isLastDataStep = currentStep === "activities";
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await getToken();
+        const headersInit = { Authorization: `Bearer ${token}` };
+        const [teamRes, stageRes] = await Promise.all([
+          fetch(`${BASE}/api/team`, { headers: headersInit }),
+          fetch(`${BASE}/api/migrate/stages`, { headers: headersInit }),
+        ]);
+        if (teamRes.ok) {
+          const data = await teamRes.json() as { members?: CrmUser[] };
+          setUsers(data.members ?? []);
+        }
+        if (stageRes.ok) setStages(await stageRes.json() as CrmStage[]);
+      } catch {
+        // non-fatal — mapping UIs degrade to manual matching by name
+      }
+    })();
+  }, [getToken]);
+
   function resetStep() {
     setHeaders([]); setRows([]); setMapping({}); setHubIdField("");
+    setOwnerMapping({}); setStageMapping({});
     setPhase("upload"); setProgress(0); setStepResult(null);
     if (fileRef.current) fileRef.current.value = "";
   }
@@ -206,6 +254,21 @@ export function MigratePage() {
     resetStep();
     setCurrentStep(step);
   }
+
+  // distinct non-empty values in the column mapped to a logical field
+  function distinctValuesFor(field: string): string[] {
+    const col = Object.keys(mapping).find(k => mapping[k] === field);
+    if (!col) return [];
+    const seen = new Set<string>();
+    for (const r of rows) {
+      const v = r[col]?.trim();
+      if (v) seen.add(v);
+    }
+    return [...seen].sort((a, b) => a.localeCompare(b));
+  }
+
+  const ownerValues = distinctValuesFor("owner");
+  const stageValues = currentStep === "deals" ? distinctValuesFor("__hubStage") : [];
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -223,6 +286,8 @@ export function MigratePage() {
       setHeaders(parsed.headers);
       setRows(parsed.rows);
       setMapping(auto);
+      setOwnerMapping({});
+      setStageMapping({});
       // detect hub ID field
       const hubKey = Object.keys(auto).find(k => auto[k] === "__hubId") ?? "";
       setHubIdField(hubKey);
@@ -249,6 +314,13 @@ export function MigratePage() {
         mapping: activeMapping,
         hubspotIdField: hubIdField || undefined,
       };
+
+      if (ownerValues.length > 0 && Object.keys(ownerMapping).length > 0) {
+        body.ownerMapping = ownerMapping;
+      }
+      if (step === "deals" && Object.keys(stageMapping).length > 0) {
+        body.stageMapping = stageMapping;
+      }
 
       // pass previously built ID maps for association resolution
       if (step === "contacts" && results.companies?.idMap) body.companyIdMap = results.companies.idMap;
@@ -287,17 +359,44 @@ export function MigratePage() {
     }
   }
 
-  function downloadSkipped(result: StepResult) {
-    if (!result.skipped.length) return;
-    const lines = ["Row,Reason", ...result.skipped.map(s => `${s.row},"${s.reason.replace(/"/g, '""')}"`)];
+  function downloadReconciliation() {
+    const objects = ["companies", "contacts", "deals", "activities"] as const;
+    const lines: string[] = [];
+    const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+
+    lines.push("HubSpot Migration — Reconciliation Report");
+    lines.push("");
+    lines.push(["Object", "Source rows", "Imported", "Skipped", "Unmatched links"].map(esc).join(","));
+    for (const step of objects) {
+      const r = results[step];
+      if (!r) {
+        lines.push([step, "—", "not run", "—", "—"].map(esc).join(","));
+        continue;
+      }
+      lines.push([step, r.received, r.imported, r.skipped.length, r.warnings.length].map(esc).join(","));
+    }
+
+    lines.push("");
+    lines.push(["Object", "Row", "Type", "Reason"].map(esc).join(","));
+    for (const step of objects) {
+      const r = results[step];
+      if (!r) continue;
+      for (const s of r.skipped) lines.push([step, s.row, "skipped", s.reason].map(esc).join(","));
+      for (const w of r.warnings) lines.push([step, w.row, "unmatched", w.reason].map(esc).join(","));
+    }
+
     const blob = new Blob([lines.join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "skipped-rows.csv"; a.click();
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "hubspot-reconciliation-report.csv";
+    a.click();
     URL.revokeObjectURL(url);
   }
 
   const currentStepDef = STEPS.find(s => s.id === currentStep)!;
   const fields = currentStep !== "summary" ? FIELDS_FOR_STEP[currentStep] : [];
+  const hasResults = (["companies", "contacts", "deals", "activities"] as const).some(s => results[s]);
 
   return (
     <SidebarLayout>
@@ -332,7 +431,14 @@ export function MigratePage() {
         {/* Summary step */}
         {currentStep === "summary" ? (
           <div className="space-y-4">
-            <h2 className="text-lg font-semibold">Migration Complete</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Migration Complete</h2>
+              {hasResults && (
+                <Button variant="outline" size="sm" onClick={downloadReconciliation}>
+                  <Download className="h-4 w-4 mr-1" />Download reconciliation report
+                </Button>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
               {(["companies", "contacts", "deals", "activities"] as const).map(step => {
                 const r = results[step];
@@ -341,12 +447,18 @@ export function MigratePage() {
                     <p className="text-sm font-medium capitalize text-muted-foreground">{step}</p>
                     {r ? (
                       <>
-                        <p className="text-2xl font-bold text-green-600">{r.imported}</p>
-                        <p className="text-xs text-muted-foreground">imported</p>
+                        <p className="text-2xl font-bold text-green-600">{r.imported}<span className="text-sm font-normal text-muted-foreground"> / {r.received}</span></p>
+                        <p className="text-xs text-muted-foreground">imported of source rows</p>
                         {r.skipped.length > 0 && (
                           <div className="flex items-center gap-1">
                             <AlertCircle className="h-3 w-3 text-amber-500" />
                             <span className="text-xs text-amber-600">{r.skipped.length} skipped</span>
+                          </div>
+                        )}
+                        {r.warnings.length > 0 && (
+                          <div className="flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3 text-orange-500" />
+                            <span className="text-xs text-orange-600">{r.warnings.length} unmatched links</span>
                           </div>
                         )}
                       </>
@@ -359,29 +471,27 @@ export function MigratePage() {
             </div>
 
             <div className="border rounded-lg p-4 space-y-3">
-              <h3 className="font-medium">Skipped rows by step</h3>
+              <h3 className="font-medium">Issues by step</h3>
               {(["companies", "contacts", "deals", "activities"] as const).map(step => {
                 const r = results[step];
-                if (!r?.skipped.length) return null;
+                const issues = r ? [...r.skipped.map(s => ({ ...s, kind: "skipped" as const })), ...r.warnings.map(w => ({ ...w, kind: "unmatched" as const }))] : [];
+                if (issues.length === 0) return null;
                 return (
                   <div key={step} className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium capitalize">{step} ({r.skipped.length} skipped)</span>
-                      <Button variant="ghost" size="sm" onClick={() => downloadSkipped(r)}>
-                        <Download className="h-3 w-3 mr-1" />Download CSV
-                      </Button>
-                    </div>
+                    <span className="text-sm font-medium capitalize">{step} ({issues.length} issues)</span>
                     <div className="max-h-32 overflow-y-auto space-y-0.5">
-                      {r.skipped.slice(0, 20).map((s, i) => (
-                        <p key={i} className="text-xs text-muted-foreground">Row {s.row}: {s.reason}</p>
+                      {issues.slice(0, 20).map((s, i) => (
+                        <p key={i} className="text-xs text-muted-foreground">
+                          Row {s.row} <span className={s.kind === "skipped" ? "text-amber-600" : "text-orange-600"}>[{s.kind}]</span>: {s.reason}
+                        </p>
                       ))}
-                      {r.skipped.length > 20 && <p className="text-xs text-muted-foreground">…and {r.skipped.length - 20} more</p>}
+                      {issues.length > 20 && <p className="text-xs text-muted-foreground">…and {issues.length - 20} more (see report)</p>}
                     </div>
                   </div>
                 );
               })}
-              {!(["companies", "contacts", "deals", "activities"] as const).some(s => results[s]?.skipped.length) && (
-                <p className="text-sm text-muted-foreground">No rows were skipped — perfect import!</p>
+              {!(["companies", "contacts", "deals", "activities"] as const).some(s => results[s] && (results[s]!.skipped.length || results[s]!.warnings.length)) && (
+                <p className="text-sm text-muted-foreground">No issues — every row imported and linked cleanly!</p>
               )}
             </div>
 
@@ -431,19 +541,21 @@ export function MigratePage() {
                   </div>
 
                   {/* HubSpot ID field selector */}
-                  <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3 space-y-2">
-                    <p className="text-sm font-medium text-blue-800 dark:text-blue-300">HubSpot Record ID field (for association linking)</p>
-                    <p className="text-xs text-blue-600 dark:text-blue-400">{HUB_ID_HINT[currentStep as Exclude<MigrateStep, "summary">]}</p>
-                    <Select value={hubIdField || "none"} onValueChange={v => setHubIdField(v === "none" ? "" : v)}>
-                      <SelectTrigger className="w-56 bg-white dark:bg-background">
-                        <SelectValue placeholder="Select ID column…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None / not available</SelectItem>
-                        {headers.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {HUB_ID_HINT[currentStep as Exclude<MigrateStep, "summary">] && (
+                    <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3 space-y-2">
+                      <p className="text-sm font-medium text-blue-800 dark:text-blue-300">HubSpot Record ID field (for association linking)</p>
+                      <p className="text-xs text-blue-600 dark:text-blue-400">{HUB_ID_HINT[currentStep as Exclude<MigrateStep, "summary">]}</p>
+                      <Select value={hubIdField || "none"} onValueChange={v => setHubIdField(v === "none" ? "" : v)}>
+                        <SelectTrigger className="w-56 bg-white dark:bg-background">
+                          <SelectValue placeholder="Select ID column…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None / not available</SelectItem>
+                          {headers.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
                   {/* Field mapping table */}
                   <div className="border rounded-lg overflow-hidden">
@@ -485,6 +597,74 @@ export function MigratePage() {
                       </TableBody>
                     </Table>
                   </div>
+
+                  {/* Owner mapping */}
+                  {ownerValues.length > 0 && (
+                    <div className="border rounded-lg p-4 space-y-3">
+                      <div>
+                        <p className="text-sm font-medium">Map owners to CRM users</p>
+                        <p className="text-xs text-muted-foreground">Each distinct owner value from your CSV — assign it to a user. Unmapped owners import unassigned.</p>
+                      </div>
+                      <div className="space-y-2 max-h-56 overflow-y-auto">
+                        {ownerValues.map(val => (
+                          <div key={val} className="flex items-center gap-3">
+                            <span className="text-sm font-mono flex-1 truncate" title={val}>{val}</span>
+                            <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                            <Select
+                              value={ownerMapping[val] || "none"}
+                              onValueChange={v => setOwnerMapping(prev => {
+                                const next = { ...prev };
+                                if (v === "none") delete next[val]; else next[val] = v;
+                                return next;
+                              })}
+                            >
+                              <SelectTrigger className="h-8 text-sm w-56">
+                                <SelectValue placeholder="Select user…" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">— leave unassigned —</SelectItem>
+                                {users.map(u => <SelectItem key={u.id} value={u.id}>{u.name} ({u.email})</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Stage mapping (deals only) */}
+                  {currentStep === "deals" && stageValues.length > 0 && (
+                    <div className="border rounded-lg p-4 space-y-3">
+                      <div>
+                        <p className="text-sm font-medium">Map HubSpot stages to your pipeline</p>
+                        <p className="text-xs text-muted-foreground">Each distinct stage value — assign it to a CRM stage. Unmapped stages fall back to name match, then the first stage.</p>
+                      </div>
+                      <div className="space-y-2 max-h-56 overflow-y-auto">
+                        {stageValues.map(val => (
+                          <div key={val} className="flex items-center gap-3">
+                            <span className="text-sm font-mono flex-1 truncate" title={val}>{val}</span>
+                            <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                            <Select
+                              value={stageMapping[val] || "auto"}
+                              onValueChange={v => setStageMapping(prev => {
+                                const next = { ...prev };
+                                if (v === "auto") delete next[val]; else next[val] = v;
+                                return next;
+                              })}
+                            >
+                              <SelectTrigger className="h-8 text-sm w-56">
+                                <SelectValue placeholder="Select stage…" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="auto">— auto (match by name) —</SelectItem>
+                                {stages.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Preview */}
                   <div>
@@ -532,18 +712,13 @@ export function MigratePage() {
                 <div className="space-y-4">
                   <div className="flex items-center gap-3 text-green-700 dark:text-green-400">
                     <CheckCircle2 className="h-5 w-5" />
-                    <span className="font-medium">{stepResult.imported} {currentStepDef.label.toLowerCase()} imported successfully</span>
+                    <span className="font-medium">{stepResult.imported} of {stepResult.received} {currentStepDef.label.toLowerCase()} imported successfully</span>
                   </div>
                   {stepResult.skipped.length > 0 && (
                     <div className="border rounded-lg p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <AlertCircle className="h-4 w-4 text-amber-500" />
-                          <span className="text-sm font-medium">{stepResult.skipped.length} rows skipped</span>
-                        </div>
-                        <Button variant="ghost" size="sm" onClick={() => downloadSkipped(stepResult)}>
-                          <Download className="h-3 w-3 mr-1" />Download
-                        </Button>
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 text-amber-500" />
+                        <span className="text-sm font-medium">{stepResult.skipped.length} rows skipped</span>
                       </div>
                       <div className="max-h-36 overflow-y-auto space-y-0.5">
                         {stepResult.skipped.slice(0, 15).map((s, i) => (
@@ -551,6 +726,22 @@ export function MigratePage() {
                         ))}
                         {stepResult.skipped.length > 15 && (
                           <p className="text-xs text-muted-foreground">…and {stepResult.skipped.length - 15} more</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {stepResult.warnings.length > 0 && (
+                    <div className="border rounded-lg p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 text-orange-500" />
+                        <span className="text-sm font-medium">{stepResult.warnings.length} unmatched associations</span>
+                      </div>
+                      <div className="max-h-36 overflow-y-auto space-y-0.5">
+                        {stepResult.warnings.slice(0, 15).map((s, i) => (
+                          <p key={i} className="text-xs text-muted-foreground">Row {s.row}: {s.reason}</p>
+                        ))}
+                        {stepResult.warnings.length > 15 && (
+                          <p className="text-xs text-muted-foreground">…and {stepResult.warnings.length - 15} more</p>
                         )}
                       </div>
                     </div>
