@@ -18,7 +18,12 @@ import {
   ResponsiveContainer,
   Cell,
   Legend,
+  LineChart,
+  Line,
 } from "recharts";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { CalendarRange, Timer } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -38,6 +43,21 @@ interface PipelineRow {
   dealCount: number;
   totalValue: number;
   avgValue: number;
+}
+
+interface VelocityRow {
+  stageId: string;
+  stageName: string;
+  stageColor: string;
+  stageOrder: number;
+  dealCount: number;
+  avgDays: number;
+}
+
+interface TrendRow {
+  week: string;
+  count: number;
+  total_value: number;
 }
 
 interface WinLossData {
@@ -67,7 +87,7 @@ interface ForecastData {
   }[];
 }
 
-function useReportsData(range: Range) {
+function useReportsData(range: Range, dateFrom: string, dateTo: string) {
   const getToken = useSessionToken();
 
   const authFetch = useCallback(
@@ -82,9 +102,14 @@ function useReportsData(range: Range) {
     [getToken],
   );
 
+  const pipelineParams = new URLSearchParams();
+  if (dateFrom) pipelineParams.set("dateFrom", dateFrom);
+  if (dateTo) pipelineParams.set("dateTo", dateTo);
+  const pipelineQs = pipelineParams.toString();
+
   const pipeline = useQuery<PipelineRow[]>({
-    queryKey: ["reports", "pipeline"],
-    queryFn: () => authFetch(`${BASE}/api/reports/pipeline`),
+    queryKey: ["reports", "pipeline", dateFrom, dateTo],
+    queryFn: () => authFetch(`${BASE}/api/reports/pipeline${pipelineQs ? `?${pipelineQs}` : ""}`),
     staleTime: 60_000,
   });
 
@@ -100,7 +125,19 @@ function useReportsData(range: Range) {
     staleTime: 60_000,
   });
 
-  return { pipeline, winLoss, forecast };
+  const velocity = useQuery<VelocityRow[]>({
+    queryKey: ["reports", "velocity"],
+    queryFn: () => authFetch(`${BASE}/api/reports/velocity`),
+    staleTime: 60_000,
+  });
+
+  const trend = useQuery<TrendRow[]>({
+    queryKey: ["reports", "trend"],
+    queryFn: () => authFetch(`${BASE}/api/reports/trend`),
+    staleTime: 60_000,
+  });
+
+  return { pipeline, winLoss, forecast, velocity, trend };
 }
 
 const CHART_COLORS = [
@@ -122,12 +159,16 @@ const customTooltipStyle = {
 
 export function ReportsPage() {
   const [range, setRange] = useState<Range>("month");
-  const { pipeline, winLoss, forecast } = useReportsData(range);
+  const [pipelineDateFrom, setPipelineDateFrom] = useState("");
+  const [pipelineDateTo, setPipelineDateTo] = useState("");
+  const { pipeline, winLoss, forecast, velocity, trend } = useReportsData(range, pipelineDateFrom, pipelineDateTo);
 
   const pipelineData = pipeline.data ?? [];
   const openStages = pipelineData.filter(
     (s) => s.stageName !== "Won" && s.stageName !== "Lost",
   );
+  const velocityData = (velocity.data ?? []).filter((r) => r.stageName !== "Won" && r.stageName !== "Lost");
+  const trendData = trend.data ?? [];
 
   return (
     <SidebarLayout>
@@ -243,6 +284,49 @@ export function ReportsPage() {
           </Card>
         </div>
 
+        {/* ── Pipeline Date Filter ── */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <CalendarRange className="h-4 w-4" />
+              Pipeline Date Filter
+            </CardTitle>
+            <CardDescription>Filter pipeline charts by deal creation date</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap items-end gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs">From</Label>
+                <Input
+                  type="date"
+                  value={pipelineDateFrom}
+                  onChange={(e) => setPipelineDateFrom(e.target.value)}
+                  className="h-8 text-sm w-36"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">To</Label>
+                <Input
+                  type="date"
+                  value={pipelineDateTo}
+                  onChange={(e) => setPipelineDateTo(e.target.value)}
+                  className="h-8 text-sm w-36"
+                />
+              </div>
+              {(pipelineDateFrom || pipelineDateTo) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8"
+                  onClick={() => { setPipelineDateFrom(""); setPipelineDateTo(""); }}
+                >
+                  Clear
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
         {/* ── Pipeline Funnel Chart ── */}
         <div className="grid gap-6 lg:grid-cols-2">
           <Card>
@@ -334,6 +418,85 @@ export function ReportsPage() {
                 <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
                   No open deals yet.
                 </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* ── Deal Velocity ── */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Timer className="h-4 w-4" />
+                Deal Velocity by Stage
+              </CardTitle>
+              <CardDescription>Average age (days) of open deals in each stage</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {velocity.isLoading ? (
+                <Skeleton className="h-64 w-full" />
+              ) : velocityData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={velocityData} margin={{ top: 4, right: 8, left: 8, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="stageName" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${Math.round(v)}d`} />
+                    <Tooltip
+                      contentStyle={customTooltipStyle}
+                      formatter={(value: number) => [`${value.toFixed(1)} days`, "Avg Age"]}
+                    />
+                    <Bar dataKey="avgDays" name="avgDays" radius={[4, 4, 0, 0]}>
+                      {velocityData.map((_, i) => (
+                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">No open deals yet.</div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ── Pipeline Trend ── */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4" />
+                Pipeline Trend (Last 12 Weeks)
+              </CardTitle>
+              <CardDescription>New deals created per week</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {trend.isLoading ? (
+                <Skeleton className="h-64 w-full" />
+              ) : trendData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={trendData} margin={{ top: 4, right: 8, left: 8, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis
+                      dataKey="week"
+                      tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v: string) => v.slice(5)}
+                    />
+                    <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                    <Tooltip
+                      contentStyle={customTooltipStyle}
+                      labelFormatter={(label: string) => `Week of ${label}`}
+                      formatter={(value: number, name: string) => {
+                        if (name === "total_value") return [formatCurrency(value), "Pipeline Value"];
+                        return [value, "Deals Created"];
+                      }}
+                    />
+                    <Legend formatter={(v) => v === "count" ? "# Deals" : "Pipeline Value"} wrapperStyle={{ fontSize: 11 }} />
+                    <Line type="monotone" dataKey="count" name="count" stroke="hsl(var(--chart-1))" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">No deals in the last 12 weeks.</div>
               )}
             </CardContent>
           </Card>

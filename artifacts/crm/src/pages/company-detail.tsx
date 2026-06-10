@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Globe, MapPin, Phone, Users, Briefcase, Pencil, CopyCheck } from "lucide-react";
 import { NotesFeed } from "@/components/notes/notes-feed";
+import { useNotesCount } from "@/hooks/use-notes-count";
 import { AuditHistory } from "@/components/audit/audit-history";
 import { formatCurrency } from "@/lib/utils";
 import { useState } from "react";
@@ -16,6 +17,21 @@ import { CompanyDuplicatesDialog } from "@/components/merge/company-duplicates";
 import { CustomFieldsSection } from "@/components/custom-fields/custom-fields-section";
 import { AttachmentsPanel } from "@/components/attachments/attachments-panel";
 import { useTeamMembers } from "@/hooks/use-team-members";
+
+function NotesTabLabel({ entityType, entityId }: { entityType: string; entityId: string }) {
+  const { data } = useNotesCount(entityType, entityId);
+  const count = data?.count ?? 0;
+  return (
+    <span className="flex items-center gap-1.5">
+      Notes
+      {count > 0 && (
+        <span className="inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold">
+          {count}
+        </span>
+      )}
+    </span>
+  );
+}
 
 export function CompanyDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -207,7 +223,7 @@ export function CompanyDetailPage() {
                   Deals ({company.deals?.length || 0})
                 </TabsTrigger>
                 <TabsTrigger value="notes" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
-                  Notes
+                  <NotesTabLabel entityType="company" entityId={id} />
                 </TabsTrigger>
                 <TabsTrigger value="history" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   History

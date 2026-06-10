@@ -5,7 +5,7 @@ import {
   dealStagesTable,
   usersTable,
 } from "@workspace/db";
-import { eq, and, gte, not, sql, desc } from "drizzle-orm";
+import { eq, and, gte, lte, not, sql, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router = Router();
@@ -22,8 +22,14 @@ function getRangeStart(range: string): Date | null {
   return null;
 }
 
-router.get("/pipeline", requireAuth, async (_req: Request, res: Response) => {
+router.get("/pipeline", requireAuth, async (req: Request, res: Response) => {
   try {
+    const { dateFrom, dateTo } = req.query as Record<string, string>;
+    const dealConditions = [];
+    if (dateFrom) dealConditions.push(gte(dealsTable.createdAt, new Date(dateFrom)));
+    if (dateTo) dealConditions.push(lte(dealsTable.createdAt, new Date(dateTo)));
+    const dealWhere = dealConditions.length > 0 ? and(...dealConditions) : undefined;
+
     const rows = await db
       .select({
         stageId: dealStagesTable.id,
@@ -35,7 +41,12 @@ router.get("/pipeline", requireAuth, async (_req: Request, res: Response) => {
         avgValue: sql<number>`coalesce(avg(${dealsTable.value}), 0)::float`,
       })
       .from(dealStagesTable)
-      .leftJoin(dealsTable, eq(dealsTable.stageId, dealStagesTable.id))
+      .leftJoin(
+        dealsTable,
+        dealWhere
+          ? and(eq(dealsTable.stageId, dealStagesTable.id), dealWhere)
+          : eq(dealsTable.stageId, dealStagesTable.id),
+      )
       .groupBy(
         dealStagesTable.id,
         dealStagesTable.name,
@@ -163,6 +174,50 @@ router.get("/forecast", requireAuth, async (_req: Request, res: Response) => {
     });
   } catch {
     res.status(500).json({ error: "Failed to get forecast report" });
+  }
+});
+
+router.get("/velocity", requireAuth, async (_req: Request, res: Response) => {
+  try {
+    const rows = await db
+      .select({
+        stageId: dealStagesTable.id,
+        stageName: dealStagesTable.name,
+        stageColor: dealStagesTable.color,
+        stageOrder: dealStagesTable.order,
+        dealCount: sql<number>`count(${dealsTable.id})::int`,
+        avgDays: sql<number>`coalesce(avg(extract(epoch from (now() - ${dealsTable.createdAt})) / 86400), 0)::float`,
+      })
+      .from(dealStagesTable)
+      .leftJoin(dealsTable, eq(dealsTable.stageId, dealStagesTable.id))
+      .groupBy(
+        dealStagesTable.id,
+        dealStagesTable.name,
+        dealStagesTable.color,
+        dealStagesTable.order,
+      )
+      .orderBy(dealStagesTable.order);
+    res.json(rows);
+  } catch {
+    res.status(500).json({ error: "Failed to get velocity report" });
+  }
+});
+
+router.get("/trend", requireAuth, async (_req: Request, res: Response) => {
+  try {
+    const rows = await db.execute(sql`
+      SELECT
+        to_char(date_trunc('week', created_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS week,
+        count(*)::int AS count,
+        coalesce(sum(value), 0)::float AS total_value
+      FROM deals
+      WHERE created_at >= now() - interval '12 weeks'
+      GROUP BY date_trunc('week', created_at AT TIME ZONE 'UTC')
+      ORDER BY date_trunc('week', created_at AT TIME ZONE 'UTC')
+    `);
+    res.json(rows.rows);
+  } catch {
+    res.status(500).json({ error: "Failed to get trend report" });
   }
 });
 

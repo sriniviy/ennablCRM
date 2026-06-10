@@ -40,6 +40,7 @@ import {
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useState, useEffect } from "react";
 import { useTheme } from "@/hooks/use-theme";
+import { useMyAssignments } from "@/hooks/use-my-assignments";
 
 const navItems = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -74,6 +75,9 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     pageSize: 1,
   });
   const reviewCount = reviewData?.total ?? 0;
+  const { data: assignmentData } = useMyAssignments();
+  const myDealCount = assignmentData?.deals ?? 0;
+  const myTaskCount = assignmentData?.tasks ?? 0;
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(getInitialCollapsed);
@@ -116,6 +120,16 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                 {reviewCount > 99 ? "99+" : reviewCount}
               </span>
             )}
+            {item.href === "/deals" && myDealCount > 0 && (
+              <span className="ml-auto bg-primary/80 text-primary-foreground rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none">
+                {myDealCount > 99 ? "99+" : myDealCount}
+              </span>
+            )}
+            {item.href === "/tasks" && myTaskCount > 0 && (
+              <span className="ml-auto bg-primary/80 text-primary-foreground rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none">
+                {myTaskCount > 99 ? "99+" : myTaskCount}
+              </span>
+            )}
           </Link>
         );
       })}
@@ -149,6 +163,12 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                     {item.href === "/needs-review" && reviewCount > 0 && (
                       <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-500" />
                     )}
+                    {item.href === "/deals" && myDealCount > 0 && (
+                      <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-primary/80" />
+                    )}
+                    {item.href === "/tasks" && myTaskCount > 0 && (
+                      <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-primary/80" />
+                    )}
                   </span>
                 </Link>
               </TooltipTrigger>
@@ -169,6 +189,16 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
             {item.href === "/needs-review" && reviewCount > 0 && (
               <span className="ml-auto bg-amber-500 text-white rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none">
                 {reviewCount > 99 ? "99+" : reviewCount}
+              </span>
+            )}
+            {item.href === "/deals" && myDealCount > 0 && (
+              <span className="ml-auto bg-primary/80 text-primary-foreground rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none">
+                {myDealCount > 99 ? "99+" : myDealCount}
+              </span>
+            )}
+            {item.href === "/tasks" && myTaskCount > 0 && (
+              <span className="ml-auto bg-primary/80 text-primary-foreground rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none">
+                {myTaskCount > 99 ? "99+" : myTaskCount}
               </span>
             )}
           </Link>

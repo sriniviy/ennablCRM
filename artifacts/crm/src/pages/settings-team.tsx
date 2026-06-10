@@ -313,6 +313,20 @@ export function SettingsTeamPage() {
   });
 
   const isAdmin = me?.role === "ADMIN";
+  const hasNoAdmins = !isLoading && (data?.members ?? []).filter((m) => m.role === "ADMIN").length === 0;
+
+  const bootstrapAdminMutation = useMutation({
+    mutationFn: () =>
+      authFetch("/bootstrap-admin", { method: "POST", body: JSON.stringify({}) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["team"] });
+      qc.invalidateQueries({ queryKey: ["me"] });
+      toast({ title: "You are now an Admin!", description: "Refresh the page to see full admin controls." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Could not promote", description: err.message, variant: "destructive" });
+    },
+  });
 
   const handleAddUser = (e: React.FormEvent) => {
     e.preventDefault();
@@ -528,8 +542,32 @@ export function SettingsTeamPage() {
         {/* Custom Fields — admins only */}
         {isAdmin && <CustomFieldsSettings />}
 
-        {/* Non-admin: read-only notice */}
-        {!isAdmin && !isLoading && (
+        {/* Non-admin: bootstrap prompt when no admin exists yet */}
+        {!isAdmin && hasNoAdmins && (
+          <Card className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-amber-800 dark:text-amber-200">
+                <Shield className="h-4 w-4" />
+                No admin yet
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-amber-700 dark:text-amber-300 mb-4">
+                This workspace has no admin. Since you're the first here, you can claim admin access to start managing the team.
+              </p>
+              <Button
+                onClick={() => bootstrapAdminMutation.mutate()}
+                disabled={bootstrapAdminMutation.isPending}
+                className="bg-amber-600 hover:bg-amber-700 text-white"
+              >
+                {bootstrapAdminMutation.isPending ? "Claiming…" : "Claim Admin Access"}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Non-admin: read-only notice (when admins do exist) */}
+        {!isAdmin && !hasNoAdmins && !isLoading && (
           <p className="text-sm text-muted-foreground">
             Only admins can add or remove team members. Contact an admin to make changes.
           </p>

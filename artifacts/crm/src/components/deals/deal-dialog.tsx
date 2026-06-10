@@ -6,6 +6,7 @@ import {
   getListDealsQueryKey,
   type DealWithRelations,
 } from "@workspace/api-client-react";
+import { useTeamMembers } from "@/hooks/use-team-members";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,13 +15,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Trash2 } from "lucide-react";
+import { Trash2, UserCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { NotesFeed } from "@/components/notes/notes-feed";
 import { AuditHistory } from "@/components/audit/audit-history";
 import { AttachmentsPanel } from "@/components/attachments/attachments-panel";
 import { AiSuggestions } from "@/components/ai/ai-suggestions";
 import { CustomFieldsSection } from "@/components/custom-fields/custom-fields-section";
+
+function memberInitials(name: string | null | undefined) {
+  if (!name) return "?";
+  return name.split(" ").filter(Boolean).map((p) => p[0]).join("").toUpperCase().slice(0, 2);
+}
 
 interface DealDialogProps {
   open: boolean;
@@ -42,11 +48,13 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
   const [contactId, setContactId] = useState("");
   const [companyId, setCompanyId] = useState("");
   const [notes, setNotes] = useState("");
+  const [assigneeId, setAssigneeId] = useState("");
   const [showDelete, setShowDelete] = useState(false);
 
   const { data: stages } = useListDealStages();
   const { data: contacts } = useListContacts({ page: 1, pageSize: 200 });
   const { data: companies } = useListCompanies({ page: 1, pageSize: 200 });
+  const { data: members } = useTeamMembers();
   const create = useCreateDeal();
   const update = useUpdateDeal();
   const remove = useDeleteDeal();
@@ -63,6 +71,7 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
       setContactId(deal?.contact?.id ?? "");
       setCompanyId(deal?.company?.id ?? "");
       setNotes(deal?.notes ?? "");
+      setAssigneeId((deal as unknown as { assigneeId?: string })?.assigneeId ?? "");
     }
   }, [open, deal, defaultStageId]);
 
@@ -83,6 +92,7 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
       contactId: contactId || undefined,
       companyId: companyId || undefined,
       notes: notes || undefined,
+      assigneeId: assigneeId || undefined,
     };
     if (isEdit) {
       update.mutate({ id: deal.id, data }, {
@@ -187,6 +197,45 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
                     </div>
                   </div>
                   <div className="space-y-1.5">
+                    <Label>Assignee</Label>
+                    <Select value={assigneeId || "none"} onValueChange={v => setAssigneeId(v === "none" ? "" : v)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Unassigned">
+                          {assigneeId
+                            ? (() => {
+                                const m = members?.find((x) => x.id === assigneeId);
+                                return m ? (
+                                  <span className="flex items-center gap-2">
+                                    <span className="h-5 w-5 rounded-full bg-primary/10 text-primary text-[10px] flex items-center justify-center font-semibold shrink-0">
+                                      {memberInitials(m.name)}
+                                    </span>
+                                    {m.name ?? m.email}
+                                  </span>
+                                ) : "Unassigned";
+                              })()
+                            : <span className="flex items-center gap-2 text-muted-foreground"><UserCircle className="h-4 w-4" />Unassigned</span>}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">
+                          <span className="flex items-center gap-2 text-muted-foreground">
+                            <UserCircle className="h-4 w-4" /> Unassigned
+                          </span>
+                        </SelectItem>
+                        {members?.map((m) => (
+                          <SelectItem key={m.id} value={m.id}>
+                            <span className="flex items-center gap-2">
+                              <span className="h-5 w-5 rounded-full bg-primary/10 text-primary text-[10px] flex items-center justify-center font-semibold shrink-0">
+                                {memberInitials(m.name)}
+                              </span>
+                              {m.name ?? m.email}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
                     <Label htmlFor="d-notes">Deal Notes</Label>
                     <Textarea id="d-notes" value={notes} onChange={e => setNotes(e.target.value)} rows={2} />
                   </div>
@@ -267,6 +316,45 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Assignee</Label>
+                <Select value={assigneeId || "none"} onValueChange={v => setAssigneeId(v === "none" ? "" : v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Unassigned">
+                      {assigneeId
+                        ? (() => {
+                            const m = members?.find((x) => x.id === assigneeId);
+                            return m ? (
+                              <span className="flex items-center gap-2">
+                                <span className="h-5 w-5 rounded-full bg-primary/10 text-primary text-[10px] flex items-center justify-center font-semibold shrink-0">
+                                  {memberInitials(m.name)}
+                                </span>
+                                {m.name ?? m.email}
+                              </span>
+                            ) : "Unassigned";
+                          })()
+                        : <span className="flex items-center gap-2 text-muted-foreground"><UserCircle className="h-4 w-4" />Unassigned</span>}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">
+                      <span className="flex items-center gap-2 text-muted-foreground">
+                        <UserCircle className="h-4 w-4" /> Unassigned
+                      </span>
+                    </SelectItem>
+                    {members?.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        <span className="flex items-center gap-2">
+                          <span className="h-5 w-5 rounded-full bg-primary/10 text-primary text-[10px] flex items-center justify-center font-semibold shrink-0">
+                            {memberInitials(m.name)}
+                          </span>
+                          {m.name ?? m.email}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="d-notes">Deal Notes</Label>

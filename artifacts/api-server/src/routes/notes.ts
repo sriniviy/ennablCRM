@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { db, notesTable, usersTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
-import { requireAuth, requireAdmin, type AuthRequest } from "../middlewares/requireAuth";
+import { eq, and, desc, sql } from "drizzle-orm";
+import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 import { logActivity } from "../lib/activity";
 
 const router = Router();
@@ -118,21 +118,54 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.delete("/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+router.get("/count", requireAuth, async (req: Request, res: Response) => {
   try {
-    const id = req.params.id as string;
-    const [note] = await db
-      .select()
+    const { entityType, entityId } = req.query as Record<string, string>;
+    if (!entityType || !entityId) { res.status(400).json({ error: "entityType and entityId required" }); return; }
+    const [row] = await db
+      .select({ count: sql<number>`count(*)::int` })
       .from(notesTable)
+      .where(and(eq(notesTable.entityType, entityType), eq(notesTable.entityId, entityId)));
+    res.json({ count: row?.count ?? 0 });
+  } catch {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const dbUser = (req as AuthRequest).dbUser;
+    const id = req.params.id as string;
+    const { body } = req.body as { body?: string };
+    if (!body?.trim()) { res.status(400).json({ error: "body is required" }); return; }
+    const [note] = await db.select().from(notesTable).where(eq(notesTable.id, id)).limit(1);
+    if (!note) { res.status(404).json({ error: "Note not found" }); return; }
+    if (note.authorId !== dbUser.id && dbUser.role !== "ADMIN") {
+      res.status(403).json({ error: "You can only edit your own notes" }); return;
+    }
+    const [updated] = await db
+      .update(notesTable)
+      .set({ body: body.trim() })
       .where(eq(notesTable.id, id))
-      .limit(1);
-    if (!note) {
-      res.status(404).json({ error: "Note not found" });
-      return;
+      .returning();
+    res.json({ ...updated, authorName: dbUser.name });
+  } catch {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const dbUser = (req as AuthRequest).dbUser;
+    const id = req.params.id as string;
+    const [note] = await db.select().from(notesTable).where(eq(notesTable.id, id)).limit(1);
+    if (!note) { res.status(404).json({ error: "Note not found" }); return; }
+    if (note.authorId !== dbUser.id && dbUser.role !== "ADMIN") {
+      res.status(403).json({ error: "You can only delete your own notes" }); return;
     }
     await db.delete(notesTable).where(eq(notesTable.id, id));
     res.status(204).end();
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Internal server error" });
   }
 });

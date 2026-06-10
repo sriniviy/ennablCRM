@@ -12,7 +12,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
-import { Users, Building2, CircleDollarSign, CheckSquare, Activity, Search } from "lucide-react";
+import { Users, Building2, CircleDollarSign, CheckSquare, Activity, Search, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface SearchResults {
@@ -30,6 +30,53 @@ interface SearchResults {
   }>;
   tasks: Array<{ id: string; title: string; completed: boolean }>;
 }
+
+const RECENT_KEY = "crm_recent_records";
+const MAX_RECENT = 6;
+
+interface RecentRecord {
+  type: "contact" | "company" | "deal";
+  id: string;
+  label: string;
+  sublabel?: string;
+  href: string;
+}
+
+function getRecentRecords(): RecentRecord[] {
+  try {
+    return JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]") as RecentRecord[];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentRecord(record: RecentRecord) {
+  try {
+    const existing = getRecentRecords().filter((r) => r.href !== record.href);
+    localStorage.setItem(RECENT_KEY, JSON.stringify([record, ...existing].slice(0, MAX_RECENT)));
+  } catch {}
+}
+
+function Highlight({ text, query }: { text: string; query: string }) {
+  if (!query.trim()) return <>{text}</>;
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx === -1) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="bg-yellow-200 dark:bg-yellow-700 text-foreground rounded-sm not-italic">
+        {text.slice(idx, idx + query.length)}
+      </mark>
+      {text.slice(idx + query.length)}
+    </>
+  );
+}
+
+const ICON_FOR_TYPE: Record<RecentRecord["type"], React.ReactNode> = {
+  contact: <Users className="h-4 w-4 text-muted-foreground shrink-0" />,
+  company: <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />,
+  deal: <CircleDollarSign className="h-4 w-4 text-muted-foreground shrink-0" />,
+};
 
 function useSearch(query: string) {
   const getToken = useSessionToken();
@@ -66,6 +113,7 @@ export function GlobalSearch({ collapsed }: GlobalSearchProps) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [, navigate] = useLocation();
+  const [recentRecords, setRecentRecords] = useState<RecentRecord[]>([]);
 
   const debouncedQuery = useDebounce(input, 200);
   const { data, isFetching } = useSearch(debouncedQuery);
@@ -81,11 +129,16 @@ export function GlobalSearch({ collapsed }: GlobalSearchProps) {
   const handleOpenChange = useCallback((val: boolean) => {
     setOpen(val);
     if (!val) setInput("");
+    if (val) setRecentRecords(getRecentRecords());
   }, []);
 
   const go = useCallback(
-    (href: string) => {
+    (href: string, recent?: RecentRecord) => {
       handleOpenChange(false);
+      if (recent) {
+        saveRecentRecord(recent);
+        setRecentRecords(getRecentRecords());
+      }
       navigate(href);
     },
     [handleOpenChange, navigate],
@@ -101,6 +154,10 @@ export function GlobalSearch({ collapsed }: GlobalSearchProps) {
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, []);
+
+  const q = debouncedQuery.trim();
+  const showRecent = q.length === 0 && recentRecords.length > 0;
+  const showEmpty = q.length > 0 && !isFetching && !hasResults;
 
   return (
     <>
@@ -134,12 +191,34 @@ export function GlobalSearch({ collapsed }: GlobalSearchProps) {
           onValueChange={setInput}
         />
         <CommandList>
-          {debouncedQuery.trim().length === 0 && (
+          {q.length === 0 && !showRecent && (
             <CommandEmpty>Start typing to search…</CommandEmpty>
           )}
 
-          {debouncedQuery.trim().length > 0 && !isFetching && !hasResults && (
+          {showEmpty && (
             <CommandEmpty>No results for "{debouncedQuery}"</CommandEmpty>
+          )}
+
+          {showRecent && (
+            <CommandGroup heading="Recent">
+              {recentRecords.map((r) => (
+                <CommandItem
+                  key={r.href}
+                  value={`recent-${r.href}`}
+                  onSelect={() => go(r.href)}
+                  className="cursor-pointer"
+                >
+                  <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
+                  {ICON_FOR_TYPE[r.type]}
+                  <div className="flex flex-col min-w-0">
+                    <span className="truncate">{r.label}</span>
+                    {r.sublabel && (
+                      <span className="text-xs text-muted-foreground truncate">{r.sublabel}</span>
+                    )}
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
           )}
 
           {data && data.contacts.length > 0 && (
@@ -149,15 +228,25 @@ export function GlobalSearch({ collapsed }: GlobalSearchProps) {
                   <CommandItem
                     key={c.id}
                     value={`contact-${c.id}-${c.firstName} ${c.lastName}`}
-                    onSelect={() => go(`/contacts/${c.id}`)}
+                    onSelect={() =>
+                      go(`/contacts/${c.id}`, {
+                        type: "contact",
+                        id: c.id,
+                        label: `${c.firstName} ${c.lastName}`,
+                        sublabel: c.email,
+                        href: `/contacts/${c.id}`,
+                      })
+                    }
                     className="cursor-pointer"
                   >
                     <Users className="h-4 w-4 text-muted-foreground shrink-0" />
                     <div className="flex flex-col min-w-0">
                       <span className="truncate font-medium">
-                        {c.firstName} {c.lastName}
+                        <Highlight text={`${c.firstName} ${c.lastName}`} query={q} />
                       </span>
-                      <span className="text-xs text-muted-foreground truncate">{c.email}</span>
+                      <span className="text-xs text-muted-foreground truncate">
+                        <Highlight text={c.email} query={q} />
+                      </span>
                     </div>
                   </CommandItem>
                 ))}
@@ -176,12 +265,22 @@ export function GlobalSearch({ collapsed }: GlobalSearchProps) {
                   <CommandItem
                     key={c.id}
                     value={`company-${c.id}-${c.name}`}
-                    onSelect={() => go(`/companies/${c.id}`)}
+                    onSelect={() =>
+                      go(`/companies/${c.id}`, {
+                        type: "company",
+                        id: c.id,
+                        label: c.name,
+                        sublabel: c.domain ?? c.domains[0],
+                        href: `/companies/${c.id}`,
+                      })
+                    }
                     className="cursor-pointer"
                   >
                     <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
                     <div className="flex flex-col min-w-0">
-                      <span className="truncate">{c.name}</span>
+                      <span className="truncate">
+                        <Highlight text={c.name} query={q} />
+                      </span>
                       {(c.domain || c.domains.length > 0) && (
                         <span className="text-xs text-muted-foreground truncate">
                           {[c.domain, ...c.domains]
@@ -200,18 +299,27 @@ export function GlobalSearch({ collapsed }: GlobalSearchProps) {
             </>
           )}
 
-          {data && debouncedQuery.trim().length > 0 && data.deals.length > 0 && (
+          {data && q.length > 0 && data.deals.length > 0 && (
             <>
               <CommandGroup heading="Deals">
                 {data.deals.map((d) => (
                   <CommandItem
                     key={d.id}
                     value={`deal-${d.id}-${d.title}`}
-                    onSelect={() => go(`/deals?open=${d.id}`)}
+                    onSelect={() =>
+                      go(`/deals?open=${d.id}`, {
+                        type: "deal",
+                        id: d.id,
+                        label: d.title,
+                        href: `/deals?open=${d.id}`,
+                      })
+                    }
                     className="cursor-pointer"
                   >
                     <CircleDollarSign className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="truncate">{d.title}</span>
+                    <span className="truncate">
+                      <Highlight text={d.title} query={q} />
+                    </span>
                   </CommandItem>
                 ))}
               </CommandGroup>
@@ -219,7 +327,7 @@ export function GlobalSearch({ collapsed }: GlobalSearchProps) {
             </>
           )}
 
-          {data && debouncedQuery.trim().length > 0 && data.activities.length > 0 && (
+          {data && q.length > 0 && data.activities.length > 0 && (
             <>
               <CommandGroup heading="Activities">
                 {data.activities.map((a) => {
@@ -240,7 +348,9 @@ export function GlobalSearch({ collapsed }: GlobalSearchProps) {
                     >
                       <Activity className="h-4 w-4 text-muted-foreground shrink-0" />
                       <div className="flex flex-col min-w-0">
-                        <span className="truncate">{a.title}</span>
+                        <span className="truncate">
+                          <Highlight text={a.title} query={q} />
+                        </span>
                         {a.emailSubject && (
                           <span className="text-xs text-muted-foreground truncate">
                             {a.emailSubject}
@@ -255,7 +365,7 @@ export function GlobalSearch({ collapsed }: GlobalSearchProps) {
             </>
           )}
 
-          {data && debouncedQuery.trim().length > 0 && data.tasks.length > 0 && (
+          {data && q.length > 0 && data.tasks.length > 0 && (
             <CommandGroup heading="Tasks">
               {data.tasks.map((t) => (
                 <CommandItem
@@ -266,7 +376,7 @@ export function GlobalSearch({ collapsed }: GlobalSearchProps) {
                 >
                   <CheckSquare className="h-4 w-4 text-muted-foreground shrink-0" />
                   <span className={`truncate ${t.completed ? "line-through text-muted-foreground" : ""}`}>
-                    {t.title}
+                    <Highlight text={t.title} query={q} />
                   </span>
                 </CommandItem>
               ))}

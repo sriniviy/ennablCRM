@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db, usersTable, baUserTable, baSessionTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, usersTable, baUserTable, baSessionTable, dealsTable, tasksTable, dealStagesTable } from "@workspace/db";
+import { eq, and, not, sql } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 import { auth } from "../lib/auth";
 import type { Request, Response } from "express";
@@ -157,6 +157,62 @@ router.delete("/:userId", requireAuth, async (req: Request, res: Response) => {
 
     await db.delete(usersTable).where(eq(usersTable.id, userId));
     res.json({ ok: true });
+  } catch (err) {
+    const e = err as Error;
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get("/my-assignments", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { dbUser } = req as AuthRequest;
+    const [dealRows, taskRows] = await Promise.all([
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(dealsTable)
+        .leftJoin(dealStagesTable, eq(dealsTable.stageId, dealStagesTable.id))
+        .where(
+          and(
+            eq(dealsTable.assigneeId, dbUser.id),
+            not(eq(dealStagesTable.name, "Won")),
+            not(eq(dealStagesTable.name, "Lost")),
+          ),
+        ),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(tasksTable)
+        .where(
+          and(
+            eq(tasksTable.assigneeId, dbUser.id),
+            eq(tasksTable.completed, false),
+          ),
+        ),
+    ]);
+    res.json({ deals: dealRows[0]?.count ?? 0, tasks: taskRows[0]?.count ?? 0 });
+  } catch (err) {
+    const e = err as Error;
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post("/bootstrap-admin", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const dbUser = (req as AuthRequest).dbUser;
+    const admins = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.role, "ADMIN"))
+      .limit(1);
+    if (admins.length > 0) {
+      res.status(400).json({ error: "An admin already exists. Ask them to promote you." });
+      return;
+    }
+    const [updated] = await db
+      .update(usersTable)
+      .set({ role: "ADMIN" })
+      .where(eq(usersTable.id, dbUser.id))
+      .returning();
+    res.json({ ok: true, user: updated });
   } catch (err) {
     const e = err as Error;
     res.status(500).json({ error: e.message });
