@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, attachmentsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
-import { requireAuth } from "../middlewares/requireAuth";
+import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 import { ObjectStorageService } from "../lib/objectStorage";
 
 const router: IRouter = Router();
@@ -79,10 +79,22 @@ router.post("/", async (req: Request, res: Response) => {
 
 router.delete("/:id", async (req: Request, res: Response) => {
   const id = req.params.id as string;
+  const { dbUser } = req as AuthRequest;
   try {
-    await db
-      .delete(attachmentsTable)
-      .where(eq(attachmentsTable.id, id));
+    const [attachment] = await db
+      .select()
+      .from(attachmentsTable)
+      .where(eq(attachmentsTable.id, id))
+      .limit(1);
+    if (!attachment) {
+      res.status(404).json({ error: "Attachment not found" });
+      return;
+    }
+    if (attachment.uploadedBy !== dbUser.id && dbUser.role !== "ADMIN") {
+      res.status(403).json({ error: "You can only delete your own attachments" });
+      return;
+    }
+    await db.delete(attachmentsTable).where(eq(attachmentsTable.id, id));
     res.status(204).send();
   } catch (err) {
     req.log.error(err);

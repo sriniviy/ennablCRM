@@ -5,8 +5,9 @@ import {
   RequestUploadUrlResponse,
 } from "@workspace/api-zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
-import { ObjectPermission } from "../lib/objectAcl";
 import { requireAuth } from "../middlewares/requireAuth";
+import { db, attachmentsTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
@@ -90,6 +91,18 @@ router.get("/storage/objects/*path", requireAuth, async (req: Request, res: Resp
     const raw = req.params.path;
     const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;
     const objectPath = `/objects/${wildcardPath}`;
+
+    // Verify this objectPath exists as a registered attachment (prevents path-guessing access to arbitrary files)
+    const [record] = await db
+      .select({ id: attachmentsTable.id })
+      .from(attachmentsTable)
+      .where(eq(attachmentsTable.objectPath, objectPath))
+      .limit(1);
+    if (!record) {
+      res.status(404).json({ error: "Object not found" });
+      return;
+    }
+
     const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
 
     const response = await objectStorageService.downloadObject(objectFile);
