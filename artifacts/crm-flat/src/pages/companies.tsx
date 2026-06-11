@@ -219,68 +219,81 @@ export function CompaniesPage() {
             />
           )
         ) : (
-          <div className="rounded-md border bg-card">
-            <Table>
+          <div className="rounded-md border bg-card overflow-hidden">
+            <Table className="table-fixed w-full">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Domain</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Industry</TableHead>
-                  <TableHead>Size</TableHead>
-                  <TableHead>Contacts</TableHead>
-                  <TableHead>Open Deals</TableHead>
+                  <TableHead className="w-[28%]">Name</TableHead>
+                  <TableHead className="w-[18%]">Domain</TableHead>
+                  <TableHead className="w-[18%]">Account Owner</TableHead>
+                  <TableHead className="w-[16%]">Member Of</TableHead>
+                  <TableHead className="w-[10%] text-right">Open Deals</TableHead>
+                  <TableHead className="w-[10%] text-right">Deal Value</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   [...Array(5)].map((_, i) => (
                     <TableRow key={i}>
-                      {[...Array(7)].map((__, j) => <TableCell key={j}><Skeleton className="h-4 w-20" /></TableCell>)}
+                      {[...Array(6)].map((__, j) => <TableCell key={j}><Skeleton className="h-4 w-20" /></TableCell>)}
                     </TableRow>
                   ))
                 ) : companies.length > 0 ? (
-                  companies.map(company => (
-                    <TableRow key={company.id} className="cursor-pointer hover:bg-muted/40" onClick={() => openEdit(company)}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-                          <Link
-                            href={`/companies/${company.id}`}
-                            className="hover:underline text-primary"
-                            onClick={e => e.stopPropagation()}
-                          >
-                            {company.name}
-                          </Link>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {company.domain ? (
-                          <a
-                            href={`https://${company.domain}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="flex items-center gap-1 text-muted-foreground hover:text-primary"
-                            onClick={e => e.stopPropagation()}
-                          >
-                            <Globe className="h-3 w-3" /> {company.domain}
-                          </a>
-                        ) : <span className="text-muted-foreground">—</span>}
-                      </TableCell>
-                      <TableCell>
-                        {company.status ? (
-                          <Badge variant="outline" className="font-normal">{company.status.replace(/_/g, " ")}</Badge>
-                        ) : <span className="text-muted-foreground">—</span>}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{company.industry ?? "—"}</TableCell>
-                      <TableCell className="text-muted-foreground">{company.size ?? "—"}</TableCell>
-                      <TableCell className="text-muted-foreground">—</TableCell>
-                      <TableCell className="text-muted-foreground">—</TableCell>
-                    </TableRow>
-                  ))
+                  companies.map(company => {
+                    const ownerName = company.assignedCsmId
+                      ? (members ?? []).find(m => m.id === company.assignedCsmId)?.name ?? "—"
+                      : "—";
+                    const memberOfStr = company.memberOf?.length ? company.memberOf.join(", ") : "—";
+                    return (
+                      <TableRow key={company.id} className="cursor-pointer hover:bg-muted/40" onClick={() => openEdit(company)}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <Link
+                              href={`/companies/${company.id}`}
+                              className="hover:underline text-primary truncate"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              {company.name}
+                            </Link>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {company.domain ? (
+                            <a
+                              href={`https://${company.domain}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-1 hover:text-primary truncate"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <Globe className="h-3 w-3 shrink-0" />
+                              <span className="truncate">{company.domain}</span>
+                            </a>
+                          ) : "—"}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground truncate">{ownerName}</TableCell>
+                        <TableCell className="text-muted-foreground truncate">{memberOfStr}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {company.openDeals != null && company.openDeals > 0 ? (
+                            <span className="font-medium">{company.openDeals}</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums text-sm">
+                          {company.totalDealsValue != null && company.totalDealsValue > 0 ? (
+                            <span className="font-medium text-primary">{formatCurrency(company.totalDealsValue)}</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                       No companies found.
                     </TableCell>
                   </TableRow>

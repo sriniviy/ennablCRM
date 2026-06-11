@@ -32,6 +32,7 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
           company: companiesTable,
           contactCount: sql<number>`count(distinct ${contactsTable.id})::int`,
           openDeals: sql<number>`count(distinct ${dealsTable.id})::int`,
+          totalDealsValue: sql<number>`coalesce(sum(${dealsTable.value}), 0)::float`,
         })
         .from(companiesTable)
         .leftJoin(contactsTable, eq(contactsTable.companyId, companiesTable.id))
@@ -45,10 +46,11 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
     ]);
 
     res.json({
-      data: companies.map(({ company, contactCount, openDeals }) => ({
+      data: companies.map(({ company, contactCount, openDeals, totalDealsValue }) => ({
         ...company,
         contactCount,
         openDeals,
+        totalDealsValue,
       })),
       total: count,
       page: pg,

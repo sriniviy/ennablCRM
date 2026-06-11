@@ -201,7 +201,7 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label>Assigned CSM</Label>
+                <Label>Account Owner</Label>
                 <Select value={assignedCsmId} onValueChange={setAssignedCsmId}>
                   <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
                   <SelectContent>

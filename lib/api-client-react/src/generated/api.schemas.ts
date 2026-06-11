@@ -160,6 +160,12 @@ export interface Company {
   country?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Computed on list endpoint: number of associated contacts */
+  contactCount?: number;
+  /** Computed on list endpoint: number of open deals */
+  openDeals?: number;
+  /** Computed on list endpoint: sum of all deal values */
+  totalDealsValue?: number;
 }
 
 export interface CompanySummary {
