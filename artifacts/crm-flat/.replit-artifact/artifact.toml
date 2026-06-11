@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/crm-flat/"
+title = "MyCRM – Flat"
+version = "1.0.0"
+id = "artifacts/crm-flat"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/crm-flat/" ]
+localPort = 19011
+
+[services.development]
+run = "pnpm --filter @workspace/crm-flat run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/crm-flat", "run", "build" ]
+publicDir = "artifacts/crm-flat/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19011"
+BASE_PATH = "/crm-flat/"
