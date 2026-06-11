@@ -234,9 +234,9 @@ export function DealsPage() {
             </div>
           )
         ) : dealsLoading ? (
-          <div className="flex gap-6 overflow-x-auto pb-4">
+          <div className="grid gap-3 pb-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="w-80 shrink-0 space-y-4">
+              <div key={i} className="space-y-4">
                 <Skeleton className="h-12 w-full" />
                 <Skeleton className="h-32 w-full" />
                 <Skeleton className="h-32 w-full" />
@@ -244,31 +244,34 @@ export function DealsPage() {
             ))}
           </div>
         ) : (
-          <div className="flex-1 overflow-x-auto pb-4">
+          <div className="flex-1 pb-4">
             <DragDropContext onDragEnd={handleDragEnd}>
-              <div className="flex gap-6 h-full min-h-[500px] items-start">
+              <div
+                className="grid gap-3 min-h-[500px] items-start"
+                style={{ gridTemplateColumns: `repeat(${(columns ?? []).length || 1}, minmax(0, 1fr))` }}
+              >
                 {(columns ?? []).map(column => (
-                  <div key={column.stage.id} className="w-80 shrink-0 flex flex-col h-full max-h-full">
-                    <div className="mb-4">
+                  <div key={column.stage.id} className="min-w-0 flex flex-col">
+                    <div className="mb-3">
                       <div className="flex items-center justify-between mb-1">
-                        <h3 className="font-semibold text-sm flex items-center gap-2">
+                        <h3 className="font-semibold text-xs flex items-center gap-1.5 min-w-0">
                           <span
-                            className="w-3 h-3 rounded-full inline-block"
+                            className="w-2.5 h-2.5 rounded-full shrink-0 inline-block"
                             style={{ backgroundColor: column.stage.color || "var(--primary)" }}
                           />
-                          {column.stage.name}
-                          <span className="text-muted-foreground font-normal ml-1">({column.deals.length})</span>
+                          <span className="truncate">{column.stage.name}</span>
+                          <span className="text-muted-foreground font-normal shrink-0">({column.deals.length})</span>
                         </h3>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                          className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
                           onClick={() => openNew(column.stage.id)}
                         >
-                          <Plus className="h-4 w-4" />
+                          <Plus className="h-3.5 w-3.5" />
                         </Button>
                       </div>
-                      <p className="text-sm font-medium text-muted-foreground">
+                      <p className="text-xs font-medium text-muted-foreground">
                         {formatCurrency(column.totalValue)}
                       </p>
                     </div>
@@ -278,9 +281,9 @@ export function DealsPage() {
                         <div
                           {...provided.droppableProps}
                           ref={provided.innerRef}
-                          className={`flex-1 rounded-xl p-2 min-h-[150px] transition-colors ${snapshot.isDraggingOver ? "bg-muted" : "bg-muted/30"}`}
+                          className={`flex-1 rounded-xl p-1.5 min-h-[150px] transition-colors ${snapshot.isDraggingOver ? "bg-muted" : "bg-muted/30"}`}
                         >
-                          <div className="space-y-3">
+                          <div className="space-y-2">
                             {column.deals.map((deal, index) => (
                               <Draggable key={deal.id} draggableId={deal.id} index={index}>
                                 {(provided, snapshot) => (
@@ -292,14 +295,14 @@ export function DealsPage() {
                                     onClick={() => openEdit(deal)}
                                   >
                                     <Card className={`shadow-sm border border-border/50 cursor-pointer hover:shadow-md transition-shadow ${snapshot.isDragging ? "shadow-lg ring-1 ring-primary/20" : ""}`}>
-                                      <CardContent className="p-4">
-                                        <div className="font-medium mb-1 line-clamp-2">{deal.title}</div>
-                                        <div className="text-lg font-bold text-primary mb-2">
+                                      <CardContent className="p-2.5">
+                                        <div className="text-xs font-medium mb-1 line-clamp-2 leading-snug">{deal.title}</div>
+                                        <div className="text-sm font-bold text-primary mb-1.5">
                                           {formatCurrency(deal.value || 0)}
                                         </div>
-                                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                          <span>{deal.company?.name || deal.contact?.firstName || "No account"}</span>
-                                          <span className="bg-muted px-2 py-0.5 rounded">{deal.probability}%</span>
+                                        <div className="flex items-center justify-between text-[10px] text-muted-foreground gap-1">
+                                          <span className="truncate">{deal.company?.name || deal.contact?.firstName || "No account"}</span>
+                                          <span className="bg-muted px-1.5 py-0.5 rounded shrink-0">{deal.probability}%</span>
                                         </div>
                                       </CardContent>
                                     </Card>
