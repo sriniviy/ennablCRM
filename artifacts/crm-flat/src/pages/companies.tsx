@@ -297,7 +297,7 @@ export function CompaniesPage() {
                   {(["Name", "Website", "Account Owner", "Member Of", "Open Deals", "Deal Value"] as const).map((label, i) => (
                     <TableHead
                       key={label}
-                      className={`relative select-none overflow-hidden ${i >= 4 ? "text-right" : ""}`}
+                      className="relative select-none overflow-hidden"
                     >
                       <span className="block truncate">{label}</span>
                       {i < 5 && (
