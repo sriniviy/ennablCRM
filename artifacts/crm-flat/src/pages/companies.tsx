@@ -1,6 +1,6 @@
 import { useSessionToken } from "@/hooks/use-session-token";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 
 import { useListCompanies, CompanyStatus, useGetMe, type Company } from "@workspace/api-client-react";
 import { useTeamMembers } from "@/hooks/use-team-members";
@@ -25,6 +25,73 @@ import { ViewToggle, type ViewMode } from "@/components/view-toggle";
 import { RecordCardGrid, type CardField } from "@/components/record-card-grid";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+const COL_STORAGE_KEY = "crm-flat:companies-col-widths";
+const DEFAULT_WIDTHS = [28, 18, 18, 16, 10, 10]; // percentages summing to 100
+const MIN_COL_PCT = 5;
+
+function useResizableColumns() {
+  const [widths, setWidths] = useState<number[]>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(COL_STORAGE_KEY) ?? "null");
+      if (Array.isArray(saved) && saved.length === DEFAULT_WIDTHS.length) return saved as number[];
+    } catch {}
+    return DEFAULT_WIDTHS;
+  });
+
+  const drag = useRef<{ col: number; startX: number; startWidths: number[] } | null>(null);
+  const tableRef = useRef<HTMLDivElement>(null);
+
+  const onMouseMove = useCallback((e: MouseEvent) => {
+    if (!drag.current || !tableRef.current) return;
+    const tableW = tableRef.current.getBoundingClientRect().width;
+    const deltaPx = e.clientX - drag.current.startX;
+    const deltaPct = (deltaPx / tableW) * 100;
+    const { col, startWidths } = drag.current;
+    const next = col + 1;
+    if (next >= startWidths.length) return;
+
+    const newA = Math.max(MIN_COL_PCT, startWidths[col] + deltaPct);
+    const newB = Math.max(MIN_COL_PCT, startWidths[next] - (newA - startWidths[col]));
+    const adjA = startWidths[col] + startWidths[next] - newB;
+
+    setWidths(prev => {
+      const w = [...prev];
+      w[col] = adjA;
+      w[next] = newB;
+      return w;
+    });
+  }, []);
+
+  const onMouseUp = useCallback(() => {
+    if (!drag.current) return;
+    drag.current = null;
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+    setWidths(prev => {
+      try { localStorage.setItem(COL_STORAGE_KEY, JSON.stringify(prev)); } catch {}
+      return prev;
+    });
+  }, []);
+
+  useEffect(() => {
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+    return () => {
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [onMouseMove, onMouseUp]);
+
+  const startResize = useCallback((colIndex: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    drag.current = { col: colIndex, startX: e.clientX, startWidths: widths.slice() };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, [widths]);
+
+  return { widths, tableRef, startResize };
+}
 
 const STATUSES = ["ALL", ...Object.values(CompanyStatus)];
 
@@ -144,6 +211,7 @@ export function CompaniesPage() {
 
   const { data: me } = useGetMe();
   const isAdmin = me?.role === "ADMIN";
+  const { widths, tableRef, startResize } = useResizableColumns();
 
   return (
     <SidebarLayout>
@@ -219,16 +287,28 @@ export function CompaniesPage() {
             />
           )
         ) : (
-          <div className="rounded-md border bg-card overflow-hidden">
+          <div className="rounded-md border bg-card overflow-hidden" ref={tableRef}>
             <Table className="table-fixed w-full">
+              <colgroup>
+                {widths.map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}
+              </colgroup>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[28%]">Name</TableHead>
-                  <TableHead className="w-[18%]">Website</TableHead>
-                  <TableHead className="w-[18%]">Account Owner</TableHead>
-                  <TableHead className="w-[16%]">Member Of</TableHead>
-                  <TableHead className="w-[10%] text-right">Open Deals</TableHead>
-                  <TableHead className="w-[10%] text-right">Deal Value</TableHead>
+                  {(["Name", "Website", "Account Owner", "Member Of", "Open Deals", "Deal Value"] as const).map((label, i) => (
+                    <TableHead
+                      key={label}
+                      className={`relative select-none overflow-hidden ${i >= 4 ? "text-right" : ""}`}
+                    >
+                      <span className="block truncate">{label}</span>
+                      {i < 5 && (
+                        <span
+                          onMouseDown={e => startResize(i, e)}
+                          className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors z-10"
+                          title="Drag to resize"
+                        />
+                      )}
+                    </TableHead>
+                  ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
