@@ -4,10 +4,9 @@ import { useRef, useState, useEffect } from "react";
 
 import { useListDeals, useMoveDeal, useListDealStages, getListDealsQueryKey, type PipelineColumn, type DealWithRelations } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Download } from "lucide-react";
+import { Plus, Download, ChevronDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { formatCurrency } from "@/lib/utils";
@@ -16,10 +15,7 @@ import { DealDialog } from "@/components/deals/deal-dialog";
 import { ExportColumnsDialog, type ColumnDef } from "@/components/export-columns-dialog";
 import { useUrlFilters } from "@/hooks/use-url-filters";
 import { useTeamMembers } from "@/hooks/use-team-members";
-import { ViewToggle, type ViewMode } from "@/components/view-toggle";
 import { RecordCardGrid, type CardField } from "@/components/record-card-grid";
-
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 const DEAL_COLUMNS: ColumnDef[] = [
   { key: "title", label: "Title" },
@@ -46,15 +42,15 @@ const CARD_FIELDS: CardField<DealWithRelations>[] = [
   { label: "Company", render: d => dash(d.company?.name) },
   { label: "Owner", render: d => dash(d.assignee?.name) },
   { label: "Notes", render: d => dash(d.notes) },
-  { label: "Order", render: d => dash(d.order) },
-  { label: "Stage ID", render: d => dash(d.stageId) },
-  { label: "Contact ID", render: d => dash(d.contactId) },
-  { label: "Company ID", render: d => dash(d.companyId) },
-  { label: "Owner ID", render: d => dash(d.assigneeId) },
   { label: "Created", render: d => (d.createdAt ? new Date(d.createdAt).toLocaleString() : "—") },
-  { label: "Updated", render: d => (d.updatedAt ? new Date(d.updatedAt).toLocaleString() : "—") },
-  { label: "ID", render: d => dash(d.id) },
 ];
+
+function probBadgeStyle(p: number | null | undefined) {
+  const pct = p ?? 0;
+  if (pct >= 80) return "bg-green-100 text-green-700 border border-green-200";
+  if (pct >= 50) return "bg-yellow-100 text-yellow-700 border border-yellow-200";
+  return "bg-red-100 text-red-700 border border-red-200";
+}
 
 export function DealsPage() {
   const getToken = useSessionToken();
@@ -65,7 +61,7 @@ export function DealsPage() {
 
   const [stageFilter, setStageFilter] = useState(() => get("stageId") || "ALL");
   const [ownerFilter, setOwnerFilter] = useState(() => get("assigneeId") || "ALL");
-  const [view, setView] = useState<ViewMode>(() => (get("view") === "cards" ? "cards" : "table"));
+  const [view, setView] = useState<"pipeline" | "cards">(() => (get("view") === "cards" ? "cards" : "pipeline"));
 
   const { data: columns, isLoading: dealsLoading } = useListDeals({
     stageId: stageFilter !== "ALL" ? stageFilter : undefined,
@@ -176,50 +172,108 @@ export function DealsPage() {
   }, [columns]);
 
   const allDeals = (columns ?? []).flatMap(c => c.deals) as DealWithRelations[];
+  const totalValue = (columns ?? []).reduce((sum, c) => sum + (c.totalValue ?? 0), 0);
+  const totalDeals = (columns ?? []).reduce((sum, c) => sum + c.deals.length, 0);
 
   return (
     <SidebarLayout>
-      <div className="space-y-6 h-full flex flex-col min-h-0">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
+      <div className="flex flex-col gap-4 h-full min-h-0">
+
+        {/* Header row */}
+        <div className="flex items-start justify-between gap-4 shrink-0">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Deals Pipeline</h1>
-            <p className="text-muted-foreground">Manage and track your active opportunities.</p>
+            <h1 className="text-base font-bold tracking-tight">Deals Pipeline</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">Manage and track your active opportunities.</p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setExportOpen(true)}>
-              <Download className="mr-2 h-4 w-4" />
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setExportOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-border bg-white text-foreground hover:bg-muted transition-colors"
+            >
+              <Download className="h-3 w-3" />
               Export CSV
-            </Button>
-            <Button data-testid="btn-new-deal" onClick={() => openNew()}>
-              <Plus className="mr-2 h-4 w-4" /> Add Deal
-            </Button>
+            </button>
+            <button
+              data-testid="btn-new-deal"
+              onClick={() => openNew()}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-semibold"
+            >
+              <Plus className="h-3 w-3" />
+              Add Deal
+            </button>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
+        {/* Stats bar */}
+        {!dealsLoading && columns && (
+          <div className="grid border border-border shrink-0" style={{ gridTemplateColumns: `repeat(${2 + (columns.length)}, 1fr)` }}>
+            <div className="px-3 py-2 border-r border-border">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">Total Value</div>
+              <div className="text-base font-bold text-primary">{formatCurrency(totalValue)}</div>
+            </div>
+            <div className="px-3 py-2 border-r border-border">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">Deals</div>
+              <div className="text-base font-bold text-foreground">{totalDeals}</div>
+            </div>
+            {columns.map((col, i) => (
+              <div key={col.stage.id} className={i < columns.length - 1 ? "px-3 py-2 border-r border-border" : "px-3 py-2"}>
+                <div className="flex items-center gap-1 mb-0.5">
+                  <span
+                    className="w-1.5 h-1.5 rounded-full shrink-0 inline-block"
+                    style={{ backgroundColor: col.stage.color || "var(--primary)" }}
+                  />
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{col.stage.name}</span>
+                </div>
+                <div className="text-sm font-bold" style={{ color: col.stage.color || "var(--color-primary)" }}>
+                  {formatCurrency(col.totalValue ?? 0)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Filter bar */}
+        <div className="flex items-center gap-2 shrink-0">
           <Select value={stageFilter} onValueChange={setStageFilter}>
-            <SelectTrigger className="w-44" data-testid="select-deal-stage"><SelectValue placeholder="Stage" /></SelectTrigger>
+            <SelectTrigger className="h-7 text-xs rounded-none border-border w-36 gap-1" data-testid="select-deal-stage">
+              <SelectValue placeholder="All stages" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">All stages</SelectItem>
               {(stages ?? []).map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={ownerFilter} onValueChange={setOwnerFilter}>
-            <SelectTrigger className="w-44" data-testid="select-deal-owner"><SelectValue placeholder="Owner" /></SelectTrigger>
+            <SelectTrigger className="h-7 text-xs rounded-none border-border w-36 gap-1" data-testid="select-deal-owner">
+              <SelectValue placeholder="All owners" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">All owners</SelectItem>
               {(members ?? []).map(m => <SelectItem key={m.id} value={m.id}>{m.name ?? "Unknown"}</SelectItem>)}
             </SelectContent>
           </Select>
-          <div className="ml-auto">
-            <ViewToggle value={view} onChange={setView} tableLabel="Pipeline view" />
+          {/* Pipeline / Cards toggle */}
+          <div className="ml-auto flex border border-border">
+            <button
+              onClick={() => setView("pipeline")}
+              className={`px-3 py-1 text-xs font-medium transition-colors ${view === "pipeline" ? "bg-primary text-primary-foreground" : "bg-white text-muted-foreground hover:bg-muted"}`}
+            >
+              Pipeline
+            </button>
+            <button
+              onClick={() => setView("cards")}
+              className={`px-3 py-1 text-xs font-medium transition-colors border-l border-border ${view === "cards" ? "bg-primary text-primary-foreground" : "bg-white text-muted-foreground hover:bg-muted"}`}
+            >
+              Cards
+            </button>
           </div>
         </div>
 
+        {/* Board / Cards */}
         {view === "cards" ? (
           dealsLoading ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-64 w-full" />)}
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-40 w-full" />)}
             </div>
           ) : (
             <div className="flex-1 overflow-y-auto">
@@ -234,46 +288,56 @@ export function DealsPage() {
             </div>
           )
         ) : dealsLoading ? (
-          <div className="grid gap-3 pb-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
+          <div
+            className="grid gap-3 pb-4"
+            style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}
+          >
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="space-y-4">
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-32 w-full" />
-                <Skeleton className="h-32 w-full" />
+              <div key={i} className="space-y-3">
+                <Skeleton className="h-14 w-full" />
+                <Skeleton className="h-28 w-full" />
+                <Skeleton className="h-28 w-full" />
               </div>
             ))}
           </div>
         ) : (
-          <div className="flex-1 pb-4">
+          <div className="flex-1 pb-4 overflow-x-auto">
             <DragDropContext onDragEnd={handleDragEnd}>
               <div
-                className="grid gap-3 min-h-[500px] items-start"
-                style={{ gridTemplateColumns: `repeat(${(columns ?? []).length || 1}, minmax(0, 1fr))` }}
+                className="grid gap-2 items-start min-h-[400px]"
+                style={{ gridTemplateColumns: `repeat(${(columns ?? []).length || 1}, minmax(160px, 1fr))` }}
               >
                 {(columns ?? []).map(column => (
                   <div key={column.stage.id} className="min-w-0 flex flex-col">
-                    <div className="mb-3">
-                      <div className="flex items-center justify-between mb-1">
-                        <h3 className="font-semibold text-xs flex items-center gap-1.5 min-w-0">
+                    {/* Column header — flat box with colored bottom border */}
+                    <div
+                      className="flex items-center justify-between px-2.5 py-2 mb-2 border border-border bg-white"
+                      style={{ borderBottomWidth: 2, borderBottomColor: column.stage.color || "var(--color-primary)" }}
+                    >
+                      <div>
+                        <div className="flex items-center gap-1.5 mb-0.5">
                           <span
-                            className="w-2.5 h-2.5 rounded-full shrink-0 inline-block"
-                            style={{ backgroundColor: column.stage.color || "var(--primary)" }}
+                            className="w-2 h-2 rounded-full shrink-0 inline-block"
+                            style={{ backgroundColor: column.stage.color || "var(--color-primary)" }}
                           />
-                          <span className="truncate">{column.stage.name}</span>
-                          <span className="text-muted-foreground font-normal shrink-0">({column.deals.length})</span>
-                        </h3>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
-                          onClick={() => openNew(column.stage.id)}
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-foreground">
+                            {column.stage.name}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">({column.deals.length})</span>
+                        </div>
+                        <div
+                          className="text-xs font-bold pl-3.5"
+                          style={{ color: column.stage.color || "var(--color-primary)" }}
                         >
-                          <Plus className="h-3.5 w-3.5" />
-                        </Button>
+                          {formatCurrency(column.totalValue ?? 0)}
+                        </div>
                       </div>
-                      <p className="text-xs font-medium text-muted-foreground">
-                        {formatCurrency(column.totalValue)}
-                      </p>
+                      <button
+                        className="w-5 h-5 flex items-center justify-center border border-border bg-white text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                        onClick={() => openNew(column.stage.id)}
+                      >
+                        <Plus className="h-3 w-3" />
+                      </button>
                     </div>
 
                     <Droppable droppableId={column.stage.id}>
@@ -281,37 +345,59 @@ export function DealsPage() {
                         <div
                           {...provided.droppableProps}
                           ref={provided.innerRef}
-                          className={`flex-1 rounded-xl p-1.5 min-h-[150px] transition-colors ${snapshot.isDraggingOver ? "bg-muted" : "bg-muted/30"}`}
+                          className={`flex flex-col gap-1.5 min-h-[120px] transition-colors ${snapshot.isDraggingOver ? "bg-muted/60" : ""}`}
                         >
-                          <div className="space-y-2">
-                            {column.deals.map((deal, index) => (
-                              <Draggable key={deal.id} draggableId={deal.id} index={index}>
-                                {(provided, snapshot) => (
-                                  <div
-                                    ref={provided.innerRef}
-                                    {...provided.draggableProps}
-                                    {...provided.dragHandleProps}
-                                    style={{ ...provided.draggableProps.style }}
-                                    onClick={() => openEdit(deal)}
-                                  >
-                                    <Card className={`shadow-sm border border-border/50 cursor-pointer hover:shadow-md transition-shadow ${snapshot.isDragging ? "shadow-lg ring-1 ring-primary/20" : ""}`}>
-                                      <CardContent className="p-2.5">
-                                        <div className="text-xs font-medium mb-1 line-clamp-2 leading-snug">{deal.title}</div>
-                                        <div className="text-sm font-bold text-primary mb-1.5">
-                                          {formatCurrency(deal.value || 0)}
-                                        </div>
-                                        <div className="flex items-center justify-between text-[10px] text-muted-foreground gap-1">
-                                          <span className="truncate">{deal.company?.name || deal.contact?.firstName || "No account"}</span>
-                                          <span className="bg-muted px-1.5 py-0.5 rounded shrink-0">{deal.probability}%</span>
-                                        </div>
-                                      </CardContent>
-                                    </Card>
+                          {column.deals.map((deal, index) => (
+                            <Draggable key={deal.id} draggableId={deal.id} index={index}>
+                              {(provided, snapshot) => (
+                                <div
+                                  ref={provided.innerRef}
+                                  {...provided.draggableProps}
+                                  {...provided.dragHandleProps}
+                                  style={{ ...provided.draggableProps.style }}
+                                  onClick={() => openEdit(deal)}
+                                  className={`border border-border bg-white p-2 cursor-pointer transition-colors group ${
+                                    snapshot.isDragging ? "shadow-md border-primary/40" : "hover:border-primary/50"
+                                  }`}
+                                >
+                                  {/* Title */}
+                                  <div className="text-xs font-semibold leading-snug mb-1.5 text-foreground line-clamp-2">
+                                    {deal.title}
                                   </div>
-                                )}
-                              </Draggable>
-                            ))}
-                            {provided.placeholder}
-                          </div>
+                                  {/* Value */}
+                                  <div
+                                    className="text-sm font-bold mb-2"
+                                    style={{ color: column.stage.color || "var(--color-primary)" }}
+                                  >
+                                    {formatCurrency(deal.value || 0)}
+                                  </div>
+                                  {/* Company + probability */}
+                                  <div className="flex items-center justify-between gap-1 mb-1">
+                                    <span className="text-[10px] text-muted-foreground truncate">
+                                      {deal.company?.name || deal.contact?.firstName || "No account"}
+                                    </span>
+                                    <span className={`text-[10px] font-semibold px-1 py-0.5 shrink-0 ${probBadgeStyle(deal.probability)}`}>
+                                      {deal.probability ?? 0}%
+                                    </span>
+                                  </div>
+                                  {/* Owner */}
+                                  {deal.assignee?.name && (
+                                    <div className="border-t border-border/60 pt-1 mt-1">
+                                      <span className="text-[10px] text-muted-foreground/80">{deal.assignee.name}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
+
+                          {/* Empty state */}
+                          {column.deals.length === 0 && (
+                            <div className="border border-dashed border-border p-4 text-center text-[11px] text-muted-foreground/60">
+                              No deals
+                            </div>
+                          )}
                         </div>
                       )}
                     </Droppable>
