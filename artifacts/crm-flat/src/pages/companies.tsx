@@ -224,7 +224,7 @@ export function CompaniesPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[28%]">Name</TableHead>
-                  <TableHead className="w-[18%]">Domain</TableHead>
+                  <TableHead className="w-[18%]">Website</TableHead>
                   <TableHead className="w-[18%]">Account Owner</TableHead>
                   <TableHead className="w-[16%]">Member Of</TableHead>
                   <TableHead className="w-[10%] text-right">Open Deals</TableHead>
@@ -259,16 +259,16 @@ export function CompaniesPage() {
                           </div>
                         </TableCell>
                         <TableCell className="text-muted-foreground">
-                          {company.domain ? (
+                          {company.website ? (
                             <a
-                              href={`https://${company.domain}`}
+                              href={company.website.startsWith("http") ? company.website : `https://${company.website}`}
                               target="_blank"
                               rel="noreferrer"
                               className="flex items-center gap-1 hover:text-primary truncate"
                               onClick={e => e.stopPropagation()}
                             >
                               <Globe className="h-3 w-3 shrink-0" />
-                              <span className="truncate">{company.domain}</span>
+                              <span className="truncate">{company.website.replace(/^https?:\/\//, "")}</span>
                             </a>
                           ) : "—"}
                         </TableCell>
