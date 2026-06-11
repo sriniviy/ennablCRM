@@ -355,9 +355,13 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                     </AvatarFallback>
                   </Avatar>
                   {!collapsed && (
-                    <div className="flex flex-col items-start min-w-0 flex-1">
-                      <span className="text-xs font-semibold truncate w-full">{user.name || "User"}</span>
-                      <span className="text-[10px] text-muted-foreground capitalize">{user.role?.toLowerCase() ?? ""}</span>
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
+                      <span className="text-xs font-semibold truncate">{user.name || "User"}</span>
+                      {user.role && (
+                        <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide px-1 py-0.5 rounded-sm bg-primary/10 text-primary leading-none">
+                          {user.role.charAt(0) + user.role.slice(1).toLowerCase()}
+                        </span>
+                      )}
                     </div>
                   )}
                 </Button>
