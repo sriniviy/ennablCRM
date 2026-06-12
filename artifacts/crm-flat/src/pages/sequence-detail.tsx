@@ -58,6 +58,7 @@ import {
   RefreshCw,
   BookmarkPlus,
   X,
+  PlusCircle,
 } from "lucide-react";
 import {
   Select,
@@ -1985,6 +1986,25 @@ export function SequenceDetailPage() {
                   </li>
                 ))}
               </ol>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full gap-1.5 mt-1"
+                type="button"
+                onClick={() =>
+                  setAiDraftPreview((prev) =>
+                    prev
+                      ? [
+                          ...prev,
+                          { subject: "", body: "", delayDays: 3 },
+                        ]
+                      : prev,
+                  )
+                }
+              >
+                <PlusCircle className="h-3.5 w-3.5" />
+                Add step
+              </Button>
             </div>
           )}
 
