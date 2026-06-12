@@ -1879,11 +1879,12 @@ export function SequenceDetailPage() {
                           size="icon"
                           className="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
                           onClick={() =>
-                            setAiDraftPreview((prev) =>
-                              prev ? prev.filter((_, j) => j !== i) : prev,
-                            )
+                            setAiDraftPreview((prev) => {
+                              if (!prev) return prev;
+                              const next = prev.filter((_, j) => j !== i);
+                              return next.length === 0 ? null : next;
+                            })
                           }
-                          disabled={aiDraftPreview.length <= 1}
                           title="Remove step"
                           type="button"
                         >
