@@ -431,22 +431,30 @@ router.post("/contact-subscription/:contactId", requireAuth, async (req: Request
 router.post("/", requireAuth, async (req: Request, res: Response) => {
   try {
     const body = req.body;
-    if (!body.name || !body.subject || !body.fromName || !body.fromEmail || !body.htmlContent) {
+    const isDraft = (body.status ?? "DRAFT") === "DRAFT";
+
+    if (!isDraft && (!body.name || !body.subject || !body.fromName || !body.fromEmail || !body.htmlContent)) {
       res.status(400).json({ error: "name, subject, fromName, fromEmail, and htmlContent are required" });
+      return;
+    }
+    if (!body.name && !isDraft) {
+      res.status(400).json({ error: "name is required" });
       return;
     }
 
     const [campaign] = await db.insert(emailCampaignsTable).values({
-      name: body.name,
-      subject: body.subject,
-      fromName: body.fromName,
-      fromEmail: body.fromEmail,
-      htmlContent: body.htmlContent,
+      name: body.name || "Untitled Campaign",
+      subject: body.subject || "",
+      fromName: body.fromName || "",
+      fromEmail: body.fromEmail || "",
+      htmlContent: body.htmlContent || "",
       textContent: body.textContent ?? null,
       status: body.status ?? "DRAFT",
       scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : null,
       recipientIds: body.recipientIds ?? [],
       segmentId: body.segmentId ?? null,
+      builderBlocks: body.builderBlocks ?? null,
+      builderStep: body.builderStep ?? 0,
     }).returning();
 
     res.status(201).json(campaign);

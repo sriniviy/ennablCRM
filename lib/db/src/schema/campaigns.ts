@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, index, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, integer, index, unique } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -23,6 +23,8 @@ export const emailCampaignsTable = pgTable("email_campaigns", {
     .notNull()
     .default(sql`ARRAY[]::text[]`),
   segmentId: text("segment_id"),
+  builderBlocks: text("builder_blocks"),
+  builderStep: integer("builder_step").default(0),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

@@ -1,3 +1,4 @@
+import { useState, useCallback } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useListCampaigns } from "@workspace/api-client-react";
 import { Link } from "wouter";
@@ -7,7 +8,9 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Mail, Calendar } from "lucide-react";
+import { Plus, Mail, Calendar, Pencil, Trash2, Loader2 } from "lucide-react";
+import { authClient } from "@/lib/auth-client";
+import { useToast } from "@/hooks/use-toast";
 
 function StatusBadge({ status, scheduledAt }: { status: string; scheduledAt?: string | null }) {
   if (status === "SCHEDULED" && scheduledAt) {
@@ -38,7 +41,30 @@ function StatusBadge({ status, scheduledAt }: { status: string; scheduledAt?: st
 }
 
 export function CampaignsPage() {
-  const { data, isLoading } = useListCampaigns({ page: 1, pageSize: 50 });
+  const { data, isLoading, refetch } = useListCampaigns({ page: 1, pageSize: 50 });
+  const { toast } = useToast();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const getHeaders = useCallback(async () => {
+    const { data: s } = await authClient.getSession();
+    return { "Authorization": `Bearer ${s?.session?.token ?? ""}` };
+  }, []);
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!window.confirm(`Delete the draft "${name}"? This cannot be undone.`)) return;
+    setDeletingId(id);
+    try {
+      const headers = await getHeaders();
+      const res = await fetch(`/api/campaigns/${id}`, { method: "DELETE", headers });
+      if (!res.ok) throw new Error("Failed");
+      toast({ title: "Draft deleted" });
+      refetch();
+    } catch {
+      toast({ title: "Failed to delete draft", variant: "destructive" });
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <SidebarLayout>
@@ -73,28 +99,40 @@ export function CampaignsPage() {
                 <TableHead className="text-right">Open Rate</TableHead>
                 <TableHead className="text-right">Click Rate</TableHead>
                 <TableHead className="text-right">Unsubscribed</TableHead>
+                <TableHead className="w-20"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
                   <TableRow key={i}>
-                    {[...Array(6)].map((__, j) => <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>)}
+                    {[...Array(7)].map((__, j) => <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>)}
                   </TableRow>
                 ))
               ) : data?.data && data.data.length > 0 ? (
                 data.data.map((campaign) => {
                   const stats = campaign.stats as { sent: number; openRate: number; clickRate: number; unsubscribed?: number };
+                  const isDraft = campaign.status === "DRAFT";
                   return (
                     <TableRow key={campaign.id}>
                       <TableCell className="font-medium">
-                        <Link href={`/campaigns/${campaign.id}`} className="flex items-center gap-2 hover:underline text-primary">
-                          <Mail className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                          <div>
-                            <p>{campaign.name}</p>
-                            <p className="text-xs text-muted-foreground font-normal">{campaign.subject}</p>
-                          </div>
-                        </Link>
+                        {isDraft ? (
+                          <Link href={`/campaigns/new?id=${campaign.id}`} className="flex items-center gap-2 hover:underline text-primary">
+                            <Mail className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            <div>
+                              <p>{campaign.name}</p>
+                              <p className="text-xs text-muted-foreground font-normal">{campaign.subject || <span className="italic">No subject</span>}</p>
+                            </div>
+                          </Link>
+                        ) : (
+                          <Link href={`/campaigns/${campaign.id}`} className="flex items-center gap-2 hover:underline text-primary">
+                            <Mail className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            <div>
+                              <p>{campaign.name}</p>
+                              <p className="text-xs text-muted-foreground font-normal">{campaign.subject}</p>
+                            </div>
+                          </Link>
+                        )}
                       </TableCell>
                       <TableCell>
                         <StatusBadge status={campaign.status} scheduledAt={campaign.scheduledAt} />
@@ -111,12 +149,35 @@ export function CampaignsPage() {
                           <span className="text-red-500">{stats.unsubscribed}</span>
                         ) : "—"}
                       </TableCell>
+                      <TableCell>
+                        {isDraft && (
+                          <div className="flex items-center gap-1 justify-end">
+                            <Button variant="ghost" size="icon" className="h-7 w-7" asChild title="Continue editing">
+                              <Link href={`/campaigns/new?id=${campaign.id}`}>
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Link>
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              title="Delete draft"
+                              disabled={deletingId === campaign.id}
+                              onClick={() => handleDelete(campaign.id, campaign.name)}
+                            >
+                              {deletingId === campaign.id
+                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                : <Trash2 className="h-3.5 w-3.5" />}
+                            </Button>
+                          </div>
+                        )}
+                      </TableCell>
                     </TableRow>
                   );
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-32 text-center">
+                  <TableCell colSpan={7} className="h-32 text-center">
                     <div className="flex flex-col items-center justify-center text-muted-foreground">
                       <Mail className="h-8 w-8 mb-2 opacity-50" />
                       <p>No campaigns yet.</p>

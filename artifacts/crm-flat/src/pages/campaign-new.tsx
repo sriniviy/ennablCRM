@@ -274,6 +274,10 @@ export function CampaignNewPage() {
   const [previewWidth, setPreviewWidth] = useState<"desktop" | "mobile">("desktop");
   const [uploadingImage, setUploadingImage] = useState(false);
 
+  // Draft persistence
+  const [campaignId, setCampaignId] = useState<string | null>(null);
+  const [draftSaving, setDraftSaving] = useState(false);
+
   // Expanded text editor dialog
   const [expandedBlockId, setExpandedBlockId] = useState<string | null>(null);
   const [expandedValue, setExpandedValue] = useState("");
@@ -314,6 +318,78 @@ export function CampaignNewPage() {
       "Content-Type": "application/json",
     };
   }, []);
+
+  // Load existing draft if ?id= is in the URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("id");
+    if (!id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const headers = await getHeaders();
+        const res = await fetch(`/api/campaigns/${id}`, { headers });
+        if (!res.ok || cancelled) return;
+        const data = await res.json() as {
+          id: string; name: string; subject: string; fromName: string; fromEmail: string;
+          builderBlocks?: string | null; builderStep?: number | null; segmentId?: string | null;
+        };
+        if (cancelled) return;
+        setCampaignId(data.id);
+        setName(data.name === "Untitled Campaign" ? "" : data.name);
+        setSubject(data.subject || "");
+        setFromName(data.fromName || "");
+        setFromEmail(data.fromEmail || "");
+        if (data.builderBlocks) {
+          try {
+            const parsed = JSON.parse(data.builderBlocks) as Block[];
+            setBlocks(parsed.map(b => ({ ...b, id: b.id || uid() })));
+          } catch { /* ignore */ }
+        }
+        if (typeof data.builderStep === "number") setStep(data.builderStep);
+        if (data.segmentId) { setSelectedSegmentId(data.segmentId); setAudienceMode("segment"); }
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [getHeaders]);
+
+  const saveDraft = async () => {
+    setDraftSaving(true);
+    try {
+      const headers = await getHeaders();
+      const payload = {
+        name: name.trim() || "Untitled Campaign",
+        subject: subject || "",
+        fromName: fromName || "",
+        fromEmail: fromEmail || "",
+        htmlContent: blocks.length > 0 ? generatedHtml : "",
+        status: "DRAFT",
+        segmentId: selectedSegmentId ?? null,
+        builderBlocks: JSON.stringify(blocks),
+        builderStep: step,
+      };
+      if (campaignId) {
+        const res = await fetch(`/api/campaigns/${campaignId}`, {
+          method: "PATCH", headers, body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error("Failed");
+        toast({ title: "Draft saved" });
+      } else {
+        const res = await fetch("/api/campaigns", {
+          method: "POST", headers, body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error("Failed");
+        const saved = await res.json() as { id: string };
+        setCampaignId(saved.id);
+        window.history.replaceState(null, "", `/campaigns/new?id=${saved.id}`);
+        toast({ title: "Draft saved", description: "Resume editing from the Campaigns page any time." });
+      }
+    } catch {
+      toast({ title: "Failed to save draft", variant: "destructive" });
+    } finally {
+      setDraftSaving(false);
+    }
+  };
 
   useEffect(() => {
     const timer = setTimeout(async () => {
@@ -508,7 +584,13 @@ export function CampaignNewPage() {
           <Button variant="ghost" size="sm" onClick={() => step === 0 ? setLocation("/campaigns") : setStep(step - 1)} className="-ml-2 text-muted-foreground">
             <ArrowLeft className="h-4 w-4 mr-1" /> {step === 0 ? "Campaigns" : "Back"}
           </Button>
-          <h1 className="text-2xl font-bold">Create Campaign</h1>
+          <h1 className="text-2xl font-bold">{campaignId ? "Edit Draft" : "Create Campaign"}</h1>
+          {step < 3 && (
+            <Button variant="outline" size="sm" onClick={saveDraft} disabled={draftSaving} className="ml-auto">
+              {draftSaving ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
+              Save Draft
+            </Button>
+          )}
         </div>
 
         <StepIndicator current={step} />
@@ -669,9 +751,15 @@ export function CampaignNewPage() {
                     <button onClick={() => setPreviewWidth("mobile")} className={`px-2 py-1.5 rounded-md text-xs transition-colors flex items-center gap-1 ${previewWidth === "mobile" ? "bg-white shadow-sm" : "text-muted-foreground"}`}><Smartphone className="h-3 w-3" /> Mobile</button>
                   </div>
                 )}
-                <Button onClick={() => { if (!name || !subject || !fromName || !fromEmail) { toast({ title: "Fill campaign info first", variant: "destructive" }); return; } setStep(2); }} size="sm">
-                  Audience <ArrowRight className="h-4 w-4 ml-1" />
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={saveDraft} disabled={draftSaving}>
+                    {draftSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                    Save
+                  </Button>
+                  <Button onClick={() => { if (!name || !subject || !fromName || !fromEmail) { toast({ title: "Fill campaign info first", variant: "destructive" }); return; } setStep(2); }} size="sm">
+                    Audience <ArrowRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </div>
               </div>
 
               {previewMode === "canvas" && (
@@ -1182,7 +1270,13 @@ export function CampaignNewPage() {
 
             <div className="flex justify-between">
               <Button variant="outline" onClick={() => setStep(1)}><ChevronLeft className="h-4 w-4 mr-1" /> Back</Button>
-              <Button onClick={() => setStep(3)}>Timing <ArrowRight className="h-4 w-4 ml-1" /></Button>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={saveDraft} disabled={draftSaving}>
+                  {draftSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                  Save
+                </Button>
+                <Button onClick={() => setStep(3)}>Timing <ArrowRight className="h-4 w-4 ml-1" /></Button>
+              </div>
             </div>
           </div>
         )}

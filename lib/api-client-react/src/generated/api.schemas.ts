@@ -367,6 +367,9 @@ export interface CampaignWithStats {
   status: CampaignStatus;
   scheduledAt?: string | null;
   sentAt?: string | null;
+  segmentId?: string | null;
+  builderBlocks?: string | null;
+  builderStep?: number | null;
   stats: CampaignStats;
   createdAt: string;
   updatedAt: string;
