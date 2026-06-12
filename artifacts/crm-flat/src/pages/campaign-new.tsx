@@ -713,7 +713,7 @@ export function CampaignNewPage() {
                                     )}
                                     {block.type === "text" && (
                                       isHtml(block.content)
-                                        ? <div style={{ textAlign: block.align ?? "left", color: block.color || "#444", fontSize: FONT_SIZES[block.fontSize ?? "md"].px, lineHeight: 1.6 }} className="prose prose-sm max-w-none text-sm [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1" dangerouslySetInnerHTML={{ __html: block.content }} />
+                                        ? <div style={{ textAlign: block.align ?? "left", color: block.color || "#444", fontSize: FONT_SIZES[block.fontSize ?? "md"].px, lineHeight: 1.6 }} className="[&_p]:my-1 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-4 [&_li]:my-0 [&_strong]:font-semibold [&_em]:italic [&_a]:underline" dangerouslySetInnerHTML={{ __html: block.content }} />
                                         : <p style={{ textAlign: block.align ?? "left", color: block.color || "#444", fontSize: FONT_SIZES[block.fontSize ?? "md"].px, lineHeight: 1.6 }} className="text-sm whitespace-pre-wrap">
                                             {block.content || <span className="text-muted-foreground">Text block</span>}
                                           </p>
@@ -851,7 +851,7 @@ export function CampaignNewPage() {
                           </div>
                           {activeBlock.type === "text"
                             ? isHtml(activeBlock.content)
-                              ? <div className="rounded-md border bg-muted/30 p-2 text-sm text-muted-foreground prose prose-sm max-w-none line-clamp-4 [&_p]:my-0.5 [&_ul]:my-0.5 [&_ol]:my-0.5" dangerouslySetInnerHTML={{ __html: activeBlock.content }} />
+                              ? <div style={{ color: activeBlock.color || "#444", fontSize: FONT_SIZES[activeBlock.fontSize ?? "md"].px }} className="rounded-md border bg-muted/30 p-2 line-clamp-4 [&_p]:my-0.5 [&_ul]:my-0.5 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:my-0.5 [&_ol]:list-decimal [&_ol]:pl-4 [&_strong]:font-semibold [&_em]:italic" dangerouslySetInnerHTML={{ __html: activeBlock.content }} />
                               : <Textarea value={activeBlock.content} onChange={e => updateBlock(activeBlock.id, { content: e.target.value })} rows={4} className="text-sm" />
                             : <Input value={activeBlock.content} onChange={e => updateBlock(activeBlock.id, { content: e.target.value })} className="text-sm h-8" />}
                         </div>
@@ -1295,13 +1295,15 @@ export function CampaignNewPage() {
             </div>
           </div>
 
-          <RichEmailEditor
-            value={expandedValue}
-            onChange={setExpandedValue}
-            placeholder="Write your text block here…"
-            tokens={PERSONALIZATION_TOKENS}
-            minHeight="320px"
-          />
+          <div style={{ fontSize: `${FONT_SIZES[expandedFontSize].px}px`, color: expandedColor }} className="campaign-text-editor">
+            <RichEmailEditor
+              value={expandedValue}
+              onChange={setExpandedValue}
+              placeholder="Write your text block here…"
+              tokens={PERSONALIZATION_TOKENS}
+              minHeight="320px"
+            />
+          </div>
 
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setExpandedBlockId(null)}>Cancel</Button>

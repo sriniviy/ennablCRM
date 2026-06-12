@@ -273,6 +273,11 @@
   min-height: inherit;
   color: hsl(var(--foreground));
 }
+/* Campaign text block editor: font-size and color should be driven by block settings */
+.campaign-text-editor .rich-email-editor-content .ProseMirror {
+  font-size: inherit !important;
+  color: inherit !important;
+}
 .rich-email-editor-content .ProseMirror p {
   margin-bottom: 0.6rem;
 }
