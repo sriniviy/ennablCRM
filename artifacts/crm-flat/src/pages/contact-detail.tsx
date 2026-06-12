@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Mail, Phone, Building2, Calendar, MessageSquare, Linkedin, CheckSquare, Pencil, CopyCheck, Send, Eye, MousePointerClick, BellOff } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { NotesFeed } from "@/components/notes/notes-feed";
 import { useNotesCount } from "@/hooks/use-notes-count";
@@ -41,6 +42,54 @@ function NotesTabLabel({ entityType, entityId }: { entityType: string; entityId:
         </span>
       )}
     </span>
+  );
+}
+
+function CampaignEngagementChart({ data }: { data: import("@/hooks/use-contact-campaigns").ContactCampaignRow[] }) {
+  if (data.length < 2) return null;
+
+  const chartData = data.map(row => ({
+    name: row.campaignName.length > 18 ? row.campaignName.slice(0, 17) + "…" : row.campaignName,
+    Opened: row.openedAt ? 1 : 0,
+    Clicked: row.clickedAt ? 1 : 0,
+  }));
+
+  return (
+    <div className="rounded-lg border bg-card p-4">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-3">
+        Engagement per Campaign
+      </p>
+      <ResponsiveContainer width="100%" height={160}>
+        <BarChart data={chartData} barCategoryGap="30%" barGap={4}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+          <XAxis
+            dataKey="name"
+            tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <YAxis hide domain={[0, 1]} />
+          <Tooltip
+            cursor={{ fill: "hsl(var(--muted))" }}
+            formatter={(value: number, name: string) => [value === 1 ? "Yes" : "No", name]}
+            contentStyle={{
+              fontSize: 12,
+              borderRadius: 8,
+              border: "1px solid hsl(var(--border))",
+              background: "hsl(var(--card))",
+              color: "hsl(var(--foreground))",
+            }}
+          />
+          <Legend
+            iconType="circle"
+            iconSize={8}
+            wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
+          />
+          <Bar dataKey="Opened" fill="#3b82f6" radius={[3, 3, 0, 0]} maxBarSize={32} />
+          <Bar dataKey="Clicked" fill="#22c55e" radius={[3, 3, 0, 0]} maxBarSize={32} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
 
@@ -99,6 +148,7 @@ function ContactCampaignsTab({ contactId }: { contactId: string }) {
           <span className="text-xs text-muted-foreground">{clickPct}% click rate</span>
         </div>
       </div>
+      <CampaignEngagementChart data={data} />
       {data.map(row => (
         <div key={row.campaignId} className="flex items-start justify-between gap-4 p-4 border rounded-lg bg-card">
           <div className="min-w-0 flex-1">
