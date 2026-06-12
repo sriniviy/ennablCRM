@@ -85,7 +85,11 @@ router.post("/me/ai-presets", requireAuth, async (req: Request, res: Response) =
 router.patch("/me/ai-presets/:presetId", requireAuth, async (req: Request, res: Response) => {
   const { userId, dbUser } = req as AuthRequest;
   const { presetId } = req.params;
-  const { shared } = req.body as { shared: boolean };
+  const { shared, name, category } = req.body as {
+    shared?: boolean;
+    name?: string;
+    category?: string | null;
+  };
 
   try {
     const [preset] = await db
@@ -106,15 +110,51 @@ router.patch("/me/ai-presets/:presetId", requireAuth, async (req: Request, res: 
       return;
     }
 
+    const updates: Partial<typeof aiPresetsTable.$inferInsert> = {};
+    if (shared !== undefined) updates.shared = shared === true;
+    if (name !== undefined && name.trim()) updates.name = name.trim();
+    if (category !== undefined) updates.category = category?.trim() || null;
+
     const [updated] = await db
       .update(aiPresetsTable)
-      .set({ shared: shared === true })
+      .set(updates)
       .where(eq(aiPresetsTable.id, presetId))
       .returning();
 
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: "Failed to update preset" });
+  }
+});
+
+// ── Admin: list all shared presets ─────────────────────────────────────────
+
+router.get("/admin/ai-presets", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const rows = await db
+      .select({
+        id: aiPresetsTable.id,
+        userId: aiPresetsTable.userId,
+        name: aiPresetsTable.name,
+        category: aiPresetsTable.category,
+        goal: aiPresetsTable.goal,
+        tone: aiPresetsTable.tone,
+        improveFields: aiPresetsTable.improveFields,
+        shared: aiPresetsTable.shared,
+        createdAt: aiPresetsTable.createdAt,
+        creatorName: usersTable.name,
+        creatorEmail: usersTable.email,
+      })
+      .from(aiPresetsTable)
+      .leftJoin(usersTable, eq(aiPresetsTable.userId, usersTable.id))
+      .where(eq(aiPresetsTable.shared, true))
+      .orderBy(
+        sql`coalesce(${aiPresetsTable.category}, '')`,
+        asc(aiPresetsTable.name),
+      );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch presets" });
   }
 });
 
