@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { RichEmailEditor } from "@/components/rich-email-editor";
 import { useToast } from "@/hooks/use-toast";
 import { authClient } from "@/lib/auth-client";
 import {
@@ -28,6 +29,7 @@ import {
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 
 const uid = () => Math.random().toString(36).slice(2, 9);
+const isHtml = (s: string) => /<[^>]+>/.test(s);
 
 type BlockType = "header" | "text" | "image" | "button" | "divider" | "spacer" | "social" | "columns";
 type FontSize = "sm" | "md" | "lg" | "xl";
@@ -140,7 +142,12 @@ function blocksToHtml(blocks: Block[]): string {
       }
       case "text": {
         const px = FONT_SIZES[b.fontSize ?? "md"].px;
-        return `<tr><td style="padding:8px 40px;text-align:${align};"><p style="margin:0;font-family:Arial,sans-serif;font-size:${px}px;color:${color};line-height:1.7;white-space:pre-line;">${b.content}</p></td></tr>`;
+        const baseStyle = `font-family:Arial,sans-serif;font-size:${px}px;color:${color};line-height:1.7;`;
+        if (isHtml(b.content)) {
+          // rich-text HTML — wrap in a styled container, let the HTML speak for itself
+          return `<tr><td style="padding:8px 40px;text-align:${align};"><div style="${baseStyle}">${b.content}</div></td></tr>`;
+        }
+        return `<tr><td style="padding:8px 40px;text-align:${align};"><p style="margin:0;${baseStyle}white-space:pre-line;">${b.content}</p></td></tr>`;
       }
       case "columns": {
         const [w1, w2] = b.colRatio === "60-40" ? [60, 40] : b.colRatio === "40-60" ? [40, 60] : [50, 50];
@@ -703,9 +710,11 @@ export function CampaignNewPage() {
                                       </div>
                                     )}
                                     {block.type === "text" && (
-                                      <p style={{ textAlign: block.align ?? "left", color: block.color || "#444", fontSize: FONT_SIZES[block.fontSize ?? "md"].px, lineHeight: 1.6 }} className="text-sm whitespace-pre-wrap">
-                                        {block.content || <span className="text-muted-foreground">Text block</span>}
-                                      </p>
+                                      isHtml(block.content)
+                                        ? <div style={{ textAlign: block.align ?? "left", color: block.color || "#444", fontSize: FONT_SIZES[block.fontSize ?? "md"].px, lineHeight: 1.6 }} className="prose prose-sm max-w-none text-sm [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1" dangerouslySetInnerHTML={{ __html: block.content }} />
+                                        : <p style={{ textAlign: block.align ?? "left", color: block.color || "#444", fontSize: FONT_SIZES[block.fontSize ?? "md"].px, lineHeight: 1.6 }} className="text-sm whitespace-pre-wrap">
+                                            {block.content || <span className="text-muted-foreground">Text block</span>}
+                                          </p>
                                     )}
                                     {block.type === "columns" && (
                                       <div className="grid gap-2" style={{ gridTemplateColumns: block.colRatio === "60-40" ? "3fr 2fr" : block.colRatio === "40-60" ? "2fr 3fr" : "1fr 1fr" }}>
@@ -839,7 +848,9 @@ export function CampaignNewPage() {
                             </div>
                           </div>
                           {activeBlock.type === "text"
-                            ? <Textarea value={activeBlock.content} onChange={e => updateBlock(activeBlock.id, { content: e.target.value })} rows={4} className="text-sm" />
+                            ? isHtml(activeBlock.content)
+                              ? <div className="rounded-md border bg-muted/30 p-2 text-sm text-muted-foreground prose prose-sm max-w-none line-clamp-4 [&_p]:my-0.5 [&_ul]:my-0.5 [&_ol]:my-0.5" dangerouslySetInnerHTML={{ __html: activeBlock.content }} />
+                              : <Textarea value={activeBlock.content} onChange={e => updateBlock(activeBlock.id, { content: e.target.value })} rows={4} className="text-sm" />
                             : <Input value={activeBlock.content} onChange={e => updateBlock(activeBlock.id, { content: e.target.value })} className="text-sm h-8" />}
                         </div>
                         <div>
@@ -1252,37 +1263,13 @@ export function CampaignNewPage() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-3">
-            {/* quick formatting helpers */}
-            <div className="flex items-center gap-1 flex-wrap">
-              <span className="text-xs text-muted-foreground mr-1">Insert:</span>
-              {PERSONALIZATION_TOKENS.map(t => (
-                <button
-                  key={t.token}
-                  onClick={() => setExpandedValue(v => v + t.token)}
-                  className="text-xs px-2 py-1 rounded border hover:bg-accent hover:border-primary transition-colors"
-                >
-                  {t.label}
-                </button>
-              ))}
-              <div className="w-px h-4 bg-border mx-1" />
-              <button onClick={() => setExpandedValue(v => v + "\n\n• ")} className="text-xs px-2 py-1 rounded border hover:bg-accent hover:border-primary transition-colors">• Bullet</button>
-              <button onClick={() => setExpandedValue(v => v + "\n\n")} className="text-xs px-2 py-1 rounded border hover:bg-accent hover:border-primary transition-colors">¶ New paragraph</button>
-            </div>
-
-            <Textarea
-              value={expandedValue}
-              onChange={e => setExpandedValue(e.target.value)}
-              className="text-sm font-mono leading-relaxed resize-none"
-              style={{ minHeight: 360 }}
-              autoFocus
-              placeholder="Write your text here…"
-            />
-
-            <p className="text-xs text-muted-foreground">
-              Use blank lines to separate paragraphs. Use <code className="bg-muted px-1 rounded">{"{{firstName}}"}</code> etc. for personalization.
-            </p>
-          </div>
+          <RichEmailEditor
+            value={expandedValue}
+            onChange={setExpandedValue}
+            placeholder="Write your text block here…"
+            tokens={PERSONALIZATION_TOKENS}
+            minHeight="360px"
+          />
 
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setExpandedBlockId(null)}>Cancel</Button>
