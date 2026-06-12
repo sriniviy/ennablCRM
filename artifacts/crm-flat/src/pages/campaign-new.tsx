@@ -16,13 +16,14 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { authClient } from "@/lib/auth-client";
 import {
   ArrowLeft, ArrowRight, Check, Trash2, Type, AlignLeft, MousePointer,
   Minus, Image, Share2, Maximize2, Users, Calendar, Send, Save,
   ChevronLeft, ChevronRight, Clock, Tag, User, Smile, Columns, Monitor, Smartphone, Code,
-  Mail, Building2, UserCheck, ExternalLink, Sparkles, Loader2, GripVertical, Copy,
+  Mail, Building2, UserCheck, ExternalLink, Sparkles, Loader2, GripVertical, Copy, Expand,
 } from "lucide-react";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 
@@ -265,6 +266,10 @@ export function CampaignNewPage() {
   const [previewMode, setPreviewMode] = useState<"canvas" | "preview" | "html">("canvas");
   const [previewWidth, setPreviewWidth] = useState<"desktop" | "mobile">("desktop");
   const [uploadingImage, setUploadingImage] = useState(false);
+
+  // Expanded text editor dialog
+  const [expandedBlockId, setExpandedBlockId] = useState<string | null>(null);
+  const [expandedValue, setExpandedValue] = useState("");
 
   // AI campaign generation
   const [showAiPanel, setShowAiPanel] = useState(false);
@@ -807,19 +812,30 @@ export function CampaignNewPage() {
                         <div>
                           <div className="flex items-center justify-between mb-1">
                             <Label className="text-xs">Content</Label>
-                            <div className="relative">
-                              <button onClick={() => setShowPersonalization(p => !p)} className="text-xs text-primary hover:underline flex items-center gap-1">
-                                <Smile className="h-3 w-3" /> Personalize
-                              </button>
-                              {showPersonalization && (
-                                <div className="absolute right-0 top-6 z-20 bg-popover border rounded-lg shadow-lg p-2 space-y-1 w-36">
-                                  {PERSONALIZATION_TOKENS.map(t => (
-                                    <button key={t.token} onClick={() => insertToken(t.token)} className="block w-full text-left text-xs px-2 py-1.5 hover:bg-accent rounded">
-                                      {t.label}
-                                    </button>
-                                  ))}
-                                </div>
+                            <div className="flex items-center gap-2">
+                              {activeBlock.type === "text" && (
+                                <button
+                                  onClick={() => { setExpandedBlockId(activeBlock.id); setExpandedValue(activeBlock.content); }}
+                                  className="text-xs text-primary hover:underline flex items-center gap-1"
+                                  title="Open full editor"
+                                >
+                                  <Expand className="h-3 w-3" /> Expand
+                                </button>
                               )}
+                              <div className="relative">
+                                <button onClick={() => setShowPersonalization(p => !p)} className="text-xs text-primary hover:underline flex items-center gap-1">
+                                  <Smile className="h-3 w-3" /> Personalize
+                                </button>
+                                {showPersonalization && (
+                                  <div className="absolute right-0 top-6 z-20 bg-popover border rounded-lg shadow-lg p-2 space-y-1 w-36">
+                                    {PERSONALIZATION_TOKENS.map(t => (
+                                      <button key={t.token} onClick={() => insertToken(t.token)} className="block w-full text-left text-xs px-2 py-1.5 hover:bg-accent rounded">
+                                        {t.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
                           {activeBlock.type === "text"
@@ -1226,6 +1242,59 @@ export function CampaignNewPage() {
           </div>
         )}
       </div>
+
+      {/* ── Expanded text editor dialog ── */}
+      <Dialog open={expandedBlockId !== null} onOpenChange={open => { if (!open) setExpandedBlockId(null); }}>
+        <DialogContent className="max-w-3xl w-full">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlignLeft className="h-4 w-4" /> Edit Text Block
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {/* quick formatting helpers */}
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className="text-xs text-muted-foreground mr-1">Insert:</span>
+              {PERSONALIZATION_TOKENS.map(t => (
+                <button
+                  key={t.token}
+                  onClick={() => setExpandedValue(v => v + t.token)}
+                  className="text-xs px-2 py-1 rounded border hover:bg-accent hover:border-primary transition-colors"
+                >
+                  {t.label}
+                </button>
+              ))}
+              <div className="w-px h-4 bg-border mx-1" />
+              <button onClick={() => setExpandedValue(v => v + "\n\n• ")} className="text-xs px-2 py-1 rounded border hover:bg-accent hover:border-primary transition-colors">• Bullet</button>
+              <button onClick={() => setExpandedValue(v => v + "\n\n")} className="text-xs px-2 py-1 rounded border hover:bg-accent hover:border-primary transition-colors">¶ New paragraph</button>
+            </div>
+
+            <Textarea
+              value={expandedValue}
+              onChange={e => setExpandedValue(e.target.value)}
+              className="text-sm font-mono leading-relaxed resize-none"
+              style={{ minHeight: 360 }}
+              autoFocus
+              placeholder="Write your text here…"
+            />
+
+            <p className="text-xs text-muted-foreground">
+              Use blank lines to separate paragraphs. Use <code className="bg-muted px-1 rounded">{"{{firstName}}"}</code> etc. for personalization.
+            </p>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setExpandedBlockId(null)}>Cancel</Button>
+            <Button onClick={() => {
+              if (expandedBlockId) updateBlock(expandedBlockId, { content: expandedValue });
+              setExpandedBlockId(null);
+            }}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </SidebarLayout>
   );
 }
