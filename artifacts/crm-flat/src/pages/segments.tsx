@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { authClient } from "@/lib/auth-client";
-import { Users, Pencil, Trash2, Plus, Filter, Tag, Building2, UserCheck, Mail, ChevronRight, Megaphone } from "lucide-react";
+import { Users, Pencil, Trash2, Plus, Filter, Tag, Building2, UserCheck, Mail, ChevronRight, Megaphone, TriangleAlert } from "lucide-react";
 
 interface SegmentFilter {
   status?: string;
@@ -193,6 +193,7 @@ export function SegmentsPage() {
   const [editCount, setEditCount] = useState<number | null>(null);
   const [editLoading, setEditLoading] = useState(false);
   const [editCountLoading, setEditCountLoading] = useState(false);
+  const [editSentCampaignCount, setEditSentCampaignCount] = useState<number | null>(null);
 
   const [deleteTarget, setDeleteTarget] = useState<Segment | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -332,11 +333,22 @@ export function SegmentsPage() {
     }
   }, [getHeaders]);
 
-  const openEdit = (seg: Segment) => {
+  const openEdit = async (seg: Segment) => {
     setEditTarget(seg);
     setEditName(seg.name);
     setEditFilter(filterFromJson(seg.filterJson));
     setEditCount(counts[seg.id] ?? null);
+    setEditSentCampaignCount(null);
+    try {
+      const headers = await getHeaders();
+      const r = await fetch(`/api/segments/${seg.id}/campaigns`, { headers });
+      if (r.ok) {
+        const campaigns: SegmentCampaign[] = await r.json();
+        setEditSentCampaignCount(campaigns.filter(c => c.status === "SENT").length);
+      }
+    } catch {
+      setEditSentCampaignCount(0);
+    }
   };
 
   const handleSaveEdit = async () => {
@@ -651,6 +663,16 @@ export function SegmentsPage() {
           <DialogHeader>
             <DialogTitle>Edit Segment</DialogTitle>
           </DialogHeader>
+          {editSentCampaignCount !== null && editSentCampaignCount > 0 && (
+            <div className="flex gap-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+              <TriangleAlert className="h-4 w-4 shrink-0 mt-0.5 text-amber-500" />
+              <p>
+                This segment was used in{" "}
+                <span className="font-semibold">{editSentCampaignCount} sent {editSentCampaignCount === 1 ? "campaign" : "campaigns"}</span>.
+                {" "}Editing the filters won't change who received those past sends — only future campaigns using this segment will be affected.
+              </p>
+            </div>
+          )}
           <div className="space-y-4 py-2">
             <div>
               <Label className="text-xs">Segment Name</Label>
