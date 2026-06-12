@@ -1,5 +1,5 @@
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
-import { useParams, Link } from "wouter";
+import { useParams, Link, useSearch } from "wouter";
 import { useGetContact, useCreateActivity, getGetContactQueryKey, useGetMe, type ActivityType } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -110,6 +110,10 @@ function ContactCampaignsTab({ contactId }: { contactId: string }) {
 
 export function ContactDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const queryString = useSearch();
+  const fromParam = new URLSearchParams(queryString).get("from");
+  const backHref = fromParam ?? "/contacts";
+  const backLabel = fromParam?.startsWith("/campaigns/") ? "Campaign" : "Back";
   const { data: contact, isLoading } = useGetContact(id);
   const [editOpen, setEditOpen] = useState(false);
   const [duplicatesOpen, setDuplicatesOpen] = useState(false);
@@ -210,7 +214,7 @@ export function ContactDetailPage() {
       <div className="space-y-6">
         <div>
           <Button variant="ghost" size="sm" asChild className="mb-2 -ml-3 text-muted-foreground">
-            <Link href="/contacts"><ArrowLeft className="mr-2 h-4 w-4" /> Back</Link>
+            <Link href={backHref}><ArrowLeft className="mr-2 h-4 w-4" /> {backLabel}</Link>
           </Button>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-4">

@@ -311,7 +311,7 @@ export function CampaignDetailPage() {
                               return (
                                 <tr key={r.contactId} className="border-b last:border-0 hover:bg-muted/20">
                                   <td className="px-4 py-2.5">
-                                    <Link href={`/contacts/${r.contactId}`} className="font-medium hover:underline">
+                                    <Link href={`/contacts/${r.contactId}?from=/campaigns/${id}`} className="font-medium hover:underline">
                                       {r.firstName} {r.lastName}
                                     </Link>
                                     <p className="text-xs text-muted-foreground">{r.email}</p>
