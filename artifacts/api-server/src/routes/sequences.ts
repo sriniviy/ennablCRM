@@ -434,7 +434,8 @@ router.post("/:id/steps", requireAuth, async (req: Request, res: Response) => {
       body?: string;
       delayDays?: number;
     };
-    if (!subject?.trim() || !body?.trim()) {
+    const bodyText = body?.replace(/<[^>]*>/g, "").trim();
+    if (!subject?.trim() || !bodyText) {
       res.status(400).json({ error: "subject and body are required" });
       return;
     }

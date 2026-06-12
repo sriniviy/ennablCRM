@@ -1,6 +1,7 @@
 import { useSessionToken } from "@/hooks/use-session-token";
 import { useAiPrefs } from "@/hooks/use-ai-prefs";
 import { useState, useRef } from "react";
+import { RichEmailEditor } from "@/components/rich-email-editor";
 import { cn } from "@/lib/utils";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useRoute, useLocation, Link } from "wouter";
@@ -96,6 +97,26 @@ function highlightTokens(text: string): React.ReactNode {
     ) : (
       part
     ),
+  );
+}
+
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function isEmptyHtml(html: string): boolean {
+  return !html || stripHtml(html) === "";
+}
+
+function plainTextToHtml(text: string): string {
+  if (!text) return "";
+  if (/<[^>]+>/.test(text)) return text;
+  return (
+    text
+      .split(/\n\n+/)
+      .filter((p) => p.trim())
+      .map((p) => `<p>${p.replace(/\n/g, "<br>")}</p>`)
+      .join("") || ""
   );
 }
 
@@ -245,26 +266,20 @@ export function SequenceDetailPage() {
   const [aiOriginalSnapshot, setAiOriginalSnapshot] = useState<{ subject: string; body: string } | null>(null);
   const [aiCompareFor, setAiCompareFor] = useState<"add" | "edit" | null>(null);
 
-  // Refs for cursor-position-aware token insertion
+  // Refs for subject token insertion (body uses the rich editor's built-in token picker)
   const addSubjectRef = useRef<HTMLInputElement>(null);
-  const addBodyRef = useRef<HTMLTextAreaElement>(null);
   const editSubjectRef = useRef<HTMLInputElement>(null);
-  const editBodyRef = useRef<HTMLTextAreaElement>(null);
-  const lastSelRef = useRef<{
+  const lastSubjectSelRef = useRef<{
     form: "add" | "edit";
-    field: "subject" | "body";
     start: number;
     end: number;
   } | null>(null);
 
-  function trackSel(form: "add" | "edit", field: "subject" | "body") {
-    return (
-      e: React.SyntheticEvent<HTMLInputElement | HTMLTextAreaElement>,
-    ) => {
+  function trackSubjectSel(form: "add" | "edit") {
+    return (e: React.SyntheticEvent<HTMLInputElement>) => {
       const el = e.currentTarget;
-      lastSelRef.current = {
+      lastSubjectSelRef.current = {
         form,
-        field,
         start: el.selectionStart ?? 0,
         end: el.selectionEnd ?? 0,
       };
@@ -272,32 +287,23 @@ export function SequenceDetailPage() {
   }
 
   function insertToken(token: string) {
-    const sel = lastSelRef.current;
-    if (!sel) {
-      setStepForm((f) => ({ ...f, body: f.body + token }));
-      return;
-    }
-    const { form, field, start, end } = sel;
+    const sel = lastSubjectSelRef.current;
+    if (!sel) return;
+    const { form, start, end } = sel;
     const splice = (str: string) =>
       str.slice(0, start) + token + str.slice(end);
     const newCursor = start + token.length;
     if (form === "add") {
-      setStepForm((f) => ({ ...f, [field]: splice(f[field]) }));
+      setStepForm((f) => ({ ...f, subject: splice(f.subject) }));
       setTimeout(() => {
-        const el =
-          field === "subject" ? addSubjectRef.current : addBodyRef.current;
-        el?.focus();
-        el?.setSelectionRange(newCursor, newCursor);
+        addSubjectRef.current?.focus();
+        addSubjectRef.current?.setSelectionRange(newCursor, newCursor);
       }, 0);
     } else {
-      setEditingStep((s) =>
-        s ? { ...s, [field]: splice(s[field]) } : null,
-      );
+      setEditingStep((s) => (s ? { ...s, subject: splice(s.subject) } : null));
       setTimeout(() => {
-        const el =
-          field === "subject" ? editSubjectRef.current : editBodyRef.current;
-        el?.focus();
-        el?.setSelectionRange(newCursor, newCursor);
+        editSubjectRef.current?.focus();
+        editSubjectRef.current?.setSelectionRange(newCursor, newCursor);
       }, 0);
     }
   }
@@ -349,7 +355,9 @@ export function SequenceDetailPage() {
           context: aiDraftContext.trim() || undefined,
         }),
       })) as { steps: { subject: string; body: string; delayDays: number }[] };
-      setAiDraftPreview(result.steps);
+      setAiDraftPreview(
+        result.steps.map((s) => ({ ...s, body: plainTextToHtml(s.body) })),
+      );
     } catch (err) {
       toast({
         title: "AI generation failed",
@@ -404,9 +412,9 @@ export function SequenceDetailPage() {
           stepNumber,
           totalSteps,
           ...(isImprove && targetForm === "edit" && editingStep
-            ? { existingSubject: editingStep.subject, existingBody: editingStep.body, improveFields: aiImproveFields }
+            ? { existingSubject: editingStep.subject, existingBody: stripHtml(editingStep.body), improveFields: aiImproveFields }
             : isImprove && targetForm === "add"
-              ? { existingSubject: stepForm.subject, existingBody: stepForm.body, improveFields: aiImproveFields }
+              ? { existingSubject: stepForm.subject, existingBody: stripHtml(stepForm.body), improveFields: aiImproveFields }
               : {}),
         }),
       })) as { subject?: string; body?: string };
@@ -418,9 +426,10 @@ export function SequenceDetailPage() {
           : { subject: editingStep?.subject ?? "", body: editingStep?.body ?? "" };
 
       // For selective improve, fall back to original for any field not returned by AI
+      // Convert AI plain-text body to HTML so the rich editor can render it
       const proposed = {
         subject: result.subject ?? original.subject,
-        body: result.body ?? original.body,
+        body: result.body ? plainTextToHtml(result.body) : original.body,
       };
 
       setAiOriginalSnapshot(original);
@@ -864,31 +873,23 @@ export function SequenceDetailPage() {
                                 s ? { ...s, subject: e.target.value } : null,
                               )
                             }
-                            onSelect={trackSel("edit", "subject")}
-                            onKeyUp={trackSel("edit", "subject")}
-                            onMouseUp={trackSel("edit", "subject")}
-                            onFocus={trackSel("edit", "subject")}
+                            onSelect={trackSubjectSel("edit")}
+                            onKeyUp={trackSubjectSel("edit")}
+                            onMouseUp={trackSubjectSel("edit")}
+                            onFocus={trackSubjectSel("edit")}
                           />
                         </div>
                         <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="text-xs text-muted-foreground">Body</label>
-                            <TokenPicker form="edit" />
-                          </div>
-                          <Textarea
-                            ref={editBodyRef}
-                            placeholder="Email body"
+                          <label className="text-xs text-muted-foreground mb-1 block">Body</label>
+                          <RichEmailEditor
                             value={editingStep.body}
-                            rows={4}
-                            onChange={(e) =>
+                            onChange={(html) =>
                               setEditingStep((s) =>
-                                s ? { ...s, body: e.target.value } : null,
+                                s ? { ...s, body: html } : null,
                               )
                             }
-                            onSelect={trackSel("edit", "body")}
-                            onKeyUp={trackSel("edit", "body")}
-                            onMouseUp={trackSel("edit", "body")}
-                            onFocus={trackSel("edit", "body")}
+                            placeholder="Write your email body…"
+                            tokens={TOKENS}
                           />
                         </div>
                         {/* AI Writer Panel — edit form */}
@@ -1009,22 +1010,24 @@ export function SequenceDetailPage() {
                               </div>
                             </div>
                             <div className="grid grid-cols-2 divide-x divide-border">
-                              <div className="p-3 space-y-2 min-w-0">
+                              <div className="p-3 space-y-2 min-w-0 overflow-hidden">
                                 <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Original</p>
                                 <div className="space-y-1.5">
                                   <p className="text-[11px] font-medium text-muted-foreground leading-snug line-clamp-1">
                                     {aiOriginalSnapshot?.subject || <span className="italic opacity-50">No subject</span>}
                                   </p>
-                                  <p className="text-[11px] text-muted-foreground/80 leading-relaxed whitespace-pre-wrap line-clamp-6">
-                                    {aiOriginalSnapshot?.body || <span className="italic opacity-50">No body</span>}
-                                  </p>
+                                  <div className="text-[11px] text-muted-foreground/80 leading-relaxed line-clamp-6 [&_p]:mb-1 [&_ul]:pl-4 [&_ul]:list-disc [&_ol]:pl-4 [&_ol]:list-decimal"
+                                    dangerouslySetInnerHTML={{ __html: aiOriginalSnapshot?.body || "<em class='opacity-50'>No body</em>" }}
+                                  />
                                 </div>
                               </div>
-                              <div className="p-3 space-y-2 min-w-0 bg-primary/[0.03]">
+                              <div className="p-3 space-y-2 min-w-0 overflow-hidden bg-primary/[0.03]">
                                 <p className="text-[10px] font-semibold uppercase tracking-wide text-primary/70">AI Rewrite</p>
                                 <div className="space-y-1.5">
                                   <p className="text-[11px] font-medium leading-snug line-clamp-1">{aiProposed.subject}</p>
-                                  <p className="text-[11px] text-foreground/80 leading-relaxed whitespace-pre-wrap line-clamp-6">{aiProposed.body}</p>
+                                  <div className="text-[11px] text-foreground/80 leading-relaxed line-clamp-6 [&_p]:mb-1 [&_ul]:pl-4 [&_ul]:list-disc [&_ol]:pl-4 [&_ol]:list-decimal"
+                                    dangerouslySetInnerHTML={{ __html: aiProposed.body }}
+                                  />
                                 </div>
                               </div>
                             </div>
@@ -1101,7 +1104,7 @@ export function SequenceDetailPage() {
                             {highlightTokens(step.subject)}
                           </p>
                           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                            {highlightTokens(step.body)}
+                            {stripHtml(step.body)}
                           </p>
                           <div className="flex items-center gap-1 mt-1.5 text-xs text-muted-foreground">
                             <Clock className="h-3 w-3" />
@@ -1174,7 +1177,7 @@ export function SequenceDetailPage() {
                         <Sparkles className="h-3 w-3" />
                         Write with AI
                       </Button>
-                      {(stepForm.subject.trim() || stepForm.body.trim()) && (
+                      {(stepForm.subject.trim() || !isEmptyHtml(stepForm.body)) && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -1201,29 +1204,21 @@ export function SequenceDetailPage() {
                       setStepForm((f) => ({ ...f, subject: e.target.value }))
                     }
                     autoFocus
-                    onSelect={trackSel("add", "subject")}
-                    onKeyUp={trackSel("add", "subject")}
-                    onMouseUp={trackSel("add", "subject")}
-                    onFocus={trackSel("add", "subject")}
+                    onSelect={trackSubjectSel("add")}
+                    onKeyUp={trackSubjectSel("add")}
+                    onMouseUp={trackSubjectSel("add")}
+                    onFocus={trackSubjectSel("add")}
                   />
                 </div>
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs text-muted-foreground">Body</label>
-                    <TokenPicker form="add" />
-                  </div>
-                  <Textarea
-                    ref={addBodyRef}
-                    placeholder="Email body"
+                  <label className="text-xs text-muted-foreground mb-1 block">Body</label>
+                  <RichEmailEditor
                     value={stepForm.body}
-                    rows={4}
-                    onChange={(e) =>
-                      setStepForm((f) => ({ ...f, body: e.target.value }))
+                    onChange={(html) =>
+                      setStepForm((f) => ({ ...f, body: html }))
                     }
-                    onSelect={trackSel("add", "body")}
-                    onKeyUp={trackSel("add", "body")}
-                    onMouseUp={trackSel("add", "body")}
-                    onFocus={trackSel("add", "body")}
+                    placeholder="Write your email body…"
+                    tokens={TOKENS}
                   />
                 </div>
                 {/* AI Writer Panel — add form */}
@@ -1412,7 +1407,7 @@ export function SequenceDetailPage() {
                     onClick={() => addStepMutation.mutate()}
                     disabled={
                       !stepForm.subject.trim() ||
-                      !stepForm.body.trim() ||
+                      isEmptyHtml(stepForm.body) ||
                       addStepMutation.isPending
                     }
                   >
@@ -1911,19 +1906,19 @@ export function SequenceDetailPage() {
                     </div>
                     <div>
                       <label className="text-xs text-muted-foreground mb-1 block">Body</label>
-                      <Textarea
+                      <RichEmailEditor
                         value={step.body}
-                        rows={4}
-                        onChange={(e) =>
+                        onChange={(html) =>
                           setAiDraftPreview((prev) =>
                             prev
                               ? prev.map((s, j) =>
-                                  j === i ? { ...s, body: e.target.value } : s,
+                                  j === i ? { ...s, body: html } : s,
                                 )
                               : prev,
                           )
                         }
-                        className="text-sm resize-none"
+                        tokens={TOKENS}
+                        minHeight="120px"
                       />
                     </div>
                   </li>
