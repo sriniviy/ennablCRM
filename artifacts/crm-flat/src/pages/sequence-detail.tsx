@@ -1872,6 +1872,19 @@ export function SequenceDetailPage() {
                         >
                           <ChevronDown className="h-3.5 w-3.5" />
                         </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
+                          onClick={() =>
+                            setAiDraftPreview((prev) =>
+                              prev ? prev.filter((_, j) => j !== i) : prev,
+                            )
+                          }
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          <span className="sr-only">Remove step {i + 1}</span>
+                        </Button>
                       </div>
                     </div>
                     <div>
