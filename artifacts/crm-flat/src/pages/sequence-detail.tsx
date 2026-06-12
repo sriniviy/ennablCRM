@@ -336,6 +336,8 @@ export function SequenceDetailPage() {
   // AI preset state
   const [aiPresetNaming, setAiPresetNaming] = useState(false);
   const [aiPresetName, setAiPresetName] = useState("");
+  const [aiPresetCategory, setAiPresetCategory] = useState("");
+  const [aiPresetSearch, setAiPresetSearch] = useState("");
 
   // AI draft sequence dialog state
   const [aiDraftOpen, setAiDraftOpen] = useState(false);
@@ -455,30 +457,77 @@ export function SequenceDetailPage() {
                   setAiImproveFields(preset.improveFields as "subject" | "body" | "both");
                   setAiPresetNaming(false);
                   setAiPresetName("");
+                  setAiPresetCategory("");
                 }}
               >
                 <SelectTrigger className="h-8 text-sm flex-1">
                   <SelectValue placeholder="Select a saved preset…" />
                 </SelectTrigger>
                 <SelectContent>
-                  {aiPresets.map((preset) => (
-                    <div key={preset.id} className="flex items-center group">
-                      <SelectItem value={preset.id} className="flex-1">
-                        {preset.name}
-                      </SelectItem>
-                      <button
-                        type="button"
-                        className="mr-2 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deletePresetMutation.mutate(preset.id);
-                        }}
-                        title="Delete preset"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                  ))}
+                  {/* Search box */}
+                  <div className="px-2 py-1.5 border-b">
+                    <input
+                      className="w-full text-xs bg-transparent outline-none placeholder:text-muted-foreground"
+                      placeholder="Search presets…"
+                      value={aiPresetSearch}
+                      onChange={(e) => setAiPresetSearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </div>
+                  {/* Grouped preset list */}
+                  {(() => {
+                    const q = aiPresetSearch.toLowerCase();
+                    const filtered = aiPresets.filter(
+                      (p) =>
+                        !q ||
+                        p.name.toLowerCase().includes(q) ||
+                        (p.category ?? "").toLowerCase().includes(q),
+                    );
+                    if (filtered.length === 0) {
+                      return (
+                        <div className="px-2 py-2 text-xs text-muted-foreground">No presets match.</div>
+                      );
+                    }
+                    const groups: Record<string, typeof filtered> = {};
+                    for (const preset of filtered) {
+                      const key = preset.category ?? "";
+                      if (!groups[key]) groups[key] = [];
+                      groups[key].push(preset);
+                    }
+                    const sortedKeys = Object.keys(groups).sort((a, b) => {
+                      if (a === "") return 1;
+                      if (b === "") return -1;
+                      return a.localeCompare(b);
+                    });
+                    return sortedKeys.map((cat) => (
+                      <div key={cat}>
+                        {cat && (
+                          <div className="px-2 pt-2 pb-0.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                            {cat}
+                          </div>
+                        )}
+                        {groups[cat].map((preset) => (
+                          <div key={preset.id} className="flex items-center group">
+                            <SelectItem value={preset.id} className="flex-1">
+                              {preset.name}
+                            </SelectItem>
+                            <button
+                              type="button"
+                              className="mr-2 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deletePresetMutation.mutate(preset.id);
+                              }}
+                              title="Delete preset"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ));
+                  })()}
                 </SelectContent>
               </Select>
             </div>
@@ -572,39 +621,50 @@ export function SequenceDetailPage() {
         {isImproveMode && aiGoal.trim() && (
           <div className="border-t pt-2">
             {aiPresetNaming ? (
-              <div className="flex gap-1.5 items-center">
+              <div className="space-y-1.5">
+                <div className="flex gap-1.5 items-center">
+                  <Input
+                    placeholder="Preset name…"
+                    value={aiPresetName}
+                    onChange={(e) => setAiPresetName(e.target.value)}
+                    className="h-7 text-xs flex-1"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && aiPresetName.trim()) {
+                        savePresetMutation.mutate({ name: aiPresetName.trim(), category: aiPresetCategory.trim() || undefined, goal: aiGoal.trim(), tone: aiTone, improveFields: aiImproveFields });
+                      }
+                      if (e.key === "Escape") { setAiPresetNaming(false); setAiPresetName(""); setAiPresetCategory(""); }
+                    }}
+                    autoFocus
+                  />
+                  <Button
+                    size="sm"
+                    type="button"
+                    variant="default"
+                    className="h-7 px-2 text-xs"
+                    disabled={!aiPresetName.trim() || savePresetMutation.isPending}
+                    onClick={() => savePresetMutation.mutate({ name: aiPresetName.trim(), category: aiPresetCategory.trim() || undefined, goal: aiGoal.trim(), tone: aiTone, improveFields: aiImproveFields })}
+                  >
+                    {savePresetMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    type="button"
+                    variant="ghost"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => { setAiPresetNaming(false); setAiPresetName(""); setAiPresetCategory(""); }}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
                 <Input
-                  placeholder="Preset name…"
-                  value={aiPresetName}
-                  onChange={(e) => setAiPresetName(e.target.value)}
-                  className="h-7 text-xs flex-1"
+                  placeholder="Category (optional) — e.g. Prospecting, Follow-up…"
+                  value={aiPresetCategory}
+                  onChange={(e) => setAiPresetCategory(e.target.value)}
+                  className="h-7 text-xs"
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && aiPresetName.trim()) {
-                      savePresetMutation.mutate({ name: aiPresetName.trim(), goal: aiGoal.trim(), tone: aiTone, improveFields: aiImproveFields });
-                    }
-                    if (e.key === "Escape") { setAiPresetNaming(false); setAiPresetName(""); }
+                    if (e.key === "Escape") { setAiPresetNaming(false); setAiPresetName(""); setAiPresetCategory(""); }
                   }}
-                  autoFocus
                 />
-                <Button
-                  size="sm"
-                  type="button"
-                  variant="default"
-                  className="h-7 px-2 text-xs"
-                  disabled={!aiPresetName.trim() || savePresetMutation.isPending}
-                  onClick={() => savePresetMutation.mutate({ name: aiPresetName.trim(), goal: aiGoal.trim(), tone: aiTone, improveFields: aiImproveFields })}
-                >
-                  {savePresetMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
-                </Button>
-                <Button
-                  size="sm"
-                  type="button"
-                  variant="ghost"
-                  className="h-7 px-2 text-xs"
-                  onClick={() => { setAiPresetNaming(false); setAiPresetName(""); }}
-                >
-                  <X className="h-3 w-3" />
-                </Button>
               </div>
             ) : (
               <button
@@ -764,14 +824,14 @@ export function SequenceDetailPage() {
     staleTime: 30_000,
   });
 
-  type AiPreset = { id: string; name: string; goal: string; tone: string; improveFields: string };
+  type AiPreset = { id: string; name: string; category: string | null; goal: string; tone: string; improveFields: string };
   const { data: aiPresets = [] } = useQuery<AiPreset[]>({
     queryKey: ["ai-presets"],
     queryFn: () => apiFetch("/users/me/ai-presets"),
   });
 
   const savePresetMutation = useMutation({
-    mutationFn: (payload: { name: string; goal: string; tone: string; improveFields: string }) =>
+    mutationFn: (payload: { name: string; category?: string; goal: string; tone: string; improveFields: string }) =>
       apiFetch("/users/me/ai-presets", {
         method: "POST",
         body: JSON.stringify(payload),
@@ -780,6 +840,7 @@ export function SequenceDetailPage() {
       qc.invalidateQueries({ queryKey: ["ai-presets"] });
       setAiPresetNaming(false);
       setAiPresetName("");
+      setAiPresetCategory("");
       toast({ title: "Preset saved" });
     },
     onError: (err: Error) =>

@@ -11,6 +11,7 @@ export const aiPresetsTable = pgTable(
       .notNull()
       .references(() => usersTable.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    category: text("category"),
     goal: text("goal").notNull(),
     tone: text("tone").notNull().default("Professional"),
     improveFields: text("improve_fields").notNull().default("both"),
