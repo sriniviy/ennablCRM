@@ -6,6 +6,7 @@ import { Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardContent,
@@ -15,7 +16,17 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, ListOrdered, Users, ChevronRight, ArrowLeft, Loader2 } from "lucide-react";
+import {
+  Plus,
+  ListOrdered,
+  Users,
+  ChevronRight,
+  ArrowLeft,
+  Loader2,
+  Sparkles,
+  CheckCircle2,
+  RefreshCw,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +34,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { SEQUENCE_TEMPLATES, type SequenceTemplate } from "@/lib/sequence-templates";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -67,11 +85,25 @@ export function SequencesPage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
+  // ── Standard create dialog ────────────────────────────────────────────────
   const [showCreate, setShowCreate] = useState(false);
   const [dialogStep, setDialogStep] = useState<DialogStep>("gallery");
   const [selectedTemplate, setSelectedTemplate] = useState<SequenceTemplate | null>(null);
   const [newName, setNewName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+
+  // ── AI-create dialog ──────────────────────────────────────────────────────
+  const [showAiCreate, setShowAiCreate] = useState(false);
+  const [aiName, setAiName] = useState("");
+  const [aiGoal, setAiGoal] = useState("");
+  const [aiNumSteps, setAiNumSteps] = useState(3);
+  const [aiTone, setAiTone] = useState("Professional");
+  const [aiContext, setAiContext] = useState("");
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiPreview, setAiPreview] = useState<
+    { subject: string; body: string; delayDays: number }[] | null
+  >(null);
+  const [aiSaving, setAiSaving] = useState(false);
 
   const { data: sequences, isLoading } = useQuery<SequenceSummary[]>({
     queryKey: ["sequences"],
@@ -79,6 +111,7 @@ export function SequencesPage() {
     staleTime: 30_000,
   });
 
+  // ── Standard create handlers ──────────────────────────────────────────────
   function openCreate() {
     setDialogStep("gallery");
     setSelectedTemplate(null);
@@ -131,6 +164,75 @@ export function SequencesPage() {
     }
   }
 
+  // ── AI-create handlers ────────────────────────────────────────────────────
+  function openAiCreate() {
+    setAiName("");
+    setAiGoal("");
+    setAiNumSteps(3);
+    setAiTone("Professional");
+    setAiContext("");
+    setAiPreview(null);
+    setShowAiCreate(true);
+  }
+
+  function closeAiCreate() {
+    if (aiGenerating || aiSaving) return;
+    setShowAiCreate(false);
+  }
+
+  async function generateAiDraft() {
+    if (!aiGoal.trim()) return;
+    setAiGenerating(true);
+    setAiPreview(null);
+    try {
+      const result = (await apiFetch("/ai-draft-sequence", {
+        method: "POST",
+        body: JSON.stringify({
+          goal: aiGoal.trim(),
+          numSteps: aiNumSteps,
+          tone: aiTone,
+          context: aiContext.trim() || undefined,
+        }),
+      })) as { steps: { subject: string; body: string; delayDays: number }[] };
+      setAiPreview(result.steps);
+    } catch (err) {
+      toast({
+        title: "AI generation failed",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setAiGenerating(false);
+    }
+  }
+
+  async function acceptAiDraft() {
+    if (!aiPreview) return;
+    const name = aiName.trim() || "AI-drafted sequence";
+    setAiSaving(true);
+    try {
+      const seq = await apiFetch("", { method: "POST", body: JSON.stringify({ name }) });
+      for (const step of aiPreview) {
+        await apiFetch(`/${seq.id}/steps`, {
+          method: "POST",
+          body: JSON.stringify(step),
+        });
+      }
+      qc.invalidateQueries({ queryKey: ["sequences"] });
+      setShowAiCreate(false);
+      navigate(`/sequences/${seq.id}`);
+      toast({ title: `Sequence created with ${aiPreview.length} steps` });
+    } catch (err) {
+      toast({
+        title: "Failed to save sequence",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setAiSaving(false);
+    }
+  }
+
   return (
     <SidebarLayout>
       <div className="space-y-6">
@@ -144,6 +246,10 @@ export function SequencesPage() {
           <div className="flex gap-2">
             <Button variant="outline" asChild>
               <Link href="/campaigns">Campaigns</Link>
+            </Button>
+            <Button variant="outline" onClick={openAiCreate} className="gap-2">
+              <Sparkles className="h-4 w-4" />
+              New with AI
             </Button>
             <Button onClick={openCreate}>
               <Plus className="mr-2 h-4 w-4" /> New Sequence
@@ -200,13 +306,19 @@ export function SequencesPage() {
           <Card className="flex flex-col items-center justify-center py-16">
             <ListOrdered className="h-10 w-10 text-muted-foreground mb-3 opacity-50" />
             <p className="text-muted-foreground text-sm mb-4">No sequences yet.</p>
-            <Button onClick={openCreate}>
-              <Plus className="mr-2 h-4 w-4" /> Create your first sequence
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={openAiCreate} className="gap-2">
+                <Sparkles className="h-4 w-4" />
+                Draft with AI
+              </Button>
+              <Button onClick={openCreate}>
+                <Plus className="mr-2 h-4 w-4" /> Create from scratch
+              </Button>
+            </div>
           </Card>
         )}
 
-        {/* Create dialog */}
+        {/* Standard create dialog */}
         <Dialog open={showCreate} onOpenChange={closeCreate}>
           <DialogContent className="max-w-2xl">
             {dialogStep === "gallery" ? (
@@ -341,6 +453,209 @@ export function SequencesPage() {
                 </DialogFooter>
               </>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* AI-create dialog */}
+        <Dialog
+          open={showAiCreate}
+          onOpenChange={(open) => {
+            if (!open) closeAiCreate();
+          }}
+        >
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                New sequence with AI
+              </DialogTitle>
+            </DialogHeader>
+
+            {/* Form — hidden once preview is shown */}
+            {!aiPreview && (
+              <div className="space-y-4 py-2">
+                <div>
+                  <label className="text-sm font-medium">Sequence name</label>
+                  <Input
+                    placeholder="e.g. Q3 Cold Outreach"
+                    value={aiName}
+                    onChange={(e) => setAiName(e.target.value)}
+                    className="mt-1.5"
+                    disabled={aiGenerating}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Sequence goal</label>
+                  <p className="text-xs text-muted-foreground mb-1.5">
+                    What should this email sequence accomplish?
+                  </p>
+                  <Textarea
+                    placeholder="e.g. Warm up cold leads who downloaded our e-book and book a 15-min discovery call"
+                    value={aiGoal}
+                    onChange={(e) => setAiGoal(e.target.value)}
+                    rows={3}
+                    className="text-sm resize-none"
+                    autoFocus
+                    disabled={aiGenerating}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Number of steps</label>
+                    <Select
+                      value={String(aiNumSteps)}
+                      onValueChange={(v) => setAiNumSteps(Number(v))}
+                      disabled={aiGenerating}
+                    >
+                      <SelectTrigger className="mt-1.5">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[2, 3, 4, 5, 6, 7].map((n) => (
+                          <SelectItem key={n} value={String(n)}>
+                            {n} emails
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Tone</label>
+                    <Select
+                      value={aiTone}
+                      onValueChange={setAiTone}
+                      disabled={aiGenerating}
+                    >
+                      <SelectTrigger className="mt-1.5">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {["Friendly", "Professional", "Direct", "Urgent"].map((t) => (
+                          <SelectItem key={t} value={t}>{t}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">
+                    Context{" "}
+                    <span className="font-normal text-muted-foreground text-xs">(optional)</span>
+                  </label>
+                  <Textarea
+                    placeholder="e.g. Our audience is mid-market CFOs. We offer a spend analytics platform."
+                    value={aiContext}
+                    onChange={(e) => setAiContext(e.target.value)}
+                    rows={2}
+                    className="mt-1.5 text-sm resize-none"
+                    disabled={aiGenerating}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Preview */}
+            {aiPreview && (
+              <div className="space-y-3 py-2">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium flex-1">
+                    {aiPreview.length} steps generated — review before saving
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1.5 text-xs"
+                    onClick={() => setAiPreview(null)}
+                    disabled={aiSaving}
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                    Edit inputs
+                  </Button>
+                </div>
+                {aiName.trim() && (
+                  <p className="text-xs text-muted-foreground">
+                    Will be saved as: <span className="font-medium text-foreground">{aiName.trim()}</span>
+                  </p>
+                )}
+                <ol className="space-y-3">
+                  {aiPreview.map((step, i) => (
+                    <li key={i} className="border rounded-lg p-4 space-y-2 bg-muted/30">
+                      <div className="flex items-center gap-2">
+                        <span className="bg-primary text-primary-foreground rounded-full h-6 w-6 flex items-center justify-center text-xs font-bold shrink-0">
+                          {i + 1}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {i === 0
+                            ? "Send immediately"
+                            : `Send ${step.delayDays} day${step.delayDays !== 1 ? "s" : ""} after step ${i}`}
+                        </span>
+                      </div>
+                      <p className="text-sm font-semibold">{step.subject}</p>
+                      <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                        {step.body}
+                      </p>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              {!aiPreview ? (
+                <>
+                  <Button variant="outline" onClick={closeAiCreate} disabled={aiGenerating}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={generateAiDraft}
+                    disabled={!aiGoal.trim() || aiGenerating}
+                    className="gap-2"
+                  >
+                    {aiGenerating ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
+                    {aiGenerating ? "Generating…" : "Generate draft"}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={closeAiCreate}
+                    disabled={aiSaving}
+                  >
+                    Dismiss
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={generateAiDraft}
+                    disabled={aiGenerating || aiSaving}
+                    className="gap-1.5"
+                  >
+                    {aiGenerating ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    )}
+                    Regenerate
+                  </Button>
+                  <Button
+                    onClick={acceptAiDraft}
+                    disabled={aiSaving || aiGenerating}
+                    className="gap-2"
+                  >
+                    {aiSaving ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="h-4 w-4" />
+                    )}
+                    {aiSaving ? "Saving…" : `Create with ${aiPreview.length} steps`}
+                  </Button>
+                </>
+              )}
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
