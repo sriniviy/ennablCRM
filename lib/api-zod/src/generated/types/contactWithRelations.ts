@@ -32,6 +32,7 @@ export interface ContactWithRelations {
   assignee?: UserSummary | null;
   dealCount: number;
   taskCount: number;
+  campaignEngagementCount?: number;
   createdAt: Date;
   updatedAt: Date;
 }

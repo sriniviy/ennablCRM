@@ -1425,6 +1425,9 @@ components:
           type: integer
         taskCount:
           type: integer
+        campaignEngagementCount:
+          type: integer
+          description: Number of campaigns the contact has opened or clicked at least once.
         createdAt:
           type: string
           format: date-time

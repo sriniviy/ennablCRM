@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { db, contactsTable, companiesTable, usersTable, dealsTable, dealStagesTable, tasksTable, activitiesTable, notesTable, customFieldDefinitionsTable, customFieldValuesTable } from "@workspace/db";
+import { db, contactsTable, companiesTable, usersTable, dealsTable, dealStagesTable, tasksTable, activitiesTable, notesTable, customFieldDefinitionsTable, customFieldValuesTable, campaignContactsTable } from "@workspace/db";
 import { eq, ne, ilike, and, or, inArray, sql, asc, desc, isNotNull } from "drizzle-orm";
 import { requireAuth, requireAdmin, type AuthRequest } from "../middlewares/requireAuth";
 import { logActivity } from "../lib/activity";
@@ -77,6 +77,11 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
             name: usersTable.name,
             avatarUrl: usersTable.avatarUrl,
           },
+          campaignEngagementCount: sql<number>`(
+            SELECT COUNT(*)::int FROM campaign_contacts
+            WHERE campaign_contacts.contact_id = ${contactsTable.id}
+              AND (campaign_contacts.opened_at IS NOT NULL OR campaign_contacts.clicked_at IS NOT NULL)
+          )`,
         })
         .from(contactsTable)
         .leftJoin(companiesTable, eq(contactsTable.companyId, companiesTable.id))
@@ -92,10 +97,11 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
     ]);
 
     res.json({
-      data: contacts.map(({ contact, company, assignee }) => ({
+      data: contacts.map(({ contact, company, assignee, campaignEngagementCount }) => ({
         ...contact,
         company: company?.id ? company : null,
         assignee: assignee?.id ? assignee : null,
+        campaignEngagementCount: campaignEngagementCount ?? 0,
       })),
       total: count,
       page: pg,

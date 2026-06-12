@@ -76,6 +76,7 @@ export const ListContactsResponse = zod.object({
 }).nullish(),
   "dealCount": zod.number(),
   "taskCount": zod.number(),
+  "campaignEngagementCount": zod.number().optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })),
@@ -193,6 +194,7 @@ export const MergeContactsResponse = zod.object({
 }).nullish(),
   "dealCount": zod.number(),
   "taskCount": zod.number(),
+  "campaignEngagementCount": zod.number().optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -395,6 +397,7 @@ export const UpdateContactResponse = zod.object({
 }).nullish(),
   "dealCount": zod.number(),
   "taskCount": zod.number(),
+  "campaignEngagementCount": zod.number().optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })

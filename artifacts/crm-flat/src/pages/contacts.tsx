@@ -7,12 +7,13 @@ import { Link } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Plus, Upload, Download, CopyCheck } from "lucide-react";
+import { Search, Plus, Upload, Download, CopyCheck, Mail } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useUrlFilters } from "@/hooks/use-url-filters";
 import { useTeamMembers } from "@/hooks/use-team-members";
@@ -68,6 +69,7 @@ const CARD_FIELDS: CardField<ContactWithRelations>[] = [
   { label: "Notes", render: c => dash(c.notes) },
   { label: "Deals", render: c => dash(c.dealCount) },
   { label: "Tasks", render: c => dash(c.taskCount) },
+  { label: "Campaign engagement", render: c => (c.campaignEngagementCount ?? 0) > 0 ? `${c.campaignEngagementCount} campaign${c.campaignEngagementCount === 1 ? "" : "s"}` : "—" },
   { label: "Company ID", render: c => dash(c.companyId) },
   { label: "Owner ID", render: c => dash(c.assigneeId) },
   { label: "Created", render: c => (c.createdAt ? new Date(c.createdAt).toLocaleString() : "—") },
@@ -255,13 +257,14 @@ export function ContactsPage() {
                   <TableHead>Status</TableHead>
                   <TableHead>Review</TableHead>
                   <TableHead>Tags</TableHead>
+                  <TableHead className="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   [...Array(5)].map((_, i) => (
                     <TableRow key={i}>
-                      {[...Array(6)].map((__, j) => <TableCell key={j}><Skeleton className="h-4 w-24" /></TableCell>)}
+                      {[...Array(7)].map((__, j) => <TableCell key={j}><Skeleton className="h-4 w-24" /></TableCell>)}
                     </TableRow>
                   ))
                 ) : contacts.length > 0 ? (
@@ -305,11 +308,27 @@ export function ContactsPage() {
                           ))}
                         </div>
                       </TableCell>
+                      <TableCell>
+                        {(contact.campaignEngagementCount ?? 0) > 0 && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-flex items-center justify-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 h-6 w-6 cursor-default" onClick={e => e.stopPropagation()}>
+                                  <Mail className="h-3.5 w-3.5" />
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="left">
+                                Engaged with {contact.campaignEngagementCount} campaign{contact.campaignEngagementCount === 1 ? "" : "s"}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                       No contacts found.
                     </TableCell>
                   </TableRow>
