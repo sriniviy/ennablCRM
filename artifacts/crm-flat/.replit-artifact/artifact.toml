@@ -1,5 +1,5 @@
 kind = "web"
-previewPath = "/crm-flat/"
+previewPath = "/"
 title = "MyCRM – Flat"
 version = "1.0.0"
 id = "artifacts/crm-flat"
@@ -11,7 +11,7 @@ version = "1.0.0"
 
 [[services]]
 name = "web"
-paths = [ "/crm-flat/" ]
+paths = [ "/" ]
 localPort = 19011
 
 [services.development]
@@ -28,4 +28,4 @@ to = "/index.html"
 
 [services.env]
 PORT = "19011"
-BASE_PATH = "/crm-flat/"
+BASE_PATH = "/"

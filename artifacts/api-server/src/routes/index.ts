@@ -10,6 +10,7 @@ import activitiesRouter from "./activities";
 import campaignsRouter from "./campaigns";
 import dashboardRouter from "./dashboard";
 import trackingRouter from "./tracking";
+import unsubscribeRouter from "./unsubscribe";
 import searchRouter from "./search";
 import notesRouter from "./notes";
 import reportsRouter from "./reports";
@@ -23,6 +24,7 @@ import aiSuggestionsRouter from "./ai-suggestions";
 import storageRouter from "./storage";
 import attachmentsRouter from "./attachments";
 import migrateRouter from "./migrate";
+import segmentsRouter from "./segments";
 
 const router: IRouter = Router();
 
@@ -37,6 +39,8 @@ router.use("/activities", activitiesRouter);
 router.use("/campaigns", campaignsRouter);
 router.use("/dashboard", dashboardRouter);
 router.use("/track", trackingRouter);
+router.use(unsubscribeRouter);
+router.use("/segments", segmentsRouter);
 router.use("/search", searchRouter);
 router.use("/notes", notesRouter);
 router.use("/reports", reportsRouter);

@@ -1,4 +1,5 @@
 import { pgTable, text, timestamp, index, unique } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { campaignStatusEnum, sendStatusEnum } from "./enums";
@@ -17,6 +18,11 @@ export const emailCampaignsTable = pgTable("email_campaigns", {
   status: campaignStatusEnum("status").notNull().default("DRAFT"),
   scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
   sentAt: timestamp("sent_at", { withTimezone: true }),
+  recipientIds: text("recipient_ids")
+    .array()
+    .notNull()
+    .default(sql`ARRAY[]::text[]`),
+  segmentId: text("segment_id"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -41,6 +47,7 @@ export const campaignContactsTable = pgTable(
     status: sendStatusEnum("status").notNull().default("PENDING"),
     openedAt: timestamp("opened_at", { withTimezone: true }),
     clickedAt: timestamp("clicked_at", { withTimezone: true }),
+    unsubscribedAt: timestamp("unsubscribed_at", { withTimezone: true }),
     sentAt: timestamp("sent_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

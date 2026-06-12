@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
+import { createHmac } from "crypto";
 import { db, emailCampaignsTable, campaignContactsTable, contactsTable } from "@workspace/db";
-import { eq, and, desc, inArray, sql } from "drizzle-orm";
+import { eq, and, desc, inArray, lte, sql } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 import { Resend } from "resend";
 
@@ -10,6 +11,161 @@ function getResend() {
   const key = process.env.RESEND_API_KEY;
   if (!key) return null;
   return new Resend(key);
+}
+
+function generateUnsubscribeToken(contactId: string, campaignId: string): string {
+  const secret = process.env.BETTER_AUTH_SECRET ?? "dev-secret";
+  return createHmac("sha256", secret).update(`${contactId}:${campaignId}`).digest("hex");
+}
+
+async function executeSend(campaignId: string, contactIds: string[]) {
+  const [campaign] = await db
+    .select()
+    .from(emailCampaignsTable)
+    .where(eq(emailCampaignsTable.id, campaignId))
+    .limit(1);
+  if (!campaign) return;
+
+  const resend = getResend();
+  if (!resend) return;
+
+  const contacts = await db
+    .select({
+      id: contactsTable.id,
+      email: contactsTable.email,
+      firstName: contactsTable.firstName,
+      lastName: contactsTable.lastName,
+      emailMarketingContact: contactsTable.emailMarketingContact,
+    })
+    .from(contactsTable)
+    .where(inArray(contactsTable.id, contactIds));
+
+  const validContacts = contacts.filter(
+    (c) => c.email && c.emailMarketingContact !== false,
+  );
+
+  await db
+    .update(emailCampaignsTable)
+    .set({ status: "SENDING", updatedAt: new Date() })
+    .where(eq(emailCampaignsTable.id, campaignId));
+
+  const campaignContactRows = validContacts.map((c) => ({
+    campaignId,
+    contactId: c.id,
+    email: c.email!,
+    status: "PENDING" as const,
+  }));
+
+  if (campaignContactRows.length > 0) {
+    await db
+      .insert(campaignContactsTable)
+      .values(campaignContactRows)
+      .onConflictDoNothing();
+  }
+
+  const base = process.env.API_BASE_URL ?? "";
+
+  for (const contact of validContacts) {
+    if (!contact.email) continue;
+
+    const unsubToken = generateUnsubscribeToken(contact.id, campaignId);
+    const unsubscribeUrl = `${base}/api/unsubscribe?cid=${contact.id}&campaign=${campaignId}&token=${unsubToken}`;
+    const trackingPixelUrl = `${base}/api/track/open/${campaignId}?cid=${contact.id}`;
+
+    let html = campaign.htmlContent
+      .replace(/\{\{firstName\}\}/g, contact.firstName || "")
+      .replace(/\{\{lastName\}\}/g, contact.lastName || "")
+      .replace(/\{\{fullName\}\}/g, `${contact.firstName || ""} ${contact.lastName || ""}`.trim())
+      .replace(/\{\{unsubscribe_url\}\}/g, unsubscribeUrl)
+      .replace(
+        /href="(https?:\/\/[^"]+)"/gi,
+        (_match: string, url: string) =>
+          `href="${base}/api/track/click/${campaignId}?cid=${contact.id}&url=${encodeURIComponent(url)}"`,
+      );
+
+    if (!html.includes("</body>")) {
+      html += `<img src="${trackingPixelUrl}" width="1" height="1" style="display:none" alt="" />`;
+    } else {
+      html = html.replace(
+        "</body>",
+        `<img src="${trackingPixelUrl}" width="1" height="1" style="display:none" alt="" /></body>`,
+      );
+    }
+
+    try {
+      await resend.emails.send({
+        from: `${campaign.fromName} <${campaign.fromEmail}>`,
+        to: contact.email,
+        subject: campaign.subject,
+        html,
+        text: campaign.textContent ?? undefined,
+      });
+
+      await db
+        .update(campaignContactsTable)
+        .set({ status: "SENT", sentAt: new Date() })
+        .where(
+          and(
+            eq(campaignContactsTable.campaignId, campaignId),
+            eq(campaignContactsTable.contactId, contact.id),
+          ),
+        );
+    } catch {
+      // ignore individual send errors
+    }
+  }
+
+  await db
+    .update(emailCampaignsTable)
+    .set({ status: "SENT", sentAt: new Date(), updatedAt: new Date() })
+    .where(eq(emailCampaignsTable.id, campaignId));
+}
+
+export function startCampaignScheduler() {
+  setInterval(async () => {
+    try {
+      const due = await db
+        .select()
+        .from(emailCampaignsTable)
+        .where(
+          and(
+            eq(emailCampaignsTable.status, "SCHEDULED"),
+            lte(emailCampaignsTable.scheduledAt, new Date()),
+          ),
+        );
+
+      for (const campaign of due) {
+        if (campaign.recipientIds && campaign.recipientIds.length > 0) {
+          await executeSend(campaign.id, campaign.recipientIds).catch(() => {});
+        }
+      }
+    } catch {
+      // swallow scheduler errors
+    }
+  }, 60_000);
+}
+
+function getStats(campaignId: string) {
+  return db
+    .select({
+      total: sql<number>`count(*)::int`,
+      sent: sql<number>`count(case when ${campaignContactsTable.status} != 'PENDING' and ${campaignContactsTable.status} != 'UNSUBSCRIBED' then 1 end)::int`,
+      opened: sql<number>`count(case when ${campaignContactsTable.openedAt} is not null then 1 end)::int`,
+      clicked: sql<number>`count(case when ${campaignContactsTable.clickedAt} is not null then 1 end)::int`,
+      unsubscribed: sql<number>`count(case when ${campaignContactsTable.status} = 'UNSUBSCRIBED' then 1 end)::int`,
+    })
+    .from(campaignContactsTable)
+    .where(eq(campaignContactsTable.campaignId, campaignId))
+    .then(([r]) => ({
+      total: r.total,
+      sent: r.sent,
+      opened: r.opened,
+      clicked: r.clicked,
+      unsubscribed: r.unsubscribed,
+      openRate: r.sent > 0 ? Math.round((r.opened / r.sent) * 100) : 0,
+      clickRate: r.sent > 0 ? Math.round((r.clicked / r.sent) * 100) : 0,
+      unsubscribeRate: r.sent > 0 ? Math.round((r.unsubscribed / r.sent) * 100) : 0,
+    }));
 }
 
 router.get("/", requireAuth, async (req: Request, res: Response) => {
@@ -28,9 +184,10 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
         .select({
           campaign: emailCampaignsTable,
           total: sql<number>`count(distinct ${campaignContactsTable.id})::int`,
-          sent: sql<number>`count(distinct case when ${campaignContactsTable.status} != 'PENDING' then ${campaignContactsTable.id} end)::int`,
+          sent: sql<number>`count(distinct case when ${campaignContactsTable.status} != 'PENDING' and ${campaignContactsTable.status} != 'UNSUBSCRIBED' then ${campaignContactsTable.id} end)::int`,
           opened: sql<number>`count(distinct case when ${campaignContactsTable.openedAt} is not null then ${campaignContactsTable.id} end)::int`,
           clicked: sql<number>`count(distinct case when ${campaignContactsTable.clickedAt} is not null then ${campaignContactsTable.id} end)::int`,
+          unsubscribed: sql<number>`count(distinct case when ${campaignContactsTable.status} = 'UNSUBSCRIBED' then ${campaignContactsTable.id} end)::int`,
         })
         .from(emailCampaignsTable)
         .leftJoin(campaignContactsTable, eq(campaignContactsTable.campaignId, emailCampaignsTable.id))
@@ -43,13 +200,10 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
     ]);
 
     res.json({
-      data: campaigns.map(({ campaign, total, sent, opened, clicked }) => ({
+      data: campaigns.map(({ campaign, total, sent, opened, clicked, unsubscribed }) => ({
         ...campaign,
         stats: {
-          total,
-          sent,
-          opened,
-          clicked,
+          total, sent, opened, clicked, unsubscribed,
           openRate: sent > 0 ? Math.round((opened / sent) * 100) : 0,
           clickRate: sent > 0 ? Math.round((clicked / sent) * 100) : 0,
         },
@@ -67,48 +221,57 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
 router.get("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
     const id = req.params.id as string;
-
     const [campaign] = await db
       .select()
       .from(emailCampaignsTable)
       .where(eq(emailCampaignsTable.id, id))
       .limit(1);
-
-    if (!campaign) {
-      res.status(404).json({ error: "Campaign not found" });
-      return;
-    }
-
-    const [{ total, sent, opened, clicked }] = await db
-      .select({
-        total: sql<number>`count(*)::int`,
-        sent: sql<number>`count(case when ${campaignContactsTable.status} != 'PENDING' then 1 end)::int`,
-        opened: sql<number>`count(case when ${campaignContactsTable.openedAt} is not null then 1 end)::int`,
-        clicked: sql<number>`count(case when ${campaignContactsTable.clickedAt} is not null then 1 end)::int`,
-      })
-      .from(campaignContactsTable)
-      .where(eq(campaignContactsTable.campaignId, id));
-
-    res.json({
-      ...campaign,
-      stats: {
-        total,
-        sent,
-        opened,
-        clicked,
-        openRate: sent > 0 ? Math.round((opened / sent) * 100) : 0,
-        clickRate: sent > 0 ? Math.round((clicked / sent) * 100) : 0,
-      },
-    });
+    if (!campaign) { res.status(404).json({ error: "Campaign not found" }); return; }
+    const stats = await getStats(id);
+    res.json({ ...campaign, stats });
   } catch {
     res.status(500).json({ error: "Failed to get campaign" });
+  }
+});
+
+router.get("/:id/recipients", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const { search = "" } = req.query as { search?: string };
+
+    const rows = await db
+      .select({
+        contactId: campaignContactsTable.contactId,
+        email: campaignContactsTable.email,
+        status: campaignContactsTable.status,
+        sentAt: campaignContactsTable.sentAt,
+        openedAt: campaignContactsTable.openedAt,
+        clickedAt: campaignContactsTable.clickedAt,
+        unsubscribedAt: campaignContactsTable.unsubscribedAt,
+        firstName: contactsTable.firstName,
+        lastName: contactsTable.lastName,
+      })
+      .from(campaignContactsTable)
+      .leftJoin(contactsTable, eq(contactsTable.id, campaignContactsTable.contactId))
+      .where(eq(campaignContactsTable.campaignId, id))
+      .orderBy(desc(campaignContactsTable.sentAt));
+
+    const filtered = search
+      ? rows.filter(r =>
+          `${r.firstName} ${r.lastName}`.toLowerCase().includes(search.toLowerCase()) ||
+          r.email.toLowerCase().includes(search.toLowerCase())
+        )
+      : rows;
+
+    res.json(filtered);
+  } catch {
+    res.status(500).json({ error: "Failed to get recipients" });
   }
 });
 
 router.post("/", requireAuth, async (req: Request, res: Response) => {
   try {
     const body = req.body;
-
     if (!body.name || !body.subject || !body.fromName || !body.fromEmail || !body.htmlContent) {
       res.status(400).json({ error: "name, subject, fromName, fromEmail, and htmlContent are required" });
       return;
@@ -122,6 +285,9 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
       htmlContent: body.htmlContent,
       textContent: body.textContent ?? null,
       status: body.status ?? "DRAFT",
+      scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : null,
+      recipientIds: body.recipientIds ?? [],
+      segmentId: body.segmentId ?? null,
     }).returning();
 
     res.status(201).json(campaign);
@@ -134,14 +300,14 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
     const id = req.params.id as string;
     const [existing] = await db.select().from(emailCampaignsTable).where(eq(emailCampaignsTable.id, id)).limit(1);
-    if (!existing) {
-      res.status(404).json({ error: "Campaign not found" });
-      return;
-    }
+    if (!existing) { res.status(404).json({ error: "Campaign not found" }); return; }
+
+    const body = { ...req.body };
+    if (body.scheduledAt) body.scheduledAt = new Date(body.scheduledAt);
 
     const [updated] = await db
       .update(emailCampaignsTable)
-      .set({ ...req.body, updatedAt: new Date() })
+      .set({ ...body, updatedAt: new Date() })
       .where(eq(emailCampaignsTable.id, id))
       .returning();
 
@@ -151,15 +317,30 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
   }
 });
 
+router.patch("/:id/cancel", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const [existing] = await db.select().from(emailCampaignsTable).where(eq(emailCampaignsTable.id, id)).limit(1);
+    if (!existing) { res.status(404).json({ error: "Campaign not found" }); return; }
+    if (existing.status !== "SCHEDULED") { res.status(400).json({ error: "Only scheduled campaigns can be cancelled" }); return; }
+
+    const [updated] = await db
+      .update(emailCampaignsTable)
+      .set({ status: "CANCELLED", scheduledAt: null, updatedAt: new Date() })
+      .where(eq(emailCampaignsTable.id, id))
+      .returning();
+
+    res.json(updated);
+  } catch {
+    res.status(500).json({ error: "Failed to cancel campaign" });
+  }
+});
+
 router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
     const id = req.params.id as string;
     const [existing] = await db.select().from(emailCampaignsTable).where(eq(emailCampaignsTable.id, id)).limit(1);
-    if (!existing) {
-      res.status(404).json({ error: "Campaign not found" });
-      return;
-    }
-
+    if (!existing) { res.status(404).json({ error: "Campaign not found" }); return; }
     await db.delete(emailCampaignsTable).where(eq(emailCampaignsTable.id, id));
     res.status(204).send();
   } catch {
@@ -171,9 +352,8 @@ router.post("/:id/send", requireAuth, async (req: Request, res: Response) => {
   try {
     const id = req.params.id as string;
     const { recipientContactIds } = req.body as { recipientContactIds: string[] };
-    const contactIds = recipientContactIds;
 
-    if (!contactIds || contactIds.length === 0) {
+    if (!recipientContactIds || recipientContactIds.length === 0) {
       res.status(400).json({ error: "recipientContactIds array is required" });
       return;
     }
@@ -184,108 +364,12 @@ router.post("/:id/send", requireAuth, async (req: Request, res: Response) => {
     }
 
     const [campaign] = await db.select().from(emailCampaignsTable).where(eq(emailCampaignsTable.id, id)).limit(1);
-    if (!campaign) {
-      res.status(404).json({ error: "Campaign not found" });
-      return;
-    }
+    if (!campaign) { res.status(404).json({ error: "Campaign not found" }); return; }
 
-    const contacts = await db
-      .select({ id: contactsTable.id, email: contactsTable.email, firstName: contactsTable.firstName, lastName: contactsTable.lastName })
-      .from(contactsTable)
-      .where(inArray(contactsTable.id, contactIds));
-
-    const validContacts = contacts.filter((c) => c.email);
-
-    await db
-      .update(emailCampaignsTable)
-      .set({ status: "SENDING", updatedAt: new Date() })
-      .where(eq(emailCampaignsTable.id, id));
-
-    const campaignContactRows = validContacts.map((c) => ({
-      campaignId: id,
-      contactId: c.id,
-      email: c.email!,
-      status: "PENDING" as const,
-    }));
-
-    if (campaignContactRows.length > 0) {
-      await db
-        .insert(campaignContactsTable)
-        .values(campaignContactRows)
-        .onConflictDoNothing();
-    }
-
-    const resend = getResend()!;
-    let sentCount = 0;
-
-    for (const contact of validContacts) {
-      if (!contact.email) continue;
-
-      const base = process.env.API_BASE_URL ?? "";
-      const trackingPixelUrl = `${base}/api/track/open/${id}?cid=${contact.id}`;
-
-      const htmlWithTracking = campaign.htmlContent
-        .replace(
-          /href="(https?:\/\/[^"]+)"/gi,
-          (_match: string, url: string) =>
-            `href="${base}/api/track/click/${id}?cid=${contact.id}&url=${encodeURIComponent(url)}"`,
-        )
-        .replace(
-          "</body>",
-          `<img src="${trackingPixelUrl}" width="1" height="1" style="display:none" alt="" /></body>`,
-        );
-
-      try {
-        await resend.emails.send({
-          from: `${campaign.fromName} <${campaign.fromEmail}>`,
-          to: contact.email,
-          subject: campaign.subject,
-          html: htmlWithTracking,
-          text: campaign.textContent ?? undefined,
-        });
-
-        await db
-          .update(campaignContactsTable)
-          .set({ status: "SENT", sentAt: new Date() })
-          .where(
-            and(
-              eq(campaignContactsTable.campaignId, id),
-              eq(campaignContactsTable.contactId, contact.id),
-            ),
-          );
-        sentCount++;
-      } catch {
-        // ignore individual send errors — don't fail the whole batch
-      }
-    }
-
-    const [updatedCampaign] = await db
-      .update(emailCampaignsTable)
-      .set({ status: "SENT", sentAt: new Date(), updatedAt: new Date() })
-      .where(eq(emailCampaignsTable.id, id))
-      .returning();
-
-    const [{ total: statTotal, sent: statSent, opened: statOpened, clicked: statClicked }] = await db
-      .select({
-        total: sql<number>`count(*)::int`,
-        sent: sql<number>`count(case when ${campaignContactsTable.status} != 'PENDING' then 1 end)::int`,
-        opened: sql<number>`count(case when ${campaignContactsTable.openedAt} is not null then 1 end)::int`,
-        clicked: sql<number>`count(case when ${campaignContactsTable.clickedAt} is not null then 1 end)::int`,
-      })
-      .from(campaignContactsTable)
-      .where(eq(campaignContactsTable.campaignId, id));
-
-    res.json({
-      ...updatedCampaign,
-      stats: {
-        total: statTotal,
-        sent: statSent,
-        opened: statOpened,
-        clicked: statClicked,
-        openRate: statSent > 0 ? Math.round((statOpened / statSent) * 100) : 0,
-        clickRate: statSent > 0 ? Math.round((statClicked / statSent) * 100) : 0,
-      },
-    });
+    await executeSend(id, recipientContactIds);
+    const stats = await getStats(id);
+    const [updatedCampaign] = await db.select().from(emailCampaignsTable).where(eq(emailCampaignsTable.id, id)).limit(1);
+    res.json({ ...updatedCampaign, stats });
   } catch {
     res.status(500).json({ error: "Failed to send campaign" });
   }

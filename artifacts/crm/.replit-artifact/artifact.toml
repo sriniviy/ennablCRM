@@ -1,6 +1,6 @@
 kind = "web"
-previewPath = "/"
-title = "MyCRM"
+previewPath = "/crm-v1/"
+title = "MyCRM (archived)"
 version = "1.0.0"
 id = "artifacts/crm"
 router = "path"
@@ -11,7 +11,7 @@ version = "1.0.0"
 
 [[services]]
 name = "web"
-paths = [ "/" ]
+paths = [ "/crm-v1/" ]
 localPort = 22444
 
 [services.development]
@@ -28,4 +28,4 @@ to = "/index.html"
 
 [services.env]
 PORT = "22444"
-BASE_PATH = "/"
+BASE_PATH = "/crm-v1/"

@@ -1,18 +1,27 @@
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
-import { useState, useRef, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useCreateCampaign, useListContacts } from "@workspace/api-client-react";
-import { useLocation, Link } from "wouter";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { ArrowLeft, Check, Plus, Trash2, GripVertical, Type, AlignLeft, MousePointer, Minus, Eye, Code } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
+import { authClient } from "@/lib/auth-client";
+import {
+  ArrowLeft, ArrowRight, Check, Trash2, Type, AlignLeft, MousePointer,
+  Minus, Image, Share2, Maximize2, Users, Calendar, Send, Save,
+  ChevronLeft, ChevronRight, Clock, Tag, User, Mail, Smile
+} from "lucide-react";
 
-type BlockType = "header" | "text" | "button" | "divider";
+const uid = () => Math.random().toString(36).slice(2, 9);
+
+type BlockType = "header" | "text" | "image" | "button" | "divider" | "spacer" | "social";
+type FontSize = "sm" | "md" | "lg" | "xl";
+type SpacerHeight = "sm" | "md" | "lg";
 
 interface Block {
   id: string;
@@ -20,388 +29,842 @@ interface Block {
   content: string;
   url?: string;
   align?: "left" | "center" | "right";
+  fontSize?: FontSize;
+  color?: string;
+  bgColor?: string;
+  buttonColor?: string;
+  imageUrl?: string;
+  imageAlt?: string;
+  spacerHeight?: SpacerHeight;
 }
 
-const uid = () => Math.random().toString(36).slice(2, 9);
+interface SegmentFilter { status?: string; tags?: string[]; ennablUser?: boolean; emailMarketingContact?: boolean; }
+interface SavedSegment { id: string; name: string; filterJson: string; }
 
-const DEFAULT_BLOCKS: Block[] = [
-  { id: uid(), type: "header", content: "Hello {{firstName}}!", align: "center" },
-  { id: uid(), type: "text", content: "We have some exciting news to share with you.", align: "left" },
-  { id: uid(), type: "button", content: "Learn More", url: "https://example.com", align: "center" },
+const FONT_SIZES: Record<FontSize, { label: string; px: number }> = {
+  sm: { label: "S", px: 14 },
+  md: { label: "M", px: 18 },
+  lg: { label: "L", px: 24 },
+  xl: { label: "XL", px: 32 },
+};
+
+const TEMPLATES: { id: string; label: string; desc: string; color: string; blocks: Block[] }[] = [
+  {
+    id: "blank", label: "Blank", desc: "Start fresh", color: "#e5e7eb",
+    blocks: [
+      { id: uid(), type: "header", content: "Your Heading Here", align: "center", fontSize: "lg" },
+      { id: uid(), type: "text", content: "Write your message here.", align: "left", fontSize: "md" },
+    ],
+  },
+  {
+    id: "announcement", label: "Product Announcement", desc: "Announce something new", color: "#6366f1",
+    blocks: [
+      { id: uid(), type: "header", content: "🚀 Introducing Something New", align: "center", fontSize: "xl" },
+      { id: uid(), type: "text", content: "We're thrilled to share exciting news with you, {{firstName}}.", align: "left", fontSize: "md" },
+      { id: uid(), type: "image", content: "", imageUrl: "", imageAlt: "Product image", align: "center" },
+      { id: uid(), type: "text", content: "This is a game-changer for teams like yours. Here's what you get:\n\n• Feature one that saves hours\n• Feature two that improves accuracy\n• Feature three you've been waiting for", align: "left", fontSize: "md" },
+      { id: uid(), type: "button", content: "Learn More", url: "https://", align: "center", buttonColor: "#6366f1" },
+    ],
+  },
+  {
+    id: "newsletter", label: "Newsletter", desc: "Regular updates", color: "#10b981",
+    blocks: [
+      { id: uid(), type: "header", content: "Monthly Update — {{firstName}}", align: "left", fontSize: "lg" },
+      { id: uid(), type: "divider", content: "" },
+      { id: uid(), type: "text", content: "Here's what's been happening this month at Ennabl.", align: "left", fontSize: "md" },
+      { id: uid(), type: "spacer", content: "", spacerHeight: "sm" },
+      { id: uid(), type: "header", content: "Highlights", align: "left", fontSize: "md" },
+      { id: uid(), type: "text", content: "• Update or insight #1\n• Update or insight #2\n• Update or insight #3", align: "left", fontSize: "md" },
+      { id: uid(), type: "button", content: "Read Full Update", url: "https://", align: "left", buttonColor: "#10b981" },
+    ],
+  },
+  {
+    id: "followup", label: "Follow-Up", desc: "Personal touch", color: "#f59e0b",
+    blocks: [
+      { id: uid(), type: "header", content: "Following up, {{firstName}}", align: "left", fontSize: "lg" },
+      { id: uid(), type: "text", content: "I wanted to follow up on our recent conversation and see if you had any questions.", align: "left", fontSize: "md" },
+      { id: uid(), type: "text", content: "I'd love to schedule a quick call to discuss how we can help you. Would any of these times work?", align: "left", fontSize: "md" },
+      { id: uid(), type: "button", content: "Book a Call", url: "https://", align: "left", buttonColor: "#f59e0b" },
+    ],
+  },
+  {
+    id: "event", label: "Event Invite", desc: "Drive attendance", color: "#8b5cf6",
+    blocks: [
+      { id: uid(), type: "header", content: "You're Invited, {{firstName}}!", align: "center", fontSize: "xl" },
+      { id: uid(), type: "text", content: "Join us for an exclusive event you won't want to miss.", align: "center", fontSize: "md" },
+      { id: uid(), type: "spacer", content: "", spacerHeight: "sm" },
+      { id: uid(), type: "text", content: "📅 Date: [Event Date]\n📍 Location: [Event Location]\n🕐 Time: [Event Time]", align: "center", fontSize: "md" },
+      { id: uid(), type: "spacer", content: "", spacerHeight: "sm" },
+      { id: uid(), type: "button", content: "Reserve My Spot", url: "https://", align: "center", buttonColor: "#8b5cf6" },
+    ],
+  },
+  {
+    id: "renewal", label: "Renewal Reminder", desc: "Retain customers", color: "#ef4444",
+    blocks: [
+      { id: uid(), type: "header", content: "Your renewal is coming up, {{firstName}}", align: "left", fontSize: "lg" },
+      { id: uid(), type: "text", content: "Your contract with Ennabl is up for renewal soon. We'd love to continue working with you.", align: "left", fontSize: "md" },
+      { id: uid(), type: "text", content: "Here's a quick summary of what you've accomplished this year:\n\n• [Achievement 1]\n• [Achievement 2]\n• [Achievement 3]", align: "left", fontSize: "md" },
+      { id: uid(), type: "button", content: "Renew Now", url: "https://", align: "left", buttonColor: "#ef4444" },
+    ],
+  },
 ];
 
-const blocksToHtml = (blocks: Block[]): string => {
+function blocksToHtml(blocks: Block[], fromName = "", fromEmail = ""): string {
   const rows = blocks.map(b => {
     const align = b.align ?? "left";
+    const color = b.color || "#333333";
     switch (b.type) {
-      case "header":
-        return `<tr><td style="padding:24px 40px;text-align:${align};"><h1 style="margin:0;font-family:Arial,sans-serif;font-size:28px;font-weight:700;color:#111;">${b.content}</h1></td></tr>`;
-      case "text":
-        return `<tr><td style="padding:8px 40px;text-align:${align};"><p style="margin:0;font-family:Arial,sans-serif;font-size:16px;color:#444;line-height:1.6;">${b.content}</p></td></tr>`;
-      case "button":
-        return `<tr><td style="padding:20px 40px;text-align:${align};"><a href="${b.url || "#"}" style="display:inline-block;padding:12px 28px;background:#6366f1;color:#fff;font-family:Arial,sans-serif;font-size:15px;font-weight:600;text-decoration:none;border-radius:6px;">${b.content}</a></td></tr>`;
+      case "header": {
+        const px = FONT_SIZES[b.fontSize ?? "lg"].px;
+        return `<tr><td style="padding:20px 40px;text-align:${align};"><h1 style="margin:0;font-family:Arial,sans-serif;font-size:${px}px;font-weight:700;color:${color};line-height:1.3;">${b.content.replace(/\n/g, "<br>")}</h1></td></tr>`;
+      }
+      case "text": {
+        const px = FONT_SIZES[b.fontSize ?? "md"].px;
+        return `<tr><td style="padding:8px 40px;text-align:${align};"><p style="margin:0;font-family:Arial,sans-serif;font-size:${px}px;color:${color};line-height:1.7;white-space:pre-line;">${b.content}</p></td></tr>`;
+      }
+      case "image":
+        if (b.imageUrl) {
+          return `<tr><td style="padding:16px 40px;text-align:${align};"><img src="${b.imageUrl}" alt="${b.imageAlt || ""}" style="max-width:100%;height:auto;display:inline-block;border-radius:6px;" /></td></tr>`;
+        }
+        return `<tr><td style="padding:16px 40px;text-align:center;"><div style="background:#f3f4f6;border:2px dashed #d1d5db;border-radius:8px;padding:40px;font-family:Arial,sans-serif;font-size:14px;color:#9ca3af;">Image placeholder</div></td></tr>`;
+      case "button": {
+        const bg = b.buttonColor || "#6366f1";
+        return `<tr><td style="padding:16px 40px;text-align:${align};"><a href="${b.url || "#"}" style="display:inline-block;padding:13px 30px;background:${bg};color:#fff;font-family:Arial,sans-serif;font-size:15px;font-weight:600;text-decoration:none;border-radius:6px;">${b.content}</a></td></tr>`;
+      }
       case "divider":
         return `<tr><td style="padding:12px 40px;"><hr style="border:none;border-top:1px solid #e5e7eb;" /></td></tr>`;
-      default:
-        return "";
+      case "spacer": {
+        const h = b.spacerHeight === "lg" ? 48 : b.spacerHeight === "md" ? 32 : 16;
+        return `<tr><td style="height:${h}px;font-size:0;line-height:0;">&nbsp;</td></tr>`;
+      }
+      case "social":
+        return `<tr><td style="padding:16px 40px;text-align:${align};">
+          <a href="#" style="display:inline-block;margin:0 6px;font-family:Arial,sans-serif;font-size:13px;color:#6b7280;text-decoration:none;">LinkedIn</a>
+          <a href="#" style="display:inline-block;margin:0 6px;font-family:Arial,sans-serif;font-size:13px;color:#6b7280;text-decoration:none;">X/Twitter</a>
+          <a href="#" style="display:inline-block;margin:0 6px;font-family:Arial,sans-serif;font-size:13px;color:#6b7280;text-decoration:none;">Website</a>
+        </td></tr>`;
+      default: return "";
     }
   }).join("\n");
 
-  return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:40px 0;background:#f9fafb;">
 <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.1);">
 <tbody>
 ${rows}
-<tr><td style="padding:24px 40px;text-align:center;"><p style="margin:0;font-family:Arial,sans-serif;font-size:12px;color:#9ca3af;">You received this email because you're on our list. <a href="{{unsubscribe_url}}" style="color:#9ca3af;">Unsubscribe</a></p></td></tr>
-</tbody>
-</table>
-</body></html>`;
-};
+<tr><td style="padding:24px 40px;border-top:1px solid #f3f4f6;text-align:center;"><p style="margin:0;font-family:Arial,sans-serif;font-size:12px;color:#9ca3af;">
+  You're receiving this because you're on our list. <a href="{{unsubscribe_url}}" style="color:#9ca3af;">Unsubscribe</a>
+</p></td></tr>
+</tbody></table></body></html>`;
+}
 
-const BLOCK_ICONS: Record<BlockType, React.ReactNode> = {
-  header: <Type className="h-4 w-4" />,
-  text: <AlignLeft className="h-4 w-4" />,
-  button: <MousePointer className="h-4 w-4" />,
-  divider: <Minus className="h-4 w-4" />,
-};
+function TemplatePreview({ color, blocks }: { color: string; blocks: Block[] }) {
+  return (
+    <div className="w-full bg-white rounded border overflow-hidden" style={{ height: 120 }}>
+      <div className="h-2 w-full" style={{ background: color }} />
+      <div className="p-2 space-y-1">
+        {blocks.slice(0, 4).map((b, i) => {
+          if (b.type === "header") return <div key={i} className="h-2.5 rounded" style={{ background: color, width: "70%", opacity: 0.8 }} />;
+          if (b.type === "text") return <div key={i} className="space-y-0.5">{[0, 1].map(j => <div key={j} className="h-1.5 rounded bg-gray-200" style={{ width: j === 1 ? "55%" : "90%" }} />)}</div>;
+          if (b.type === "button") return <div key={i} className="h-3 rounded w-20" style={{ background: color, opacity: 0.7 }} />;
+          if (b.type === "divider") return <div key={i} className="h-px bg-gray-200 my-1" />;
+          if (b.type === "image") return <div key={i} className="h-8 rounded bg-gray-100 border border-dashed border-gray-200" />;
+          return null;
+        })}
+      </div>
+    </div>
+  );
+}
 
-const BLOCK_LABELS: Record<BlockType, string> = {
-  header: "Heading",
-  text: "Text",
-  button: "Button",
-  divider: "Divider",
-};
+const BLOCK_PALETTE: { type: BlockType; label: string; icon: React.ReactNode }[] = [
+  { type: "header", label: "Heading", icon: <Type className="h-4 w-4" /> },
+  { type: "text", label: "Text", icon: <AlignLeft className="h-4 w-4" /> },
+  { type: "image", label: "Image", icon: <Image className="h-4 w-4" /> },
+  { type: "button", label: "Button", icon: <MousePointer className="h-4 w-4" /> },
+  { type: "divider", label: "Divider", icon: <Minus className="h-4 w-4" /> },
+  { type: "spacer", label: "Spacer", icon: <Maximize2 className="h-4 w-4" /> },
+  { type: "social", label: "Social", icon: <Share2 className="h-4 w-4" /> },
+];
+
+const PERSONALIZATION_TOKENS = [
+  { label: "First Name", token: "{{firstName}}" },
+  { label: "Last Name", token: "{{lastName}}" },
+  { label: "Full Name", token: "{{fullName}}" },
+];
+
+const CONTACT_STATUSES = ["LEAD", "PROSPECT", "CUSTOMER", "CHURNED", "UNQUALIFIED"];
+
+function StepIndicator({ current }: { current: number }) {
+  const steps = ["Template", "Design", "Audience", "Timing"];
+  return (
+    <div className="flex items-center gap-1 mb-6">
+      {steps.map((s, i) => (
+        <div key={s} className="flex items-center gap-1">
+          <div className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full ${i === current ? "bg-primary text-primary-foreground" : i < current ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+            {i < current && <Check className="h-3 w-3" />}
+            {s}
+          </div>
+          {i < steps.length - 1 && <ChevronRight className="h-3 w-3 text-muted-foreground" />}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function CampaignNewPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPersonalization, setShowPersonalization] = useState(false);
 
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("");
   const [fromName, setFromName] = useState("");
   const [fromEmail, setFromEmail] = useState("");
-  const [blocks, setBlocks] = useState<Block[]>(DEFAULT_BLOCKS);
-  const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
+  const [blocks, setBlocks] = useState<Block[]>([]);
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
-  const [previewTab, setPreviewTab] = useState<"edit" | "preview" | "html">("edit");
+  const [previewMode, setPreviewMode] = useState<"canvas" | "preview">("canvas");
 
-  const { data: contacts } = useListContacts({ page: 1, pageSize: 200 });
+  const [audienceMode, setAudienceMode] = useState<"segment" | "filter" | "individual">("filter");
+  const [savedSegments, setSavedSegments] = useState<SavedSegment[]>([]);
+  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
+  const [segmentFilter, setSegmentFilter] = useState<SegmentFilter>({ emailMarketingContact: true });
+  const [filterCount, setFilterCount] = useState<number | null>(null);
+  const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
+  const [newSegmentName, setNewSegmentName] = useState("");
+  const [savingSegment, setSavingSegment] = useState(false);
+
+  const [sendTiming, setSendTiming] = useState<"now" | "schedule">("now");
+  const [scheduledAt, setScheduledAt] = useState("");
+
   const createCampaign = useCreateCampaign();
-  const createFnRef = useRef(createCampaign.mutateAsync);
-  createFnRef.current = createCampaign.mutateAsync;
+  const { data: contacts } = useListContacts({ page: 1, pageSize: 500 });
+
+  const getHeaders = useCallback(async () => {
+    const { data } = await authClient.getSession();
+    return {
+      "Authorization": `Bearer ${data?.session?.token ?? ""}`,
+      "Content-Type": "application/json",
+    };
+  }, []);
+
+  useEffect(() => {
+    getHeaders().then(headers =>
+      fetch("/api/segments", { headers })
+        .then(r => r.ok ? r.json() : [])
+        .then(setSavedSegments)
+        .catch(() => {})
+    );
+  }, [getHeaders]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (audienceMode === "filter") {
+        getHeaders().then(headers =>
+          fetch("/api/segments/count", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ filter: segmentFilter }),
+          })
+            .then(r => r.ok ? r.json() : null)
+            .then(d => d && setFilterCount(d.count))
+            .catch(() => {})
+        );
+      } else if (audienceMode === "segment" && selectedSegmentId) {
+        getHeaders().then(headers =>
+          fetch(`/api/segments/${selectedSegmentId}/count`, { headers })
+            .then(r => r.ok ? r.json() : null)
+            .then(d => d && setFilterCount(d.count))
+            .catch(() => {})
+        );
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [segmentFilter, audienceMode, selectedSegmentId, getHeaders]);
+
+  const activeBlock = blocks.find(b => b.id === activeBlockId) ?? null;
 
   const addBlock = (type: BlockType) => {
     const defaults: Partial<Block> =
-      type === "header" ? { content: "New heading", align: "center" } :
-      type === "text" ? { content: "Your text here.", align: "left" } :
-      type === "button" ? { content: "Click here", url: "https://", align: "center" } :
+      type === "header" ? { content: "New Heading", align: "center", fontSize: "lg" } :
+      type === "text" ? { content: "Your text here.", align: "left", fontSize: "md" } :
+      type === "image" ? { content: "", imageUrl: "", imageAlt: "", align: "center" } :
+      type === "button" ? { content: "Click Here", url: "https://", align: "center", buttonColor: "#6366f1" } :
+      type === "spacer" ? { content: "", spacerHeight: "md" } :
+      type === "social" ? { content: "", align: "center" } :
       { content: "" };
-    const newBlock = { id: uid(), type, ...defaults } as Block;
-    setBlocks(prev => [...prev, newBlock]);
-    setActiveBlockId(newBlock.id);
+    const nb = { id: uid(), type, ...defaults } as Block;
+    setBlocks(p => [...p, nb]);
+    setActiveBlockId(nb.id);
   };
 
   const updateBlock = useCallback((id: string, patch: Partial<Block>) => {
-    setBlocks(prev => prev.map(b => b.id === id ? { ...b, ...patch } : b));
+    setBlocks(p => p.map(b => b.id === id ? { ...b, ...patch } : b));
   }, []);
 
-  const removeBlock = (id: string) => {
-    setBlocks(prev => prev.filter(b => b.id !== id));
-    setActiveBlockId(null);
-  };
-
+  const removeBlock = (id: string) => { setBlocks(p => p.filter(b => b.id !== id)); setActiveBlockId(null); };
   const moveBlock = (id: string, dir: -1 | 1) => {
-    setBlocks(prev => {
-      const idx = prev.findIndex(b => b.id === id);
-      if (idx < 0) return prev;
-      const next = idx + dir;
-      if (next < 0 || next >= prev.length) return prev;
-      const arr = [...prev];
-      [arr[idx], arr[next]] = [arr[next], arr[idx]];
-      return arr;
+    setBlocks(p => {
+      const i = p.findIndex(b => b.id === id);
+      if (i < 0) return p;
+      const j = i + dir;
+      if (j < 0 || j >= p.length) return p;
+      const a = [...p]; [a[i], a[j]] = [a[j], a[i]]; return a;
     });
   };
 
-  const htmlContent = blocksToHtml(blocks);
+  const insertToken = (token: string) => {
+    if (!activeBlock || (activeBlock.type !== "header" && activeBlock.type !== "text")) return;
+    updateBlock(activeBlock.id, { content: activeBlock.content + token });
+    setShowPersonalization(false);
+  };
 
-  const handleNext = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveSegment = async () => {
+    if (!newSegmentName.trim()) return;
+    setSavingSegment(true);
+    try {
+      const headers = await getHeaders();
+      const res = await fetch("/api/segments", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ name: newSegmentName.trim(), filter: segmentFilter }),
+      });
+      if (res.ok) {
+        const seg = await res.json();
+        setSavedSegments(p => [seg, ...p]);
+        setSelectedSegmentId(seg.id);
+        setAudienceMode("segment");
+        setNewSegmentName("");
+        toast({ title: "Segment saved!" });
+      }
+    } finally {
+      setSavingSegment(false);
+    }
+  };
+
+  const getRecipientIds = async (): Promise<string[]> => {
+    if (audienceMode === "individual") return Array.from(selectedContacts);
+    const filter = audienceMode === "segment" && selectedSegmentId
+      ? JSON.parse(savedSegments.find(s => s.id === selectedSegmentId)?.filterJson ?? "{}")
+      : segmentFilter;
+    const headers = await getHeaders();
+    const res = await fetch("/api/segments/count", {
+      method: "POST",
+      headers: { ...headers, "X-Return-Ids": "true" },
+    });
+    const headers2 = await getHeaders();
+    const res2 = await fetch("/api/contacts?pageSize=1000&" +
+      (filter.status ? `status=${filter.status}&` : "") +
+      (filter.emailMarketingContact ? "emailMarketingContact=true&" : ""),
+      { headers: headers2 }
+    );
+    if (!res2.ok) return [];
+    const data = await res2.json();
+    return (data.data ?? []).map((c: { id: string }) => c.id);
+  };
+
+  const handleFinish = async (mode: "draft" | "send" | "schedule") => {
     if (!name || !subject || !fromName || !fromEmail) {
-      toast({ title: "Validation error", description: "Please fill all required fields.", variant: "destructive" });
-      return;
-    }
-    if (blocks.length === 0) {
-      toast({ title: "Empty email", description: "Add at least one content block.", variant: "destructive" });
-      return;
-    }
-    setStep(2);
-  };
-
-  const handleToggleContact = (id: string) => {
-    const s = new Set(selectedContacts);
-    s.has(id) ? s.delete(id) : s.add(id);
-    setSelectedContacts(s);
-  };
-
-  const handleSelectAll = () => {
-    if (!contacts?.data) return;
-    setSelectedContacts(selectedContacts.size === contacts.data.length ? new Set() : new Set(contacts.data.map(c => c.id)));
-  };
-
-  const handleSave = async () => {
-    if (selectedContacts.size === 0) {
-      toast({ title: "No recipients", description: "Select at least one contact.", variant: "destructive" });
+      toast({ title: "Missing info", description: "Please fill campaign name, subject, from name and email.", variant: "destructive" });
+      setStep(1);
       return;
     }
     setIsSubmitting(true);
     try {
-      await createFnRef.current({ data: { name, subject, fromName, fromEmail, htmlContent } });
-      toast({ title: "Campaign saved!", description: "Configure RESEND_API_KEY to enable sending." });
+      const htmlContent = blocksToHtml(blocks, fromName, fromEmail);
+      const recipientIds = mode !== "draft" ? await getRecipientIds() : [];
+
+      if (mode === "schedule" && recipientIds.length === 0) {
+        toast({ title: "No recipients", description: "No contacts match your audience selection.", variant: "destructive" });
+        setIsSubmitting(false);
+        return;
+      }
+
+      const campaign = await createCampaign.mutateAsync({
+        data: {
+          name, subject, fromName, fromEmail, htmlContent,
+          ...(mode === "schedule" && scheduledAt ? {
+            status: "SCHEDULED" as const,
+            scheduledAt,
+            recipientIds,
+          } : { status: "DRAFT" as const }),
+        },
+      });
+
+      if (mode === "send") {
+        const headers = await getHeaders();
+        await fetch(`/api/campaigns/${campaign.id}/send`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ recipientContactIds: recipientIds }),
+        });
+        toast({ title: "Campaign sent!" });
+      } else if (mode === "schedule") {
+        toast({ title: "Campaign scheduled!", description: `Will send on ${new Date(scheduledAt).toLocaleString()}` });
+      } else {
+        toast({ title: "Saved as draft" });
+      }
       setLocation("/campaigns");
     } catch {
-      toast({ title: "Error", description: "Failed to create campaign.", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to save campaign.", variant: "destructive" });
       setIsSubmitting(false);
     }
   };
 
-  const activeBlock = blocks.find(b => b.id === activeBlockId);
-
   return (
     <SidebarLayout>
-      <div className="space-y-6 max-w-5xl mx-auto">
-        <div>
-          <Button variant="ghost" size="sm" onClick={() => step === 2 ? setStep(1) : setLocation("/campaigns")} className="mb-2 -ml-3 text-muted-foreground">
-            <ArrowLeft className="mr-2 h-4 w-4" /> {step === 2 ? "Back to editor" : "Back to campaigns"}
+      <div className="max-w-6xl mx-auto space-y-4">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={() => step === 0 ? setLocation("/campaigns") : setStep(step - 1)} className="-ml-2 text-muted-foreground">
+            <ArrowLeft className="h-4 w-4 mr-1" /> {step === 0 ? "Campaigns" : "Back"}
           </Button>
-          <h1 className="text-3xl font-bold tracking-tight">Create Campaign</h1>
-          <p className="text-muted-foreground">{step === 1 ? "Design your email." : "Select recipients."}</p>
+          <div>
+            <h1 className="text-2xl font-bold">Create Campaign</h1>
+          </div>
         </div>
 
+        <StepIndicator current={step} />
+
+        {/* ── STEP 0: Template Gallery ── */}
+        {step === 0 && (
+          <div>
+            <p className="text-muted-foreground mb-4">Pick a template to get started — or start from scratch.</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {TEMPLATES.map(tpl => (
+                <button
+                  key={tpl.id}
+                  onClick={() => { setBlocks(tpl.blocks.map(b => ({ ...b, id: uid() }))); setStep(1); }}
+                  className="text-left p-4 rounded-xl border-2 border-transparent hover:border-primary bg-card transition-all hover:shadow-md group"
+                >
+                  <TemplatePreview color={tpl.color} blocks={tpl.blocks} />
+                  <div className="mt-3">
+                    <p className="font-semibold text-sm">{tpl.label}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{tpl.desc}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── STEP 1: Email Builder ── */}
         {step === 1 && (
-          <form onSubmit={handleNext}>
-            <div className="grid grid-cols-1 xl:grid-cols-[320px_1fr] gap-6">
-              {/* Left: settings + block controls */}
-              <div className="space-y-4">
-                <Card>
-                  <CardHeader className="pb-3"><CardTitle className="text-base">Campaign Info</CardTitle></CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="cn-name">Internal Name *</Label>
-                      <Input id="cn-name" value={name} onChange={e => setName(e.target.value)} placeholder="Q3 Newsletter" required />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="cn-subject">Subject Line *</Label>
-                      <Input id="cn-subject" value={subject} onChange={e => setSubject(e.target.value)} placeholder="Exciting news inside!" required />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1.5">
-                        <Label htmlFor="cn-fn">From Name *</Label>
-                        <Input id="cn-fn" value={fromName} onChange={e => setFromName(e.target.value)} placeholder="Acme" required />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="cn-fe">From Email *</Label>
-                        <Input id="cn-fe" type="email" value={fromEmail} onChange={e => setFromEmail(e.target.value)} placeholder="hello@acme.com" required />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+          <div className="grid grid-cols-[240px_1fr_280px] gap-4 items-start">
+            {/* Left: palette + campaign info */}
+            <div className="space-y-3">
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm">Campaign Info</CardTitle></CardHeader>
+                <CardContent className="space-y-2">
+                  <div><Label className="text-xs">Name *</Label><Input value={name} onChange={e => setName(e.target.value)} placeholder="Q3 Newsletter" className="h-8 text-sm mt-1" /></div>
+                  <div><Label className="text-xs">Subject *</Label><Input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Exciting news inside!" className="h-8 text-sm mt-1" /></div>
+                  <div><Label className="text-xs">From Name *</Label><Input value={fromName} onChange={e => setFromName(e.target.value)} placeholder="Ennabl" className="h-8 text-sm mt-1" /></div>
+                  <div><Label className="text-xs">From Email *</Label><Input type="email" value={fromEmail} onChange={e => setFromEmail(e.target.value)} placeholder="hello@ennabl.com" className="h-8 text-sm mt-1" /></div>
+                </CardContent>
+              </Card>
 
-                <Card>
-                  <CardHeader className="pb-3"><CardTitle className="text-base">Add Block</CardTitle></CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-2 gap-2">
-                      {(["header", "text", "button", "divider"] as BlockType[]).map(type => (
-                        <Button key={type} type="button" variant="outline" size="sm" className="justify-start gap-2" onClick={() => addBlock(type)}>
-                          {BLOCK_ICONS[type]} {BLOCK_LABELS[type]}
-                        </Button>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm">Add Block</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {BLOCK_PALETTE.map(({ type, label, icon }) => (
+                      <button key={type} onClick={() => addBlock(type)} className="flex items-center gap-1.5 px-2 py-2 rounded-lg border text-xs hover:bg-accent hover:border-primary transition-colors text-left">
+                        <span className="text-muted-foreground">{icon}</span> {label}
+                      </button>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
 
-                {activeBlock && (
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base flex items-center justify-between">
-                        Edit {BLOCK_LABELS[activeBlock.type]}
-                        <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeBlock(activeBlock.id)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {activeBlock.type !== "divider" && (
-                        <div className="space-y-1.5">
-                          <Label>Content</Label>
-                          {activeBlock.type === "text" ? (
-                            <Textarea
-                              value={activeBlock.content}
-                              onChange={e => updateBlock(activeBlock.id, { content: e.target.value })}
-                              rows={4}
-                            />
-                          ) : (
-                            <Input
-                              value={activeBlock.content}
-                              onChange={e => updateBlock(activeBlock.id, { content: e.target.value })}
-                            />
-                          )}
+            {/* Center: canvas */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex gap-1 bg-muted p-1 rounded-lg">
+                  <button onClick={() => setPreviewMode("canvas")} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${previewMode === "canvas" ? "bg-white shadow-sm" : "text-muted-foreground"}`}>✏️ Edit</button>
+                  <button onClick={() => setPreviewMode("preview")} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${previewMode === "preview" ? "bg-white shadow-sm" : "text-muted-foreground"}`}>👁 Preview</button>
+                </div>
+                <Button onClick={() => { if (!name || !subject || !fromName || !fromEmail) { toast({ title: "Fill campaign info first", variant: "destructive" }); return; } setStep(2); }} size="sm">
+                  Audience <ArrowRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+
+              {previewMode === "canvas" ? (
+                <div className="rounded-xl border bg-muted/30 p-4 min-h-[600px] space-y-2">
+                  {blocks.length === 0 && (
+                    <div className="flex flex-col items-center justify-center h-40 text-muted-foreground text-sm">
+                      <p className="opacity-50">Click a block type on the left to add it</p>
+                    </div>
+                  )}
+                  {blocks.map((block, idx) => (
+                    <div
+                      key={block.id}
+                      onClick={() => setActiveBlockId(block.id)}
+                      className={`group relative rounded-lg border-2 cursor-pointer p-3 bg-white dark:bg-card transition-colors ${activeBlockId === block.id ? "border-primary" : "border-transparent hover:border-muted-foreground/30"}`}
+                    >
+                      <div className="absolute right-2 top-2 hidden group-hover:flex items-center gap-0.5 bg-background border rounded-md px-1 shadow-sm z-10">
+                        <button onClick={e => { e.stopPropagation(); moveBlock(block.id, -1); }} disabled={idx === 0} className="p-1 hover:bg-muted rounded disabled:opacity-30 text-xs">▲</button>
+                        <button onClick={e => { e.stopPropagation(); moveBlock(block.id, 1); }} disabled={idx === blocks.length - 1} className="p-1 hover:bg-muted rounded disabled:opacity-30 text-xs">▼</button>
+                        <button onClick={e => { e.stopPropagation(); removeBlock(block.id); }} className="p-1 hover:bg-red-50 text-destructive rounded text-xs"><Trash2 className="h-3 w-3" /></button>
+                      </div>
+                      {block.type === "header" && (
+                        <div style={{ textAlign: block.align ?? "center", color: block.color || "#111", fontSize: FONT_SIZES[block.fontSize ?? "lg"].px, fontWeight: 700, lineHeight: 1.3 }} className="truncate">
+                          {block.content || <span className="text-muted-foreground">Heading</span>}
                         </div>
                       )}
-                      {activeBlock.type === "button" && (
-                        <div className="space-y-1.5">
-                          <Label>Button URL</Label>
-                          <Input
-                            value={activeBlock.url ?? ""}
-                            onChange={e => updateBlock(activeBlock.id, { url: e.target.value })}
-                            placeholder="https://"
-                          />
+                      {block.type === "text" && (
+                        <p style={{ textAlign: block.align ?? "left", color: block.color || "#444", fontSize: FONT_SIZES[block.fontSize ?? "md"].px, lineHeight: 1.6 }} className="text-sm whitespace-pre-wrap">
+                          {block.content || <span className="text-muted-foreground">Text block</span>}
+                        </p>
+                      )}
+                      {block.type === "image" && (
+                        block.imageUrl
+                          ? <img src={block.imageUrl} alt={block.imageAlt} className="max-w-full rounded" />
+                          : <div className="h-20 bg-muted rounded-lg border-2 border-dashed flex items-center justify-center text-muted-foreground text-sm"><Image className="h-5 w-5 mr-2" /> Add image URL in panel →</div>
+                      )}
+                      {block.type === "button" && (
+                        <div style={{ textAlign: block.align ?? "center" }}>
+                          <span className="inline-block px-5 py-2.5 text-sm font-semibold rounded-md text-white" style={{ background: block.buttonColor || "#6366f1" }}>
+                            {block.content || "Button"}
+                          </span>
                         </div>
                       )}
-                      {activeBlock.type !== "divider" && (
-                        <div className="space-y-1.5">
-                          <Label>Alignment</Label>
-                          <div className="flex gap-1">
-                            {(["left", "center", "right"] as const).map(a => (
-                              <Button
-                                key={a} type="button" variant={activeBlock.align === a ? "default" : "outline"}
-                                size="sm" className="flex-1 text-xs capitalize"
-                                onClick={() => updateBlock(activeBlock.id, { align: a })}
-                              >
-                                {a}
-                              </Button>
+                      {block.type === "divider" && <Separator />}
+                      {block.type === "spacer" && (
+                        <div className="flex items-center justify-center text-xs text-muted-foreground py-1">
+                          <Maximize2 className="h-3 w-3 mr-1" /> Spacer ({block.spacerHeight ?? "md"})
+                        </div>
+                      )}
+                      {block.type === "social" && (
+                        <div style={{ textAlign: block.align ?? "center" }} className="text-xs text-muted-foreground space-x-3">
+                          <span>LinkedIn</span><span>X / Twitter</span><span>Website</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  <div className="rounded-lg border bg-muted/30 p-3 text-center text-xs text-muted-foreground">
+                    🔒 Unsubscribe footer — always included
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl border overflow-hidden bg-[#f9fafb]" style={{ minHeight: 600 }}>
+                  <iframe
+                    srcDoc={blocksToHtml(blocks, fromName, fromEmail)}
+                    title="Email preview"
+                    className="w-full"
+                    style={{ height: 650, border: "none" }}
+                    sandbox="allow-same-origin"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Right: property panel */}
+            <div className="space-y-3">
+              {activeBlock ? (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center justify-between">
+                      Edit {BLOCK_PALETTE.find(b => b.type === activeBlock.type)?.label ?? activeBlock.type}
+                      <button onClick={() => removeBlock(activeBlock.id)} className="text-destructive hover:bg-destructive/10 rounded p-1"><Trash2 className="h-3.5 w-3.5" /></button>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    {(activeBlock.type === "header" || activeBlock.type === "text") && (
+                      <>
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <Label className="text-xs">Content</Label>
+                            <div className="relative">
+                              <button onClick={() => setShowPersonalization(p => !p)} className="text-xs text-primary hover:underline flex items-center gap-1">
+                                <Smile className="h-3 w-3" /> Personalize
+                              </button>
+                              {showPersonalization && (
+                                <div className="absolute right-0 top-6 z-20 bg-popover border rounded-lg shadow-lg p-2 space-y-1 w-36">
+                                  {PERSONALIZATION_TOKENS.map(t => (
+                                    <button key={t.token} onClick={() => insertToken(t.token)} className="block w-full text-left text-xs px-2 py-1.5 hover:bg-accent rounded">
+                                      {t.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          {activeBlock.type === "text"
+                            ? <Textarea value={activeBlock.content} onChange={e => updateBlock(activeBlock.id, { content: e.target.value })} rows={4} className="text-sm" />
+                            : <Input value={activeBlock.content} onChange={e => updateBlock(activeBlock.id, { content: e.target.value })} className="text-sm h-8" />}
+                        </div>
+                        <div>
+                          <Label className="text-xs mb-1.5 block">Font Size</Label>
+                          <div className="grid grid-cols-4 gap-1">
+                            {(["sm", "md", "lg", "xl"] as FontSize[]).map(s => (
+                              <button key={s} onClick={() => updateBlock(activeBlock.id, { fontSize: s })} className={`py-1 text-xs rounded border font-medium ${activeBlock.fontSize === s ? "bg-primary text-primary-foreground border-primary" : "border-muted hover:bg-muted"}`}>
+                                {FONT_SIZES[s].label}
+                              </button>
                             ))}
                           </div>
                         </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-
-              {/* Right: canvas + preview */}
-              <div className="flex flex-col gap-4">
-                <Tabs value={previewTab} onValueChange={v => setPreviewTab(v as typeof previewTab)}>
-                  <div className="flex items-center justify-between mb-3">
-                    <TabsList>
-                      <TabsTrigger value="edit" className="gap-1.5"><GripVertical className="h-3.5 w-3.5" /> Canvas</TabsTrigger>
-                      <TabsTrigger value="preview" className="gap-1.5"><Eye className="h-3.5 w-3.5" /> Preview</TabsTrigger>
-                      <TabsTrigger value="html" className="gap-1.5"><Code className="h-3.5 w-3.5" /> HTML</TabsTrigger>
-                    </TabsList>
-                    <Button type="submit" size="sm">Continue to Recipients →</Button>
-                  </div>
-
-                  <TabsContent value="edit">
-                    <div className="rounded-xl border bg-muted/30 p-4 min-h-[500px] space-y-2">
-                      {blocks.length === 0 && (
-                        <div className="flex flex-col items-center justify-center h-48 text-muted-foreground text-sm">
-                          <Plus className="h-8 w-8 mb-2 opacity-30" />
-                          Add a block from the panel to get started
-                        </div>
-                      )}
-                      {blocks.map((block, idx) => (
-                        <div
-                          key={block.id}
-                          className={`group relative rounded-lg border-2 transition-colors cursor-pointer p-3 bg-white dark:bg-card ${activeBlockId === block.id ? "border-primary" : "border-transparent hover:border-muted-foreground/30"}`}
-                          onClick={() => setActiveBlockId(block.id)}
-                        >
-                          <div className="absolute right-2 top-2 hidden group-hover:flex items-center gap-1">
-                            <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={e => { e.stopPropagation(); moveBlock(block.id, -1); }} disabled={idx === 0}>▲</Button>
-                            <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={e => { e.stopPropagation(); moveBlock(block.id, 1); }} disabled={idx === blocks.length - 1}>▼</Button>
-                            <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={e => { e.stopPropagation(); removeBlock(block.id); }}><Trash2 className="h-3 w-3" /></Button>
+                        <div>
+                          <Label className="text-xs mb-1.5 block">Alignment</Label>
+                          <div className="grid grid-cols-3 gap-1">
+                            {(["left", "center", "right"] as const).map(a => (
+                              <button key={a} onClick={() => updateBlock(activeBlock.id, { align: a })} className={`py-1 text-xs rounded border capitalize ${activeBlock.align === a ? "bg-primary text-primary-foreground border-primary" : "border-muted hover:bg-muted"}`}>{a}</button>
+                            ))}
                           </div>
+                        </div>
+                        <div>
+                          <Label className="text-xs mb-1.5 block">Text Color</Label>
+                          <div className="flex items-center gap-2">
+                            <input type="color" value={activeBlock.color || "#333333"} onChange={e => updateBlock(activeBlock.id, { color: e.target.value })} className="w-8 h-8 rounded border cursor-pointer" />
+                            <span className="text-xs text-muted-foreground">{activeBlock.color || "#333333"}</span>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                    {activeBlock.type === "image" && (
+                      <>
+                        <div><Label className="text-xs">Image URL</Label><Input value={activeBlock.imageUrl ?? ""} onChange={e => updateBlock(activeBlock.id, { imageUrl: e.target.value })} placeholder="https://..." className="text-sm h-8 mt-1" /></div>
+                        <div><Label className="text-xs">Alt Text</Label><Input value={activeBlock.imageAlt ?? ""} onChange={e => updateBlock(activeBlock.id, { imageAlt: e.target.value })} placeholder="Describe the image" className="text-sm h-8 mt-1" /></div>
+                        <div>
+                          <Label className="text-xs mb-1.5 block">Alignment</Label>
+                          <div className="grid grid-cols-3 gap-1">
+                            {(["left", "center", "right"] as const).map(a => (
+                              <button key={a} onClick={() => updateBlock(activeBlock.id, { align: a })} className={`py-1 text-xs rounded border capitalize ${activeBlock.align === a ? "bg-primary text-primary-foreground border-primary" : "border-muted hover:bg-muted"}`}>{a}</button>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                    {activeBlock.type === "button" && (
+                      <>
+                        <div><Label className="text-xs">Button Text</Label><Input value={activeBlock.content} onChange={e => updateBlock(activeBlock.id, { content: e.target.value })} className="text-sm h-8 mt-1" /></div>
+                        <div><Label className="text-xs">URL</Label><Input value={activeBlock.url ?? ""} onChange={e => updateBlock(activeBlock.id, { url: e.target.value })} placeholder="https://" className="text-sm h-8 mt-1" /></div>
+                        <div>
+                          <Label className="text-xs mb-1.5 block">Alignment</Label>
+                          <div className="grid grid-cols-3 gap-1">
+                            {(["left", "center", "right"] as const).map(a => (
+                              <button key={a} onClick={() => updateBlock(activeBlock.id, { align: a })} className={`py-1 text-xs rounded border capitalize ${activeBlock.align === a ? "bg-primary text-primary-foreground border-primary" : "border-muted hover:bg-muted"}`}>{a}</button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-xs mb-1.5 block">Button Color</Label>
+                          <div className="flex items-center gap-2">
+                            <input type="color" value={activeBlock.buttonColor || "#6366f1"} onChange={e => updateBlock(activeBlock.id, { buttonColor: e.target.value })} className="w-8 h-8 rounded border cursor-pointer" />
+                            <span className="text-xs text-muted-foreground">{activeBlock.buttonColor || "#6366f1"}</span>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                    {activeBlock.type === "spacer" && (
+                      <div>
+                        <Label className="text-xs mb-1.5 block">Height</Label>
+                        <div className="grid grid-cols-3 gap-1">
+                          {(["sm", "md", "lg"] as SpacerHeight[]).map(h => (
+                            <button key={h} onClick={() => updateBlock(activeBlock.id, { spacerHeight: h })} className={`py-1 text-xs rounded border capitalize ${activeBlock.spacerHeight === h ? "bg-primary text-primary-foreground border-primary" : "border-muted hover:bg-muted"}`}>{h}</button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="rounded-xl border bg-muted/30 p-6 text-center text-sm text-muted-foreground">
+                  <Type className="h-6 w-6 mx-auto mb-2 opacity-30" />
+                  Click a block to edit its properties
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
-                          {block.type === "header" && (
-                            <h2 style={{ textAlign: block.align ?? "center" }} className="text-2xl font-bold leading-tight truncate">{block.content || <span className="text-muted-foreground">Heading</span>}</h2>
-                          )}
-                          {block.type === "text" && (
-                            <p style={{ textAlign: block.align ?? "left" }} className="text-sm leading-relaxed whitespace-pre-wrap">{block.content || <span className="text-muted-foreground">Text paragraph</span>}</p>
-                          )}
-                          {block.type === "button" && (
-                            <div style={{ textAlign: block.align ?? "center" }}>
-                              <span className="inline-block px-5 py-2 bg-primary text-primary-foreground text-sm font-semibold rounded-md">
-                                {block.content || "Button"}
-                              </span>
+        {/* ── STEP 2: Audience ── */}
+        {step === 2 && (
+          <div className="max-w-2xl mx-auto space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2"><Users className="h-5 w-5" /> Choose Your Audience</CardTitle>
+                {filterCount !== null && (
+                  <p className="text-sm text-muted-foreground">
+                    <span className="font-semibold text-foreground">{filterCount}</span> contacts will receive this email
+                  </p>
+                )}
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex gap-2">
+                  {([
+                    { key: "filter", label: "Build a filter", icon: <Tag className="h-4 w-4" /> },
+                    { key: "segment", label: "Saved segments", icon: <User className="h-4 w-4" /> },
+                    { key: "individual", label: "Pick contacts", icon: <Users className="h-4 w-4" /> },
+                  ] as { key: typeof audienceMode; label: string; icon: React.ReactNode }[]).map(opt => (
+                    <button key={opt.key} onClick={() => setAudienceMode(opt.key)} className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${audienceMode === opt.key ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted"}`}>
+                      {opt.icon} {opt.label}
+                    </button>
+                  ))}
+                </div>
+
+                {audienceMode === "filter" && (
+                  <div className="space-y-3 p-4 rounded-lg bg-muted/30 border">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs">Contact Status</Label>
+                        <select value={segmentFilter.status ?? ""} onChange={e => setSegmentFilter(p => ({ ...p, status: e.target.value || undefined }))} className="w-full mt-1 h-9 rounded-md border bg-background px-3 text-sm">
+                          <option value="">Any status</option>
+                          {CONTACT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Tags (comma-separated)</Label>
+                        <Input
+                          value={(segmentFilter.tags ?? []).join(", ")}
+                          onChange={e => setSegmentFilter(p => ({ ...p, tags: e.target.value ? e.target.value.split(",").map(t => t.trim()).filter(Boolean) : [] }))}
+                          placeholder="enterprise, vip"
+                          className="h-9 text-sm mt-1"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input type="checkbox" id="em-contact" checked={segmentFilter.emailMarketingContact ?? false} onChange={e => setSegmentFilter(p => ({ ...p, emailMarketingContact: e.target.checked || undefined }))} className="h-4 w-4 rounded" />
+                      <Label htmlFor="em-contact" className="text-sm cursor-pointer">Email marketing contacts only (recommended)</Label>
+                    </div>
+                    <div className="flex items-center gap-2 pt-1">
+                      <input type="checkbox" id="ennabl-user" checked={segmentFilter.ennablUser ?? false} onChange={e => setSegmentFilter(p => ({ ...p, ennablUser: e.target.checked || undefined }))} className="h-4 w-4 rounded" />
+                      <Label htmlFor="ennabl-user" className="text-sm cursor-pointer">Ennabl users only</Label>
+                    </div>
+                    <Separator />
+                    <div className="flex items-center gap-2">
+                      <Input value={newSegmentName} onChange={e => setNewSegmentName(e.target.value)} placeholder="Save filter as segment…" className="h-8 text-sm flex-1" />
+                      <Button size="sm" variant="outline" onClick={handleSaveSegment} disabled={!newSegmentName.trim() || savingSegment}>
+                        <Save className="h-3.5 w-3.5 mr-1" /> Save
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {audienceMode === "segment" && (
+                  <div className="space-y-2">
+                    {savedSegments.length === 0
+                      ? <p className="text-sm text-muted-foreground p-4 text-center bg-muted/30 rounded-lg">No saved segments yet. Switch to "Build a filter" to create one.</p>
+                      : savedSegments.map(seg => (
+                          <button key={seg.id} onClick={() => setSelectedSegmentId(seg.id)} className={`w-full text-left p-3 rounded-lg border transition-colors ${selectedSegmentId === seg.id ? "border-primary bg-primary/5" : "hover:bg-muted"}`}>
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium text-sm">{seg.name}</span>
+                              {selectedSegmentId === seg.id && <Check className="h-4 w-4 text-primary" />}
                             </div>
-                          )}
-                          {block.type === "divider" && <Separator />}
+                          </button>
+                        ))
+                    }
+                  </div>
+                )}
+
+                {audienceMode === "individual" && (
+                  <div className="border rounded-lg overflow-hidden">
+                    <div className="bg-muted/50 px-3 py-2 flex items-center justify-between border-b">
+                      <button onClick={() => {
+                        if (!contacts?.data) return;
+                        setSelectedContacts(selectedContacts.size === contacts.data.length ? new Set() : new Set(contacts.data.map(c => c.id)));
+                      }} className="text-xs text-primary hover:underline">
+                        {contacts?.data && selectedContacts.size === contacts.data.length ? "Deselect all" : "Select all"}
+                      </button>
+                      <span className="text-xs text-muted-foreground">{selectedContacts.size} selected</span>
+                    </div>
+                    <div className="max-h-64 overflow-y-auto">
+                      {contacts?.data?.map(c => (
+                        <div key={c.id} onClick={() => {
+                          const s = new Set(selectedContacts);
+                          s.has(c.id) ? s.delete(c.id) : s.add(c.id);
+                          setSelectedContacts(s);
+                        }} className={`flex items-center gap-3 p-3 border-b last:border-0 cursor-pointer hover:bg-muted/30 ${selectedContacts.has(c.id) ? "bg-primary/5" : ""}`}>
+                          <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${selectedContacts.has(c.id) ? "bg-primary border-primary" : "border-muted-foreground/30"}`}>
+                            {selectedContacts.has(c.id) && <Check className="w-2.5 h-2.5 text-white" />}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{c.firstName} {c.lastName}</p>
+                            <p className="text-xs text-muted-foreground truncate">{c.email}</p>
+                          </div>
                         </div>
                       ))}
                     </div>
-                  </TabsContent>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
-                  <TabsContent value="preview">
-                    <div className="rounded-xl border overflow-hidden bg-[#f9fafb]" style={{ minHeight: 500 }}>
-                      <iframe
-                        srcDoc={htmlContent}
-                        title="Email preview"
-                        className="w-full"
-                        style={{ height: 600, border: "none" }}
-                        sandbox="allow-same-origin"
-                      />
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="html">
-                    <div className="rounded-xl border overflow-hidden" style={{ minHeight: 500 }}>
-                      <Textarea
-                        value={htmlContent}
-                        readOnly
-                        className="h-[600px] font-mono text-xs resize-none rounded-none border-0"
-                      />
-                    </div>
-                  </TabsContent>
-                </Tabs>
-              </div>
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={() => setStep(1)}><ChevronLeft className="h-4 w-4 mr-1" /> Back</Button>
+              <Button onClick={() => setStep(3)}>Timing <ArrowRight className="h-4 w-4 ml-1" /></Button>
             </div>
-          </form>
+          </div>
         )}
 
-        {step === 2 && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Select Recipients</CardTitle>
-              <div className="text-sm text-muted-foreground font-medium">{selectedContacts.size} selected</div>
-            </CardHeader>
-            <CardContent>
-              <div className="border rounded-md overflow-hidden">
-                <div className="bg-muted/50 p-3 flex items-center justify-between border-b">
-                  <Button variant="ghost" size="sm" onClick={handleSelectAll}>
-                    {contacts?.data && selectedContacts.size === contacts.data.length ? "Deselect All" : "Select All"}
-                  </Button>
-                  <span className="text-sm text-muted-foreground">{contacts?.data?.length ?? 0} contacts</span>
+        {/* ── STEP 3: Timing ── */}
+        {step === 3 && (
+          <div className="max-w-2xl mx-auto space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2"><Clock className="h-5 w-5" /> When to Send</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <button onClick={() => setSendTiming("now")} className={`p-4 rounded-xl border-2 text-left transition-colors ${sendTiming === "now" ? "border-primary bg-primary/5" : "hover:border-muted-foreground/30"}`}>
+                    <Send className="h-5 w-5 mb-2 text-primary" />
+                    <p className="font-semibold text-sm">Send Now</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Deliver immediately to your audience</p>
+                  </button>
+                  <button onClick={() => setSendTiming("schedule")} className={`p-4 rounded-xl border-2 text-left transition-colors ${sendTiming === "schedule" ? "border-primary bg-primary/5" : "hover:border-muted-foreground/30"}`}>
+                    <Calendar className="h-5 w-5 mb-2 text-primary" />
+                    <p className="font-semibold text-sm">Schedule for Later</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Pick a date and time to send</p>
+                  </button>
                 </div>
-                <div className="max-h-[400px] overflow-y-auto">
-                  {contacts?.data?.map(contact => {
-                    const isSelected = selectedContacts.has(contact.id);
-                    return (
-                      <div
-                        key={contact.id}
-                        className={`flex items-center justify-between p-3 border-b last:border-0 cursor-pointer hover:bg-muted/30 transition-colors ${isSelected ? "bg-primary/5" : ""}`}
-                        onClick={() => handleToggleContact(contact.id)}
-                      >
-                        <div className="flex flex-col min-w-0">
-                          <span className="font-medium truncate">{contact.firstName} {contact.lastName}</span>
-                          <span className="text-xs text-muted-foreground truncate">{contact.email}</span>
-                        </div>
-                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${isSelected ? "bg-primary border-primary text-primary-foreground" : "border-muted-foreground/30"}`}>
-                          {isSelected && <Check className="w-3 h-3" />}
-                        </div>
-                      </div>
-                    );
-                  })}
+
+                {sendTiming === "schedule" && (
+                  <div className="p-4 rounded-xl bg-muted/30 border space-y-2">
+                    <Label className="text-sm font-medium">Send Date & Time</Label>
+                    <input
+                      type="datetime-local"
+                      value={scheduledAt}
+                      min={new Date(Date.now() + 60_000).toISOString().slice(0, 16)}
+                      onChange={e => setScheduledAt(e.target.value)}
+                      className="w-full h-9 rounded-md border bg-background px-3 text-sm"
+                    />
+                    {scheduledAt && (
+                      <p className="text-xs text-muted-foreground">
+                        Will send on {new Date(scheduledAt).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div className="bg-muted/30 rounded-xl p-4 space-y-1 border text-sm">
+                  <p className="font-medium">Campaign Summary</p>
+                  <p className="text-muted-foreground">Name: <span className="text-foreground">{name || "—"}</span></p>
+                  <p className="text-muted-foreground">Subject: <span className="text-foreground">{subject || "—"}</span></p>
+                  <p className="text-muted-foreground">From: <span className="text-foreground">{fromName} &lt;{fromEmail}&gt;</span></p>
+                  <p className="text-muted-foreground">Blocks: <span className="text-foreground">{blocks.length}</span></p>
+                  {filterCount !== null && <p className="text-muted-foreground">Audience: <span className="text-foreground">{filterCount} contacts</span></p>}
                 </div>
+              </CardContent>
+            </Card>
+
+            <div className="flex items-center justify-between">
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setStep(2)}><ChevronLeft className="h-4 w-4 mr-1" /> Back</Button>
+                <Button variant="ghost" onClick={() => handleFinish("draft")} disabled={isSubmitting}>
+                  <Save className="h-4 w-4 mr-1" /> Save Draft
+                </Button>
               </div>
-            </CardContent>
-            <CardFooter className="flex justify-between border-t pt-6">
-              <Button variant="outline" onClick={() => setStep(1)}>Back</Button>
-              <Button onClick={handleSave} disabled={isSubmitting || selectedContacts.size === 0}>
-                {isSubmitting ? "Saving…" : "Save Campaign"}
+              <Button
+                onClick={() => handleFinish(sendTiming === "now" ? "send" : "schedule")}
+                disabled={isSubmitting || (sendTiming === "schedule" && !scheduledAt)}
+                className="min-w-36"
+              >
+                {isSubmitting ? "Saving…" : sendTiming === "now"
+                  ? <><Send className="h-4 w-4 mr-2" /> Send Campaign</>
+                  : <><Calendar className="h-4 w-4 mr-2" /> Schedule</>}
               </Button>
-            </CardFooter>
-          </Card>
+            </div>
+          </div>
         )}
       </div>
     </SidebarLayout>
