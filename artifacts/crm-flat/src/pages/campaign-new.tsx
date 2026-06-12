@@ -1035,7 +1035,7 @@ export function CampaignNewPage() {
                           return (
                             <button
                               key={seg.id}
-                              onClick={() => setSelectedSegmentId(seg.id)}
+                              onClick={() => setSelectedSegmentId(prev => prev === seg.id ? null : seg.id)}
                               className={`w-full text-left p-3 rounded-lg border transition-colors ${selectedSegmentId === seg.id ? "border-primary bg-primary/5" : "hover:bg-muted"}`}
                             >
                               <div className="flex items-center justify-between mb-1.5">
