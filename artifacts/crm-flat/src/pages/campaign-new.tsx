@@ -1,12 +1,11 @@
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useCreateCampaign, useListContacts } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
@@ -14,14 +13,15 @@ import { authClient } from "@/lib/auth-client";
 import {
   ArrowLeft, ArrowRight, Check, Trash2, Type, AlignLeft, MousePointer,
   Minus, Image, Share2, Maximize2, Users, Calendar, Send, Save,
-  ChevronLeft, ChevronRight, Clock, Tag, User, Mail, Smile
+  ChevronLeft, ChevronRight, Clock, Tag, User, Smile, Columns, Monitor, Smartphone, Code,
 } from "lucide-react";
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 
-type BlockType = "header" | "text" | "image" | "button" | "divider" | "spacer" | "social";
+type BlockType = "header" | "text" | "image" | "button" | "divider" | "spacer" | "social" | "columns";
 type FontSize = "sm" | "md" | "lg" | "xl";
 type SpacerHeight = "sm" | "md" | "lg";
+type ColRatio = "50-50" | "60-40" | "40-60";
 
 interface Block {
   id: string;
@@ -31,14 +31,22 @@ interface Block {
   align?: "left" | "center" | "right";
   fontSize?: FontSize;
   color?: string;
-  bgColor?: string;
   buttonColor?: string;
   imageUrl?: string;
   imageAlt?: string;
   spacerHeight?: SpacerHeight;
+  col1?: string;
+  col2?: string;
+  colRatio?: ColRatio;
 }
 
-interface SegmentFilter { status?: string; tags?: string[]; ennablUser?: boolean; emailMarketingContact?: boolean; }
+interface SegmentFilter {
+  status?: string;
+  tags?: string[];
+  ennablUser?: boolean;
+  emailMarketingContact?: boolean;
+}
+
 interface SavedSegment { id: string; name: string; filterJson: string; }
 
 const FONT_SIZES: Record<FontSize, { label: string; px: number }> = {
@@ -72,9 +80,7 @@ const TEMPLATES: { id: string; label: string; desc: string; color: string; block
       { id: uid(), type: "header", content: "Monthly Update — {{firstName}}", align: "left", fontSize: "lg" },
       { id: uid(), type: "divider", content: "" },
       { id: uid(), type: "text", content: "Here's what's been happening this month at Ennabl.", align: "left", fontSize: "md" },
-      { id: uid(), type: "spacer", content: "", spacerHeight: "sm" },
-      { id: uid(), type: "header", content: "Highlights", align: "left", fontSize: "md" },
-      { id: uid(), type: "text", content: "• Update or insight #1\n• Update or insight #2\n• Update or insight #3", align: "left", fontSize: "md" },
+      { id: uid(), type: "columns", content: "", col1: "Highlight #1\n\nYour first update here.", col2: "Highlight #2\n\nYour second update here.", colRatio: "50-50" },
       { id: uid(), type: "button", content: "Read Full Update", url: "https://", align: "left", buttonColor: "#10b981" },
     ],
   },
@@ -83,7 +89,7 @@ const TEMPLATES: { id: string; label: string; desc: string; color: string; block
     blocks: [
       { id: uid(), type: "header", content: "Following up, {{firstName}}", align: "left", fontSize: "lg" },
       { id: uid(), type: "text", content: "I wanted to follow up on our recent conversation and see if you had any questions.", align: "left", fontSize: "md" },
-      { id: uid(), type: "text", content: "I'd love to schedule a quick call to discuss how we can help you. Would any of these times work?", align: "left", fontSize: "md" },
+      { id: uid(), type: "text", content: "I'd love to schedule a quick call to discuss how we can help you.", align: "left", fontSize: "md" },
       { id: uid(), type: "button", content: "Book a Call", url: "https://", align: "left", buttonColor: "#f59e0b" },
     ],
   },
@@ -92,8 +98,7 @@ const TEMPLATES: { id: string; label: string; desc: string; color: string; block
     blocks: [
       { id: uid(), type: "header", content: "You're Invited, {{firstName}}!", align: "center", fontSize: "xl" },
       { id: uid(), type: "text", content: "Join us for an exclusive event you won't want to miss.", align: "center", fontSize: "md" },
-      { id: uid(), type: "spacer", content: "", spacerHeight: "sm" },
-      { id: uid(), type: "text", content: "📅 Date: [Event Date]\n📍 Location: [Event Location]\n🕐 Time: [Event Time]", align: "center", fontSize: "md" },
+      { id: uid(), type: "columns", content: "", col1: "📅 Date\n[Event Date]", col2: "📍 Location\n[Venue Name]", colRatio: "50-50" },
       { id: uid(), type: "spacer", content: "", spacerHeight: "sm" },
       { id: uid(), type: "button", content: "Reserve My Spot", url: "https://", align: "center", buttonColor: "#8b5cf6" },
     ],
@@ -103,13 +108,13 @@ const TEMPLATES: { id: string; label: string; desc: string; color: string; block
     blocks: [
       { id: uid(), type: "header", content: "Your renewal is coming up, {{firstName}}", align: "left", fontSize: "lg" },
       { id: uid(), type: "text", content: "Your contract with Ennabl is up for renewal soon. We'd love to continue working with you.", align: "left", fontSize: "md" },
-      { id: uid(), type: "text", content: "Here's a quick summary of what you've accomplished this year:\n\n• [Achievement 1]\n• [Achievement 2]\n• [Achievement 3]", align: "left", fontSize: "md" },
+      { id: uid(), type: "text", content: "Here's a quick summary of what you've accomplished this year:\n\n• Achievement 1\n• Achievement 2\n• Achievement 3", align: "left", fontSize: "md" },
       { id: uid(), type: "button", content: "Renew Now", url: "https://", align: "left", buttonColor: "#ef4444" },
     ],
   },
 ];
 
-function blocksToHtml(blocks: Block[], fromName = "", fromEmail = ""): string {
+function blocksToHtml(blocks: Block[]): string {
   const rows = blocks.map(b => {
     const align = b.align ?? "left";
     const color = b.color || "#333333";
@@ -121,6 +126,13 @@ function blocksToHtml(blocks: Block[], fromName = "", fromEmail = ""): string {
       case "text": {
         const px = FONT_SIZES[b.fontSize ?? "md"].px;
         return `<tr><td style="padding:8px 40px;text-align:${align};"><p style="margin:0;font-family:Arial,sans-serif;font-size:${px}px;color:${color};line-height:1.7;white-space:pre-line;">${b.content}</p></td></tr>`;
+      }
+      case "columns": {
+        const [w1, w2] = b.colRatio === "60-40" ? [60, 40] : b.colRatio === "40-60" ? [40, 60] : [50, 50];
+        return `<tr><td style="padding:8px 40px;"><table width="100%" cellpadding="0" cellspacing="0"><tbody><tr>
+          <td width="${w1}%" style="padding-right:12px;vertical-align:top;font-family:Arial,sans-serif;font-size:15px;color:#444;line-height:1.6;white-space:pre-line;">${b.col1 ?? ""}</td>
+          <td width="${w2}%" style="padding-left:12px;vertical-align:top;font-family:Arial,sans-serif;font-size:15px;color:#444;line-height:1.6;white-space:pre-line;">${b.col2 ?? ""}</td>
+        </tr></tbody></table></td></tr>`;
       }
       case "image":
         if (b.imageUrl) {
@@ -166,6 +178,7 @@ function TemplatePreview({ color, blocks }: { color: string; blocks: Block[] }) 
         {blocks.slice(0, 4).map((b, i) => {
           if (b.type === "header") return <div key={i} className="h-2.5 rounded" style={{ background: color, width: "70%", opacity: 0.8 }} />;
           if (b.type === "text") return <div key={i} className="space-y-0.5">{[0, 1].map(j => <div key={j} className="h-1.5 rounded bg-gray-200" style={{ width: j === 1 ? "55%" : "90%" }} />)}</div>;
+          if (b.type === "columns") return <div key={i} className="grid grid-cols-2 gap-1">{[0, 1].map(j => <div key={j} className="h-4 rounded bg-gray-100" />)}</div>;
           if (b.type === "button") return <div key={i} className="h-3 rounded w-20" style={{ background: color, opacity: 0.7 }} />;
           if (b.type === "divider") return <div key={i} className="h-px bg-gray-200 my-1" />;
           if (b.type === "image") return <div key={i} className="h-8 rounded bg-gray-100 border border-dashed border-gray-200" />;
@@ -179,6 +192,7 @@ function TemplatePreview({ color, blocks }: { color: string; blocks: Block[] }) 
 const BLOCK_PALETTE: { type: BlockType; label: string; icon: React.ReactNode }[] = [
   { type: "header", label: "Heading", icon: <Type className="h-4 w-4" /> },
   { type: "text", label: "Text", icon: <AlignLeft className="h-4 w-4" /> },
+  { type: "columns", label: "2 Columns", icon: <Columns className="h-4 w-4" /> },
   { type: "image", label: "Image", icon: <Image className="h-4 w-4" /> },
   { type: "button", label: "Button", icon: <MousePointer className="h-4 w-4" /> },
   { type: "divider", label: "Divider", icon: <Minus className="h-4 w-4" /> },
@@ -224,7 +238,8 @@ export function CampaignNewPage() {
   const [fromEmail, setFromEmail] = useState("");
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
-  const [previewMode, setPreviewMode] = useState<"canvas" | "preview">("canvas");
+  const [previewMode, setPreviewMode] = useState<"canvas" | "preview" | "html">("canvas");
+  const [previewWidth, setPreviewWidth] = useState<"desktop" | "mobile">("desktop");
 
   const [audienceMode, setAudienceMode] = useState<"segment" | "filter" | "individual">("filter");
   const [savedSegments, setSavedSegments] = useState<SavedSegment[]>([]);
@@ -263,8 +278,7 @@ export function CampaignNewPage() {
       if (audienceMode === "filter") {
         getHeaders().then(headers =>
           fetch("/api/segments/count", {
-            method: "POST",
-            headers,
+            method: "POST", headers,
             body: JSON.stringify({ filter: segmentFilter }),
           })
             .then(r => r.ok ? r.json() : null)
@@ -278,17 +292,21 @@ export function CampaignNewPage() {
             .then(d => d && setFilterCount(d.count))
             .catch(() => {})
         );
+      } else if (audienceMode === "individual") {
+        setFilterCount(selectedContacts.size);
       }
     }, 400);
     return () => clearTimeout(timer);
-  }, [segmentFilter, audienceMode, selectedSegmentId, getHeaders]);
+  }, [segmentFilter, audienceMode, selectedSegmentId, selectedContacts, getHeaders]);
 
   const activeBlock = blocks.find(b => b.id === activeBlockId) ?? null;
+  const generatedHtml = blocksToHtml(blocks);
 
   const addBlock = (type: BlockType) => {
     const defaults: Partial<Block> =
       type === "header" ? { content: "New Heading", align: "center", fontSize: "lg" } :
       type === "text" ? { content: "Your text here.", align: "left", fontSize: "md" } :
+      type === "columns" ? { content: "", col1: "Left column content.", col2: "Right column content.", colRatio: "50-50" } :
       type === "image" ? { content: "", imageUrl: "", imageAlt: "", align: "center" } :
       type === "button" ? { content: "Click Here", url: "https://", align: "center", buttonColor: "#6366f1" } :
       type === "spacer" ? { content: "", spacerHeight: "md" } :
@@ -315,8 +333,10 @@ export function CampaignNewPage() {
   };
 
   const insertToken = (token: string) => {
-    if (!activeBlock || (activeBlock.type !== "header" && activeBlock.type !== "text")) return;
-    updateBlock(activeBlock.id, { content: activeBlock.content + token });
+    if (!activeBlock) return;
+    if (activeBlock.type === "header" || activeBlock.type === "text") {
+      updateBlock(activeBlock.id, { content: activeBlock.content + token });
+    }
     setShowPersonalization(false);
   };
 
@@ -326,8 +346,7 @@ export function CampaignNewPage() {
     try {
       const headers = await getHeaders();
       const res = await fetch("/api/segments", {
-        method: "POST",
-        headers,
+        method: "POST", headers,
         body: JSON.stringify({ name: newSegmentName.trim(), filter: segmentFilter }),
       });
       if (res.ok) {
@@ -345,23 +364,19 @@ export function CampaignNewPage() {
 
   const getRecipientIds = async (): Promise<string[]> => {
     if (audienceMode === "individual") return Array.from(selectedContacts);
-    const filter = audienceMode === "segment" && selectedSegmentId
+
+    const filter: SegmentFilter = audienceMode === "segment" && selectedSegmentId
       ? JSON.parse(savedSegments.find(s => s.id === selectedSegmentId)?.filterJson ?? "{}")
       : segmentFilter;
+
     const headers = await getHeaders();
-    const res = await fetch("/api/segments/count", {
-      method: "POST",
-      headers: { ...headers, "X-Return-Ids": "true" },
+    const res = await fetch("/api/segments/evaluate", {
+      method: "POST", headers,
+      body: JSON.stringify({ filter }),
     });
-    const headers2 = await getHeaders();
-    const res2 = await fetch("/api/contacts?pageSize=1000&" +
-      (filter.status ? `status=${filter.status}&` : "") +
-      (filter.emailMarketingContact ? "emailMarketingContact=true&" : ""),
-      { headers: headers2 }
-    );
-    if (!res2.ok) return [];
-    const data = await res2.json();
-    return (data.data ?? []).map((c: { id: string }) => c.id);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.ids ?? [];
   };
 
   const handleFinish = async (mode: "draft" | "send" | "schedule") => {
@@ -372,10 +387,10 @@ export function CampaignNewPage() {
     }
     setIsSubmitting(true);
     try {
-      const htmlContent = blocksToHtml(blocks, fromName, fromEmail);
+      const htmlContent = generatedHtml;
       const recipientIds = mode !== "draft" ? await getRecipientIds() : [];
 
-      if (mode === "schedule" && recipientIds.length === 0) {
+      if (mode !== "draft" && recipientIds.length === 0) {
         toast({ title: "No recipients", description: "No contacts match your audience selection.", variant: "destructive" });
         setIsSubmitting(false);
         return;
@@ -394,11 +409,16 @@ export function CampaignNewPage() {
 
       if (mode === "send") {
         const headers = await getHeaders();
-        await fetch(`/api/campaigns/${campaign.id}/send`, {
-          method: "POST",
-          headers,
+        const res = await fetch(`/api/campaigns/${campaign.id}/send`, {
+          method: "POST", headers,
           body: JSON.stringify({ recipientContactIds: recipientIds }),
         });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: "Unknown error" }));
+          toast({ title: "Send failed", description: err.error, variant: "destructive" });
+          setIsSubmitting(false);
+          return;
+        }
         toast({ title: "Campaign sent!" });
       } else if (mode === "schedule") {
         toast({ title: "Campaign scheduled!", description: `Will send on ${new Date(scheduledAt).toLocaleString()}` });
@@ -419,9 +439,7 @@ export function CampaignNewPage() {
           <Button variant="ghost" size="sm" onClick={() => step === 0 ? setLocation("/campaigns") : setStep(step - 1)} className="-ml-2 text-muted-foreground">
             <ArrowLeft className="h-4 w-4 mr-1" /> {step === 0 ? "Campaigns" : "Back"}
           </Button>
-          <div>
-            <h1 className="text-2xl font-bold">Create Campaign</h1>
-          </div>
+          <h1 className="text-2xl font-bold">Create Campaign</h1>
         </div>
 
         <StepIndicator current={step} />
@@ -435,7 +453,7 @@ export function CampaignNewPage() {
                 <button
                   key={tpl.id}
                   onClick={() => { setBlocks(tpl.blocks.map(b => ({ ...b, id: uid() }))); setStep(1); }}
-                  className="text-left p-4 rounded-xl border-2 border-transparent hover:border-primary bg-card transition-all hover:shadow-md group"
+                  className="text-left p-4 rounded-xl border-2 border-transparent hover:border-primary bg-card transition-all hover:shadow-md"
                 >
                   <TemplatePreview color={tpl.color} blocks={tpl.blocks} />
                   <div className="mt-3">
@@ -479,21 +497,28 @@ export function CampaignNewPage() {
 
             {/* Center: canvas */}
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex gap-1 bg-muted p-1 rounded-lg">
                   <button onClick={() => setPreviewMode("canvas")} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${previewMode === "canvas" ? "bg-white shadow-sm" : "text-muted-foreground"}`}>✏️ Edit</button>
                   <button onClick={() => setPreviewMode("preview")} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${previewMode === "preview" ? "bg-white shadow-sm" : "text-muted-foreground"}`}>👁 Preview</button>
+                  <button onClick={() => setPreviewMode("html")} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1 ${previewMode === "html" ? "bg-white shadow-sm" : "text-muted-foreground"}`}><Code className="h-3 w-3" /> HTML</button>
                 </div>
+                {previewMode === "preview" && (
+                  <div className="flex gap-1 bg-muted p-1 rounded-lg">
+                    <button onClick={() => setPreviewWidth("desktop")} className={`px-2 py-1.5 rounded-md text-xs transition-colors flex items-center gap-1 ${previewWidth === "desktop" ? "bg-white shadow-sm" : "text-muted-foreground"}`}><Monitor className="h-3 w-3" /> Desktop</button>
+                    <button onClick={() => setPreviewWidth("mobile")} className={`px-2 py-1.5 rounded-md text-xs transition-colors flex items-center gap-1 ${previewWidth === "mobile" ? "bg-white shadow-sm" : "text-muted-foreground"}`}><Smartphone className="h-3 w-3" /> Mobile</button>
+                  </div>
+                )}
                 <Button onClick={() => { if (!name || !subject || !fromName || !fromEmail) { toast({ title: "Fill campaign info first", variant: "destructive" }); return; } setStep(2); }} size="sm">
                   Audience <ArrowRight className="h-4 w-4 ml-1" />
                 </Button>
               </div>
 
-              {previewMode === "canvas" ? (
+              {previewMode === "canvas" && (
                 <div className="rounded-xl border bg-muted/30 p-4 min-h-[600px] space-y-2">
                   {blocks.length === 0 && (
-                    <div className="flex flex-col items-center justify-center h-40 text-muted-foreground text-sm">
-                      <p className="opacity-50">Click a block type on the left to add it</p>
+                    <div className="flex items-center justify-center h-40 text-muted-foreground text-sm opacity-50">
+                      Click a block type on the left to add it
                     </div>
                   )}
                   {blocks.map((block, idx) => (
@@ -516,6 +541,12 @@ export function CampaignNewPage() {
                         <p style={{ textAlign: block.align ?? "left", color: block.color || "#444", fontSize: FONT_SIZES[block.fontSize ?? "md"].px, lineHeight: 1.6 }} className="text-sm whitespace-pre-wrap">
                           {block.content || <span className="text-muted-foreground">Text block</span>}
                         </p>
+                      )}
+                      {block.type === "columns" && (
+                        <div className="grid gap-2" style={{ gridTemplateColumns: block.colRatio === "60-40" ? "3fr 2fr" : block.colRatio === "40-60" ? "2fr 3fr" : "1fr 1fr" }}>
+                          <div className="rounded border border-dashed border-muted-foreground/20 p-2 text-xs text-muted-foreground whitespace-pre-wrap bg-muted/20">{block.col1 || "Left column"}</div>
+                          <div className="rounded border border-dashed border-muted-foreground/20 p-2 text-xs text-muted-foreground whitespace-pre-wrap bg-muted/20">{block.col2 || "Right column"}</div>
+                        </div>
                       )}
                       {block.type === "image" && (
                         block.imageUrl
@@ -546,14 +577,33 @@ export function CampaignNewPage() {
                     🔒 Unsubscribe footer — always included
                   </div>
                 </div>
-              ) : (
-                <div className="rounded-xl border overflow-hidden bg-[#f9fafb]" style={{ minHeight: 600 }}>
-                  <iframe
-                    srcDoc={blocksToHtml(blocks, fromName, fromEmail)}
-                    title="Email preview"
-                    className="w-full"
-                    style={{ height: 650, border: "none" }}
-                    sandbox="allow-same-origin"
+              )}
+
+              {previewMode === "preview" && (
+                <div className="rounded-xl border overflow-hidden bg-[#f9fafb] flex justify-center p-4" style={{ minHeight: 600 }}>
+                  <div style={{ width: previewWidth === "mobile" ? 375 : "100%", transition: "width 0.2s ease" }}>
+                    <iframe
+                      srcDoc={generatedHtml}
+                      title="Email preview"
+                      className="w-full"
+                      style={{ height: 650, border: "none", display: "block" }}
+                      sandbox="allow-same-origin"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {previewMode === "html" && (
+                <div className="rounded-xl border overflow-hidden" style={{ minHeight: 600 }}>
+                  <div className="bg-muted/50 border-b px-4 py-2 flex items-center justify-between">
+                    <span className="text-xs font-medium text-muted-foreground">Generated HTML</span>
+                    <button onClick={() => { navigator.clipboard.writeText(generatedHtml); toast({ title: "Copied!" }); }} className="text-xs text-primary hover:underline">Copy</button>
+                  </div>
+                  <Textarea
+                    readOnly
+                    value={generatedHtml}
+                    className="font-mono text-xs resize-none border-0 rounded-none bg-background"
+                    style={{ height: 580 }}
                   />
                 </div>
               )}
@@ -621,6 +671,26 @@ export function CampaignNewPage() {
                         </div>
                       </>
                     )}
+                    {activeBlock.type === "columns" && (
+                      <>
+                        <div>
+                          <Label className="text-xs mb-1.5 block">Column Ratio</Label>
+                          <div className="grid grid-cols-3 gap-1">
+                            {(["50-50", "60-40", "40-60"] as ColRatio[]).map(r => (
+                              <button key={r} onClick={() => updateBlock(activeBlock.id, { colRatio: r })} className={`py-1 text-xs rounded border ${activeBlock.colRatio === r ? "bg-primary text-primary-foreground border-primary" : "border-muted hover:bg-muted"}`}>{r}</button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-xs mb-1">Left Column</Label>
+                          <Textarea value={activeBlock.col1 ?? ""} onChange={e => updateBlock(activeBlock.id, { col1: e.target.value })} rows={3} className="text-xs" />
+                        </div>
+                        <div>
+                          <Label className="text-xs mb-1">Right Column</Label>
+                          <Textarea value={activeBlock.col2 ?? ""} onChange={e => updateBlock(activeBlock.id, { col2: e.target.value })} rows={3} className="text-xs" />
+                        </div>
+                      </>
+                    )}
                     {activeBlock.type === "image" && (
                       <>
                         <div><Label className="text-xs">Image URL</Label><Input value={activeBlock.imageUrl ?? ""} onChange={e => updateBlock(activeBlock.id, { imageUrl: e.target.value })} placeholder="https://..." className="text-sm h-8 mt-1" /></div>
@@ -666,6 +736,16 @@ export function CampaignNewPage() {
                         </div>
                       </div>
                     )}
+                    {activeBlock.type === "social" && (
+                      <div>
+                        <Label className="text-xs mb-1.5 block">Alignment</Label>
+                        <div className="grid grid-cols-3 gap-1">
+                          {(["left", "center", "right"] as const).map(a => (
+                            <button key={a} onClick={() => updateBlock(activeBlock.id, { align: a })} className={`py-1 text-xs rounded border capitalize ${activeBlock.align === a ? "bg-primary text-primary-foreground border-primary" : "border-muted hover:bg-muted"}`}>{a}</button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               ) : (
@@ -687,11 +767,14 @@ export function CampaignNewPage() {
                 {filterCount !== null && (
                   <p className="text-sm text-muted-foreground">
                     <span className="font-semibold text-foreground">{filterCount}</span> contacts will receive this email
+                    {segmentFilter.emailMarketingContact && audienceMode === "filter" && (
+                      <span className="ml-1">· unsubscribed contacts excluded</span>
+                    )}
                   </p>
                 )}
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   {([
                     { key: "filter", label: "Build a filter", icon: <Tag className="h-4 w-4" /> },
                     { key: "segment", label: "Saved segments", icon: <User className="h-4 w-4" /> },
@@ -727,7 +810,7 @@ export function CampaignNewPage() {
                       <input type="checkbox" id="em-contact" checked={segmentFilter.emailMarketingContact ?? false} onChange={e => setSegmentFilter(p => ({ ...p, emailMarketingContact: e.target.checked || undefined }))} className="h-4 w-4 rounded" />
                       <Label htmlFor="em-contact" className="text-sm cursor-pointer">Email marketing contacts only (recommended)</Label>
                     </div>
-                    <div className="flex items-center gap-2 pt-1">
+                    <div className="flex items-center gap-2">
                       <input type="checkbox" id="ennabl-user" checked={segmentFilter.ennablUser ?? false} onChange={e => setSegmentFilter(p => ({ ...p, ennablUser: e.target.checked || undefined }))} className="h-4 w-4 rounded" />
                       <Label htmlFor="ennabl-user" className="text-sm cursor-pointer">Ennabl users only</Label>
                     </div>
@@ -829,9 +912,7 @@ export function CampaignNewPage() {
                       className="w-full h-9 rounded-md border bg-background px-3 text-sm"
                     />
                     {scheduledAt && (
-                      <p className="text-xs text-muted-foreground">
-                        Will send on {new Date(scheduledAt).toLocaleString()}
-                      </p>
+                      <p className="text-xs text-muted-foreground">Will send on {new Date(scheduledAt).toLocaleString()}</p>
                     )}
                   </div>
                 )}

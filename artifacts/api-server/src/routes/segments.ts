@@ -124,6 +124,16 @@ router.post("/count", requireAuth, async (req: Request, res: Response) => {
   }
 });
 
+router.post("/evaluate", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const filter: SegmentFilter = req.body.filter ?? {};
+    const ids = await evaluateSegmentFilter(filter);
+    res.json({ ids });
+  } catch {
+    res.status(500).json({ error: "Failed to evaluate segment" });
+  }
+});
+
 router.post("/", requireAuth, async (req: Request, res: Response) => {
   try {
     const body = req.body as { name: string; filter: SegmentFilter };

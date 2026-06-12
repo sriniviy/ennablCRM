@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Users, Mail, MailOpen, MousePointerClick, UserMinus, Search } from "lucide-react";
+import { ArrowLeft, Users, Mail, MailOpen, MousePointerClick, UserMinus, Search, XCircle } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { authClient } from "@/lib/auth-client";
 
@@ -82,6 +82,7 @@ export function CampaignDetailPage() {
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [recipientsLoading, setRecipientsLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const [cancelling, setCancelling] = useState(false);
 
   const getHeaders = useCallback(async () => {
     const { data } = await authClient.getSession();
@@ -99,6 +100,20 @@ export function CampaignDetailPage() {
         .finally(() => setRecipientsLoading(false))
     );
   }, [id, getHeaders]);
+
+  const handleCancelSchedule = async () => {
+    if (!id || !window.confirm("Cancel this scheduled campaign? It will revert to Draft.")) return;
+    setCancelling(true);
+    try {
+      const headers = await getHeaders();
+      const res = await fetch(`/api/campaigns/${id}/cancel`, { method: "PATCH", headers });
+      if (res.ok) {
+        window.location.reload();
+      }
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   const filtered = search
     ? recipients.filter(r =>
@@ -144,9 +159,23 @@ export function CampaignDetailPage() {
               <h1 className="text-2xl font-bold">{campaign.name}</h1>
               <p className="text-muted-foreground text-sm mt-0.5">Subject: {campaign.subject}</p>
             </div>
-            <Badge variant="outline" className={`font-normal text-sm px-3 py-1 border-0 ${getStatusColor(campaign.status)}`}>
-              {campaign.status}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className={`font-normal text-sm px-3 py-1 border-0 ${getStatusColor(campaign.status)}`}>
+                {campaign.status}
+              </Badge>
+              {campaign.status === "SCHEDULED" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-destructive hover:bg-destructive/10 border-destructive/30"
+                  onClick={handleCancelSchedule}
+                  disabled={cancelling}
+                >
+                  <XCircle className="h-4 w-4 mr-1" />
+                  {cancelling ? "Cancelling…" : "Cancel Schedule"}
+                </Button>
+              )}
+            </div>
           </div>
         </div>
 

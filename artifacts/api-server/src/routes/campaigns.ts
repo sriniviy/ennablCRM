@@ -13,9 +13,14 @@ function getResend() {
   return new Resend(key);
 }
 
+function getSecret(): string {
+  const s = process.env.BETTER_AUTH_SECRET;
+  if (!s) throw new Error("BETTER_AUTH_SECRET environment variable is required but not set");
+  return s;
+}
+
 function generateUnsubscribeToken(contactId: string, campaignId: string): string {
-  const secret = process.env.BETTER_AUTH_SECRET ?? "dev-secret";
-  return createHmac("sha256", secret).update(`${contactId}:${campaignId}`).digest("hex");
+  return createHmac("sha256", getSecret()).update(`${contactId}:${campaignId}`).digest("hex");
 }
 
 async function executeSend(campaignId: string, contactIds: string[]) {
@@ -326,7 +331,7 @@ router.patch("/:id/cancel", requireAuth, async (req: Request, res: Response) => 
 
     const [updated] = await db
       .update(emailCampaignsTable)
-      .set({ status: "CANCELLED", scheduledAt: null, updatedAt: new Date() })
+      .set({ status: "DRAFT", scheduledAt: null, updatedAt: new Date() })
       .where(eq(emailCampaignsTable.id, id))
       .returning();
 

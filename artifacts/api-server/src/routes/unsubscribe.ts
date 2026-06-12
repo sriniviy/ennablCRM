@@ -5,8 +5,10 @@ import { eq, and } from "drizzle-orm";
 
 const router = Router();
 
-function getSecret() {
-  return process.env.BETTER_AUTH_SECRET ?? process.env.UNSUBSCRIBE_SECRET ?? "dev-secret";
+function getSecret(): string {
+  const s = process.env.BETTER_AUTH_SECRET;
+  if (!s) throw new Error("BETTER_AUTH_SECRET environment variable is required but not set");
+  return s;
 }
 
 export function generateUnsubscribeToken(contactId: string, campaignId: string): string {
