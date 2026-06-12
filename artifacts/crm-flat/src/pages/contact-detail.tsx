@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Mail, Phone, Building2, Calendar, MessageSquare, Linkedin, CheckSquare, Pencil, CopyCheck, Send, Eye, MousePointerClick } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Building2, Calendar, MessageSquare, Linkedin, CheckSquare, Pencil, CopyCheck, Send, Eye, MousePointerClick, BellOff } from "lucide-react";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { NotesFeed } from "@/components/notes/notes-feed";
 import { useNotesCount } from "@/hooks/use-notes-count";
@@ -59,8 +59,46 @@ function ContactCampaignsTab({ contactId }: { contactId: string }) {
     return <p className="text-muted-foreground text-sm">This contact has not received any campaigns yet.</p>;
   }
 
+  const totalSent = data.length;
+  const totalOpened = data.filter(r => r.openedAt).length;
+  const totalClicked = data.filter(r => r.clickedAt).length;
+  const isUnsubscribed = data.some(r => r.status === "UNSUBSCRIBED");
+  const openPct = totalSent > 0 ? Math.round((totalOpened / totalSent) * 100) : 0;
+  const clickPct = totalSent > 0 ? Math.round((totalClicked / totalSent) * 100) : 0;
+
   return (
     <div className="space-y-3">
+      {isUnsubscribed && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-lg border border-destructive/40 bg-destructive/10 text-destructive text-sm font-medium">
+          <BellOff className="h-4 w-4 flex-shrink-0" />
+          This contact is unsubscribed and will not receive future campaigns.
+        </div>
+      )}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="flex flex-col gap-1 rounded-lg border bg-card p-4">
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium uppercase tracking-wide">
+            <Send className="h-3.5 w-3.5" />
+            Sent
+          </span>
+          <span className="text-2xl font-semibold tabular-nums">{totalSent}</span>
+        </div>
+        <div className="flex flex-col gap-1 rounded-lg border bg-card p-4">
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium uppercase tracking-wide">
+            <Eye className="h-3.5 w-3.5" />
+            Opened
+          </span>
+          <span className="text-2xl font-semibold tabular-nums text-blue-600">{totalOpened}</span>
+          <span className="text-xs text-muted-foreground">{openPct}% open rate</span>
+        </div>
+        <div className="flex flex-col gap-1 rounded-lg border bg-card p-4">
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium uppercase tracking-wide">
+            <MousePointerClick className="h-3.5 w-3.5" />
+            Clicked
+          </span>
+          <span className="text-2xl font-semibold tabular-nums text-green-600">{totalClicked}</span>
+          <span className="text-xs text-muted-foreground">{clickPct}% click rate</span>
+        </div>
+      </div>
       {data.map(row => (
         <div key={row.campaignId} className="flex items-start justify-between gap-4 p-4 border rounded-lg bg-card">
           <div className="min-w-0 flex-1">
