@@ -1,5 +1,5 @@
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
-import { useParams, Link } from "wouter";
+import { useParams, Link, useSearch } from "wouter";
 import { useGetCampaign } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -81,6 +81,10 @@ function getStatusColor(status: string) {
 
 export function CampaignDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const queryString = useSearch();
+  const fromParam = new URLSearchParams(queryString).get("from");
+  const backHref = fromParam ?? "/campaigns";
+  const backLabel = fromParam?.startsWith("/contacts/") ? "Contact" : "Campaigns";
   const { data: campaign, isLoading, refetch: refetchCampaign } = useGetCampaign(id);
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [recipientsLoading, setRecipientsLoading] = useState(false);
@@ -199,7 +203,7 @@ export function CampaignDetailPage() {
       <div className="space-y-6 max-w-5xl mx-auto">
         <div>
           <Button variant="ghost" size="sm" asChild className="mb-2 -ml-3 text-muted-foreground">
-            <Link href="/campaigns"><ArrowLeft className="mr-2 h-4 w-4" /> Campaigns</Link>
+            <Link href={backHref}><ArrowLeft className="mr-2 h-4 w-4" /> {backLabel}</Link>
           </Button>
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -307,7 +311,9 @@ export function CampaignDetailPage() {
                               return (
                                 <tr key={r.contactId} className="border-b last:border-0 hover:bg-muted/20">
                                   <td className="px-4 py-2.5">
-                                    <p className="font-medium">{r.firstName} {r.lastName}</p>
+                                    <Link href={`/contacts/${r.contactId}`} className="font-medium hover:underline">
+                                      {r.firstName} {r.lastName}
+                                    </Link>
                                     <p className="text-xs text-muted-foreground">{r.email}</p>
                                   </td>
                                   <td className="px-4 py-2.5">

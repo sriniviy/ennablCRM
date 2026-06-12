@@ -64,7 +64,7 @@ function ContactCampaignsTab({ contactId }: { contactId: string }) {
       {data.map(row => (
         <div key={row.campaignId} className="flex items-start justify-between gap-4 p-4 border rounded-lg bg-card">
           <div className="min-w-0 flex-1">
-            <Link href={`/campaigns/${row.campaignId}`} className="font-medium hover:underline">
+            <Link href={`/campaigns/${row.campaignId}?from=/contacts/${contactId}`} className="font-medium hover:underline">
               {row.campaignName}
             </Link>
             <p className="text-sm text-muted-foreground mt-0.5">{row.campaignSubject}</p>
