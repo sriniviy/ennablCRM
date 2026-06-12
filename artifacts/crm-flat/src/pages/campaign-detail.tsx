@@ -6,8 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Users, Mail, MailOpen, MousePointerClick, UserMinus, Search, XCircle, RefreshCw } from "lucide-react";
+import { ArrowLeft, Users, Mail, MailOpen, MousePointerClick, UserMinus, Search, XCircle, RefreshCw, Copy, Check } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { authClient } from "@/lib/auth-client";
 
 const LIVE_STATUSES = new Set(["SENT", "SENDING"]);
@@ -84,6 +85,8 @@ export function CampaignDetailPage() {
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [recipientsLoading, setRecipientsLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [copied, setCopied] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -146,12 +149,25 @@ export function CampaignDetailPage() {
     }
   };
 
-  const filtered = search
-    ? recipients.filter(r =>
-        `${r.firstName ?? ""} ${r.lastName ?? ""}`.toLowerCase().includes(search.toLowerCase()) ||
-        r.email.toLowerCase().includes(search.toLowerCase())
-      )
-    : recipients;
+  const filtered = recipients.filter(r => {
+    if (statusFilter !== "ALL" && r.status !== statusFilter) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return (
+        `${r.firstName ?? ""} ${r.lastName ?? ""}`.toLowerCase().includes(q) ||
+        r.email.toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
+
+  const handleCopyEmails = () => {
+    const emails = filtered.map(r => r.email).join(", ");
+    navigator.clipboard.writeText(emails).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
 
   if (isLoading) {
     return (
@@ -236,7 +252,7 @@ export function CampaignDetailPage() {
                         </span>
                       )}
                     </CardTitle>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
                       {lastRefreshed && (
                         <span className="text-xs text-muted-foreground hidden sm:block">
                           Updated {lastRefreshed.toLocaleTimeString()}
@@ -245,10 +261,30 @@ export function CampaignDetailPage() {
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleManualRefresh} title="Refresh now">
                         <RefreshCw className="h-3.5 w-3.5" />
                       </Button>
+                      <Select value={statusFilter} onValueChange={setStatusFilter}>
+                        <SelectTrigger className="h-8 w-36 text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ALL">All statuses</SelectItem>
+                          <SelectItem value="SENT">Sent</SelectItem>
+                          <SelectItem value="OPENED">Opened</SelectItem>
+                          <SelectItem value="CLICKED">Clicked</SelectItem>
+                          <SelectItem value="UNSUBSCRIBED">Unsubscribed</SelectItem>
+                          <SelectItem value="BOUNCED">Bounced</SelectItem>
+                          <SelectItem value="PENDING">Pending</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <div className="relative w-44">
                         <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
                         <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" className="h-8 pl-8 text-sm" />
                       </div>
+                      {statusFilter !== "ALL" && filtered.length > 0 && (
+                        <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={handleCopyEmails}>
+                          {copied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+                          {copied ? "Copied!" : `Copy ${filtered.length} email${filtered.length === 1 ? "" : "s"}`}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </CardHeader>
