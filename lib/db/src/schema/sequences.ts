@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, integer, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, integer, boolean, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { enrollmentStatusEnum } from "./enums";
@@ -11,6 +11,9 @@ export const sequencesTable = pgTable("sequences", {
     .$defaultFn(() => crypto.randomUUID()),
   name: text("name").notNull(),
   ownerId: text("owner_id").references(() => usersTable.id),
+  exitOnDealWon: boolean("exit_on_deal_won").notNull().default(false),
+  exitOnDealLost: boolean("exit_on_deal_lost").notNull().default(false),
+  exitOnUnsubscribe: boolean("exit_on_unsubscribe").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -58,6 +61,7 @@ export const sequenceEnrollmentsTable = pgTable(
       .notNull()
       .defaultNow(),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    exitReason: text("exit_reason"),
   },
   (t) => [
     index("sequence_enrollments_seq_idx").on(t.sequenceId),

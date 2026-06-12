@@ -48,7 +48,9 @@ import {
   ChevronUp,
   ChevronDown,
   Braces,
+  ShieldOff,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -101,11 +103,15 @@ interface Enrollment {
   status: "ACTIVE" | "PAUSED" | "COMPLETED" | "UNENROLLED";
   enrolledAt: string;
   nextSendAt: string | null;
+  exitReason: string | null;
 }
 
 interface SequenceDetail {
   id: string;
   name: string;
+  exitOnDealWon: boolean;
+  exitOnDealLost: boolean;
+  exitOnUnsubscribe: boolean;
   steps: Step[];
   enrollments: Enrollment[];
 }
@@ -421,6 +427,21 @@ export function SequenceDetailPage() {
     },
     onError: (err: Error) =>
       toast({ title: "Failed", description: err.message, variant: "destructive" }),
+  });
+
+  const exitConditionMutation = useMutation({
+    mutationFn: (patch: {
+      exitOnDealWon?: boolean;
+      exitOnDealLost?: boolean;
+      exitOnUnsubscribe?: boolean;
+    }) =>
+      apiFetch(`/sequences/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+      }),
+    onSuccess: () => invalidate(),
+    onError: (err: Error) =>
+      toast({ title: "Failed to save", description: err.message, variant: "destructive" }),
   });
 
   if (isLoading) {
@@ -814,6 +835,66 @@ export function SequenceDetailPage() {
           </CardContent>
         </Card>
 
+        {/* Exit conditions */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <ShieldOff className="h-5 w-5" />
+                Exit Conditions
+              </CardTitle>
+              <CardDescription>
+                Automatically stop the sequence for a contact when any of these
+                conditions are met.
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {[
+                {
+                  key: "exitOnDealWon" as const,
+                  label: "Stop when deal is marked Won",
+                  description:
+                    "Exits if the contact has any deal moved to a Won stage.",
+                  value: sequence.exitOnDealWon,
+                },
+                {
+                  key: "exitOnDealLost" as const,
+                  label: "Stop when deal is marked Lost",
+                  description:
+                    "Exits if the contact has any deal moved to a Lost stage.",
+                  value: sequence.exitOnDealLost,
+                },
+                {
+                  key: "exitOnUnsubscribe" as const,
+                  label: "Stop when contact unsubscribes",
+                  description:
+                    "Exits if the contact's marketing email opt-in is turned off.",
+                  value: sequence.exitOnUnsubscribe,
+                },
+              ].map(({ key, label, description, value }) => (
+                <div key={key} className="flex items-start gap-4">
+                  <Switch
+                    checked={value}
+                    onCheckedChange={(checked) =>
+                      exitConditionMutation.mutate({ [key]: checked })
+                    }
+                    disabled={exitConditionMutation.isPending}
+                    className="mt-0.5 shrink-0"
+                  />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{label}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {description}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Enrollments */}
         {enrollments.length > 0 && (
           <Card>
@@ -848,7 +929,13 @@ export function SequenceDetailPage() {
                             Next: {format(new Date(e.nextSendAt), "MMM d, h:mm a")}
                           </span>
                         )}
-                        {e.status === "COMPLETED" && (
+                        {e.status === "COMPLETED" && e.exitReason && (
+                          <span className="flex items-center gap-1 inline-flex text-amber-600 dark:text-amber-400">
+                            <ShieldOff className="h-3 w-3" />
+                            Exited: {e.exitReason}
+                          </span>
+                        )}
+                        {e.status === "COMPLETED" && !e.exitReason && (
                           <span className="flex items-center gap-1 inline-flex text-green-600 dark:text-green-400">
                             <CheckCircle2 className="h-3 w-3" />
                             Completed all {steps.length} steps

@@ -7,6 +7,8 @@ import {
   contactsTable,
   companiesTable,
   usersTable,
+  dealsTable,
+  dealStagesTable,
   activitiesTable,
 } from "@workspace/db";
 import { eq, and, lte, inArray, sql, asc } from "drizzle-orm";
@@ -145,19 +147,35 @@ router.get("/:id", requireAuth, async (req: Request, res: Response) => {
 router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
     const { dbUser } = req as AuthRequest;
-    const { name } = req.body as { name?: string };
-    if (!name?.trim()) {
-      res.status(400).json({ error: "name is required" });
-      return;
-    }
+    const { name, exitOnDealWon, exitOnDealLost, exitOnUnsubscribe } =
+      req.body as {
+        name?: string;
+        exitOnDealWon?: boolean;
+        exitOnDealLost?: boolean;
+        exitOnUnsubscribe?: boolean;
+      };
+
     const existing = await getOwnedSequence(req.params.id as string, dbUser.id);
     if (!existing) {
       res.status(404).json({ error: "Sequence not found" });
       return;
     }
+
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (name !== undefined) {
+      if (!name.trim()) {
+        res.status(400).json({ error: "name cannot be empty" });
+        return;
+      }
+      updates.name = name.trim();
+    }
+    if (exitOnDealWon !== undefined) updates.exitOnDealWon = exitOnDealWon;
+    if (exitOnDealLost !== undefined) updates.exitOnDealLost = exitOnDealLost;
+    if (exitOnUnsubscribe !== undefined) updates.exitOnUnsubscribe = exitOnUnsubscribe;
+
     const [updated] = await db
       .update(sequencesTable)
-      .set({ name: name.trim(), updatedAt: new Date() })
+      .set(updates)
       .where(
         and(
           eq(sequencesTable.id, req.params.id as string),
@@ -530,6 +548,7 @@ export async function runSequenceSender() {
       contactFirstName: contactsTable.firstName,
       contactLastName: contactsTable.lastName,
       contactCompanyName: companiesTable.name,
+      contactEmailMarketingContact: contactsTable.emailMarketingContact,
     })
     .from(sequenceEnrollmentsTable)
     .innerJoin(
@@ -544,7 +563,7 @@ export async function runSequenceSender() {
       ),
     );
 
-  for (const { enrollment, contactEmail, contactFirstName, contactLastName, contactCompanyName } of claimed) {
+  for (const { enrollment, contactEmail, contactFirstName, contactLastName, contactCompanyName, contactEmailMarketingContact } of claimed) {
     if (!contactEmail) continue;
 
     const steps = await db
@@ -575,6 +594,53 @@ export async function runSequenceSender() {
       .from(sequencesTable)
       .where(eq(sequencesTable.id, enrollment.sequenceId))
       .limit(1);
+
+    // ─── Exit condition check ─────────────────────────────────────────────────
+    if (sequence) {
+      let exitReason: string | null = null;
+
+      if (!exitReason && sequence.exitOnUnsubscribe && contactEmailMarketingContact === false) {
+        exitReason = "Unsubscribed";
+      }
+
+      if (!exitReason && sequence.exitOnDealWon) {
+        const [wonDeal] = await db
+          .select({ id: dealsTable.id })
+          .from(dealsTable)
+          .innerJoin(dealStagesTable, eq(dealStagesTable.id, dealsTable.stageId))
+          .where(
+            and(
+              eq(dealsTable.contactId, enrollment.contactId),
+              eq(dealStagesTable.name, "Won"),
+            ),
+          )
+          .limit(1);
+        if (wonDeal) exitReason = "Won deal";
+      }
+
+      if (!exitReason && sequence.exitOnDealLost) {
+        const [lostDeal] = await db
+          .select({ id: dealsTable.id })
+          .from(dealsTable)
+          .innerJoin(dealStagesTable, eq(dealStagesTable.id, dealsTable.stageId))
+          .where(
+            and(
+              eq(dealsTable.contactId, enrollment.contactId),
+              eq(dealStagesTable.name, "Lost"),
+            ),
+          )
+          .limit(1);
+        if (lostDeal) exitReason = "Lost deal";
+      }
+
+      if (exitReason) {
+        await db
+          .update(sequenceEnrollmentsTable)
+          .set({ status: "COMPLETED", completedAt: new Date(), nextSendAt: null, exitReason })
+          .where(eq(sequenceEnrollmentsTable.id, enrollment.id));
+        continue;
+      }
+    }
 
     const contactName =
       [contactFirstName, contactLastName].filter(Boolean).join(" ") || contactEmail;
