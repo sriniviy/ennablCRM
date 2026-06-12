@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Users, Mail, MailOpen, MousePointerClick, UserMinus, Search, XCircle, RefreshCw, Copy, Check } from "lucide-react";
+import { ArrowLeft, Users, Mail, MailOpen, MousePointerClick, UserMinus, Search, XCircle, RefreshCw, Copy, Check, Tag } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { authClient } from "@/lib/auth-client";
@@ -93,6 +93,7 @@ export function CampaignDetailPage() {
   const [copied, setCopied] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+  const [segmentName, setSegmentName] = useState<string | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const getHeaders = useCallback(async () => {
@@ -120,6 +121,17 @@ export function CampaignDetailPage() {
   useEffect(() => {
     fetchRecipients(true);
   }, [fetchRecipients]);
+
+  useEffect(() => {
+    if (!campaign?.segmentId) return;
+    let cancelled = false;
+    getHeaders().then(headers =>
+      fetch(`/api/segments/${campaign.segmentId}`, { headers })
+    ).then(res => res.ok ? res.json() : null).then(data => {
+      if (!cancelled && data?.name) setSegmentName(data.name);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [campaign?.segmentId, getHeaders]);
 
   useEffect(() => {
     if (!campaign) return;
@@ -372,6 +384,15 @@ export function CampaignDetailPage() {
                   <div>
                     <p className="text-muted-foreground text-xs mb-1">Scheduled For</p>
                     <p className="font-medium">{new Date(campaign.scheduledAt).toLocaleString()}</p>
+                  </div>
+                )}
+                {segmentName && (
+                  <div>
+                    <p className="text-muted-foreground text-xs mb-1">Segment</p>
+                    <Link href="/segments" className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline">
+                      <Tag className="h-3.5 w-3.5" />
+                      {segmentName}
+                    </Link>
                   </div>
                 )}
               </CardContent>
