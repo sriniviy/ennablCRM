@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { db, segmentsTable, contactsTable, companiesTable } from "@workspace/db";
+import { db, segmentsTable, contactsTable, companiesTable, emailCampaignsTable } from "@workspace/db";
 import { eq, desc, and, inArray, or, ilike, sql } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 
@@ -131,6 +131,25 @@ router.get("/:id/contacts", requireAuth, async (req: Request, res: Response) => 
     res.json({ data: contacts, total: ids.length });
   } catch {
     res.status(500).json({ error: "Failed to list segment contacts" });
+  }
+});
+
+router.get("/:id/campaigns", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const campaigns = await db
+      .select({
+        id: emailCampaignsTable.id,
+        name: emailCampaignsTable.name,
+        status: emailCampaignsTable.status,
+        sentAt: emailCampaignsTable.sentAt,
+        createdAt: emailCampaignsTable.createdAt,
+      })
+      .from(emailCampaignsTable)
+      .where(eq(emailCampaignsTable.segmentId, req.params.id as string))
+      .orderBy(desc(emailCampaignsTable.createdAt));
+    res.json(campaigns);
+  } catch {
+    res.status(500).json({ error: "Failed to list campaigns for segment" });
   }
 });
 

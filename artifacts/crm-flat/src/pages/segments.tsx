@@ -19,9 +19,12 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import {
+  Popover, PopoverContent, PopoverTrigger,
+} from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { authClient } from "@/lib/auth-client";
-import { Users, Pencil, Trash2, Plus, Filter, Tag, Building2, UserCheck, Mail, ChevronRight } from "lucide-react";
+import { Users, Pencil, Trash2, Plus, Filter, Tag, Building2, UserCheck, Mail, ChevronRight, Megaphone } from "lucide-react";
 
 interface SegmentFilter {
   status?: string;
@@ -47,6 +50,14 @@ interface MatchedContact {
   status: string;
   title: string | null;
   companyName: string | null;
+}
+
+interface SegmentCampaign {
+  id: string;
+  name: string;
+  status: string;
+  sentAt: string | null;
+  createdAt: string;
 }
 
 const CONTACT_STATUSES = ["LEAD", "PROSPECT", "CUSTOMER", "CHURNED", "UNQUALIFIED"];
@@ -165,6 +176,10 @@ export function SegmentsPage() {
 
   const [segments, setSegments] = useState<Segment[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [campaignCounts, setCampaignCounts] = useState<Record<string, number>>({});
+  const [campaignsBySegment, setCampaignsBySegment] = useState<Record<string, SegmentCampaign[]>>({});
+  const [campaignPopoverOpen, setCampaignPopoverOpen] = useState<Record<string, boolean>>({});
+  const [campaignLoading, setCampaignLoading] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
 
   const [detailTarget, setDetailTarget] = useState<Segment | null>(null);
@@ -205,22 +220,51 @@ export function SegmentsPage() {
       if (res.ok) {
         const data: Segment[] = await res.json();
         setSegments(data);
-        const countEntries = await Promise.all(
-          data.map(async (seg) => {
-            const r = await fetch(`/api/segments/${seg.id}/count`, { headers });
-            if (r.ok) {
-              const { count } = await r.json();
-              return [seg.id, count] as const;
-            }
-            return [seg.id, 0] as const;
-          })
-        );
+        const [countEntries, campaignCountEntries] = await Promise.all([
+          Promise.all(
+            data.map(async (seg) => {
+              const r = await fetch(`/api/segments/${seg.id}/count`, { headers });
+              if (r.ok) {
+                const { count } = await r.json();
+                return [seg.id, count] as const;
+              }
+              return [seg.id, 0] as const;
+            })
+          ),
+          Promise.all(
+            data.map(async (seg) => {
+              const r = await fetch(`/api/segments/${seg.id}/campaigns`, { headers });
+              if (r.ok) {
+                const campaigns: SegmentCampaign[] = await r.json();
+                return [seg.id, campaigns.length] as const;
+              }
+              return [seg.id, 0] as const;
+            })
+          ),
+        ]);
         setCounts(Object.fromEntries(countEntries));
+        setCampaignCounts(Object.fromEntries(campaignCountEntries));
       }
     } finally {
       setLoading(false);
     }
   }, [getHeaders]);
+
+  const openCampaignPopover = useCallback(async (segId: string) => {
+    setCampaignPopoverOpen(p => ({ ...p, [segId]: true }));
+    if (campaignsBySegment[segId]) return;
+    setCampaignLoading(p => ({ ...p, [segId]: true }));
+    try {
+      const headers = await getHeaders();
+      const r = await fetch(`/api/segments/${segId}/campaigns`, { headers });
+      if (r.ok) {
+        const campaigns: SegmentCampaign[] = await r.json();
+        setCampaignsBySegment(p => ({ ...p, [segId]: campaigns }));
+      }
+    } finally {
+      setCampaignLoading(p => ({ ...p, [segId]: false }));
+    }
+  }, [getHeaders, campaignsBySegment]);
 
   useEffect(() => { loadSegments(); }, [loadSegments]);
 
@@ -418,12 +462,82 @@ export function SegmentsPage() {
                       <Users className="h-4 w-4 text-primary" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <span className="font-semibold text-sm group-hover:text-primary transition-colors">{seg.name}</span>
                         {count !== undefined && (
                           <Badge variant="outline" className="text-xs font-normal">
                             {count.toLocaleString()} contact{count !== 1 ? "s" : ""}
                           </Badge>
+                        )}
+                        {campaignCounts[seg.id] !== undefined && (
+                          <Popover
+                            open={campaignPopoverOpen[seg.id] ?? false}
+                            onOpenChange={(open) => {
+                              if (open) openCampaignPopover(seg.id);
+                              else setCampaignPopoverOpen(p => ({ ...p, [seg.id]: false }));
+                            }}
+                          >
+                            <PopoverTrigger asChild>
+                              <button
+                                onClick={e => e.stopPropagation()}
+                                className="inline-flex items-center gap-1 text-xs rounded-full border px-2 py-0.5 text-muted-foreground hover:text-primary hover:border-primary transition-colors"
+                              >
+                                <Megaphone className="h-3 w-3" />
+                                Used in {campaignCounts[seg.id]} campaign{campaignCounts[seg.id] !== 1 ? "s" : ""}
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent
+                              className="w-72 p-0"
+                              align="start"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <div className="px-3 py-2 border-b">
+                                <p className="text-sm font-semibold">Campaigns using this segment</p>
+                              </div>
+                              {campaignLoading[seg.id] ? (
+                                <div className="p-3 space-y-2">
+                                  {[...Array(2)].map((_, i) => (
+                                    <Skeleton key={i} className="h-8 w-full" />
+                                  ))}
+                                </div>
+                              ) : (campaignsBySegment[seg.id] ?? []).length === 0 ? (
+                                <div className="px-3 py-4 text-sm text-muted-foreground text-center">
+                                  No campaigns yet.
+                                </div>
+                              ) : (
+                                <ul className="max-h-56 overflow-y-auto divide-y">
+                                  {(campaignsBySegment[seg.id] ?? []).map(c => (
+                                    <li key={c.id}>
+                                      <Link
+                                        href={`/campaigns/${c.id}`}
+                                        onClick={() => setCampaignPopoverOpen(p => ({ ...p, [seg.id]: false }))}
+                                        className="flex items-center justify-between gap-2 px-3 py-2 hover:bg-muted/50 transition-colors"
+                                      >
+                                        <span className="text-sm font-medium truncate">{c.name}</span>
+                                        <Badge
+                                          variant={c.status === "SENT" ? "default" : "secondary"}
+                                          className="text-xs font-normal shrink-0"
+                                        >
+                                          {c.status}
+                                        </Badge>
+                                      </Link>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                              {campaignCounts[seg.id] > 0 && (
+                                <div className="border-t px-3 py-2">
+                                  <Link
+                                    href="/campaigns"
+                                    onClick={() => setCampaignPopoverOpen(p => ({ ...p, [seg.id]: false }))}
+                                    className="text-xs text-primary hover:underline"
+                                  >
+                                    View all campaigns →
+                                  </Link>
+                                </div>
+                              )}
+                            </PopoverContent>
+                          </Popover>
                         )}
                       </div>
                       <FilterSummary filter={filter} />
