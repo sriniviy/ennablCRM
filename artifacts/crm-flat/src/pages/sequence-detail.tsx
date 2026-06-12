@@ -1790,7 +1790,10 @@ export function SequenceDetailPage() {
             <div className="space-y-3 py-2">
               <div className="flex items-center gap-2">
                 <p className="text-sm font-medium flex-1">
-                  {aiDraftPreview.length} steps generated — review before saving
+                  {aiDraftPreview.length > 0
+                    ? `${aiDraftPreview.length} step${aiDraftPreview.length === 1 ? "" : "s"} generated — review before saving`
+                    : <span className="text-destructive font-medium">Add at least one step to save</span>
+                  }
                 </p>
                 <Button
                   variant="ghost"
@@ -1972,7 +1975,7 @@ export function SequenceDetailPage() {
                 </Button>
                 <Button
                   onClick={acceptAiDraftSequence}
-                  disabled={aiDraftSaving || aiDraftGenerating}
+                  disabled={aiDraftSaving || aiDraftGenerating || aiDraftPreview.length === 0}
                   className="gap-2"
                 >
                   {aiDraftSaving ? (
