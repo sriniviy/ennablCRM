@@ -53,12 +53,14 @@ async function getOwnedSequence(sequenceId: string, userId: string) {
 
 router.post("/ai-draft-step", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { goal, tone, context, stepNumber, totalSteps } = req.body as {
+    const { goal, tone, context, stepNumber, totalSteps, existingSubject, existingBody } = req.body as {
       goal?: string;
       tone?: string;
       context?: string;
       stepNumber?: number;
       totalSteps?: number;
+      existingSubject?: string;
+      existingBody?: string;
     };
     if (!goal?.trim()) {
       res.status(400).json({ error: "goal is required" });
@@ -69,8 +71,20 @@ router.post("/ai-draft-step", requireAuth, async (req: Request, res: Response) =
       stepNumber != null && totalSteps != null
         ? `This is step ${stepNumber} of ${totalSteps} in a multi-step outreach sequence.`
         : "";
+    const isImprove = !!(existingSubject?.trim() || existingBody?.trim());
 
-    const systemPrompt = `You are an expert B2B sales email writer. Your job is to draft a single outreach email for a sales sequence. Return ONLY a JSON object with two fields: "subject" (a short, compelling subject line) and "body" (the email body). Do not include any markdown, explanation, or text outside the JSON object.
+    const systemPrompt = isImprove
+      ? `You are an expert B2B sales email editor. Your job is to improve an existing outreach email for a sales sequence. Return ONLY a JSON object with two fields: "subject" (a short, compelling subject line) and "body" (the email body). Do not include any markdown, explanation, or text outside the JSON object.
+
+Guidelines:
+- Preserve the intent and key points of the original email unless the goal says otherwise
+- Keep emails concise (3-5 short paragraphs max)
+- Sound human and natural, not like a template
+- Tone should be ${toneLabel}
+- Never use phrases like "I hope this email finds you well"
+- End with a clear, low-friction call to action
+${stepCtx}`
+      : `You are an expert B2B sales email writer. Your job is to draft a single outreach email for a sales sequence. Return ONLY a JSON object with two fields: "subject" (a short, compelling subject line) and "body" (the email body). Do not include any markdown, explanation, or text outside the JSON object.
 
 Guidelines:
 - Keep emails concise (3-5 short paragraphs max)
@@ -80,7 +94,16 @@ Guidelines:
 - End with a clear, low-friction call to action
 ${stepCtx}`;
 
-    const userPrompt = `Goal of this email: ${goal.trim()}${context?.trim() ? `\n\nAdditional context: ${context.trim()}` : ""}
+    const userPrompt = isImprove
+      ? `Goal: ${goal.trim()}
+
+Existing email to improve:
+Subject: ${existingSubject?.trim() ?? ""}
+Body:
+${existingBody?.trim() ?? ""}${context?.trim() ? `\n\nAdditional context: ${context.trim()}` : ""}
+
+Rewrite this email now.`
+      : `Goal of this email: ${goal.trim()}${context?.trim() ? `\n\nAdditional context: ${context.trim()}` : ""}
 
 Write the email now.`;
 
