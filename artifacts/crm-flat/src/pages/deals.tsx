@@ -48,9 +48,9 @@ const CARD_FIELDS: CardField<DealWithRelations>[] = [
 
 function probBadgeStyle(p: number | null | undefined) {
   const pct = p ?? 0;
-  if (pct >= 80) return "bg-green-100 text-green-700 border border-green-200";
-  if (pct >= 50) return "bg-yellow-100 text-yellow-700 border border-yellow-200";
-  return "bg-red-100 text-red-700 border border-red-200";
+  if (pct >= 80) return "bg-green-100 text-green-700 border border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800";
+  if (pct >= 50) return "bg-yellow-100 text-yellow-700 border border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800";
+  return "bg-red-100 text-red-700 border border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800";
 }
 
 export function DealsPage() {
@@ -202,7 +202,7 @@ export function DealsPage() {
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => setExportOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-border bg-white text-foreground hover:bg-muted transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-border bg-background text-foreground hover:bg-muted transition-colors"
             >
               <Download className="h-3 w-3" />
               Export CSV
@@ -270,13 +270,13 @@ export function DealsPage() {
           <div className="ml-auto flex border border-border">
             <button
               onClick={() => setView("pipeline")}
-              className={`px-3 py-1 text-xs font-medium transition-colors ${view === "pipeline" ? "bg-primary text-primary-foreground" : "bg-white text-muted-foreground hover:bg-muted"}`}
+              className={`px-3 py-1 text-xs font-medium transition-colors ${view === "pipeline" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
             >
               Pipeline
             </button>
             <button
               onClick={() => setView("cards")}
-              className={`px-3 py-1 text-xs font-medium transition-colors border-l border-border ${view === "cards" ? "bg-primary text-primary-foreground" : "bg-white text-muted-foreground hover:bg-muted"}`}
+              className={`px-3 py-1 text-xs font-medium transition-colors border-l border-border ${view === "cards" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
             >
               Cards
             </button>
@@ -325,7 +325,7 @@ export function DealsPage() {
                   <div key={column.stage.id} className="min-w-0 flex flex-col">
                     {/* Column header — flat box with colored bottom border */}
                     <div
-                      className="flex items-center justify-between px-2.5 py-2 mb-2 border border-border bg-white"
+                      className="flex items-center justify-between px-2.5 py-2 mb-2 border border-border bg-card"
                       style={{ borderBottomWidth: 2, borderBottomColor: column.stage.color || "var(--color-primary)" }}
                     >
                       <div>
@@ -347,7 +347,7 @@ export function DealsPage() {
                         </div>
                       </div>
                       <button
-                        className="w-5 h-5 flex items-center justify-center border border-border bg-white text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                        className="w-5 h-5 flex items-center justify-center border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                         onClick={() => openNew(column.stage.id)}
                       >
                         <Plus className="h-3 w-3" />
@@ -370,7 +370,7 @@ export function DealsPage() {
                                   {...provided.dragHandleProps}
                                   style={{ ...provided.draggableProps.style }}
                                   onClick={() => openEdit(deal)}
-                                  className={`border border-border bg-white p-2 cursor-pointer transition-colors group ${
+                                  className={`border border-border bg-card p-2 cursor-pointer transition-colors group ${
                                     snapshot.isDragging ? "shadow-md border-primary/40" : "hover:border-primary/50"
                                   }`}
                                 >
