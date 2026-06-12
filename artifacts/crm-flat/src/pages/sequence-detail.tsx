@@ -524,7 +524,12 @@ export function SequenceDetailPage() {
                                 <SelectItem value={preset.id} className="flex-1">
                                   <span className="flex items-center gap-1.5">
                                     <Shield className="h-3 w-3 text-primary shrink-0" />
-                                    {preset.name}
+                                    <span className="flex flex-col leading-tight">
+                                      <span>{preset.name}</span>
+                                      {isAdmin && preset.creatorName && (
+                                        <span className="text-[10px] text-muted-foreground font-normal">by {preset.creatorName}</span>
+                                      )}
+                                    </span>
                                   </span>
                                 </SelectItem>
                                 {isAdmin && (
@@ -912,7 +917,7 @@ export function SequenceDetailPage() {
     staleTime: 30_000,
   });
 
-  type AiPreset = { id: string; userId: string; name: string; category: string | null; goal: string; tone: string; improveFields: string; shared: boolean };
+  type AiPreset = { id: string; userId: string; name: string; category: string | null; goal: string; tone: string; improveFields: string; shared: boolean; creatorName: string | null };
   const { data: me } = useQuery<{ id: string; role: string }>({
     queryKey: ["me"],
     queryFn: () => apiFetch("/users/me"),

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireAuth, requireAdmin, type AuthRequest } from "../middlewares/requireAuth";
 import type { Request, Response } from "express";
-import { db, aiPresetsTable } from "@workspace/db";
+import { db, aiPresetsTable, usersTable } from "@workspace/db";
 import { eq, and, or, asc, sql } from "drizzle-orm";
 
 const router = Router();
@@ -16,9 +16,21 @@ router.get("/me", requireAuth, (req: Request, res: Response) => {
 router.get("/me/ai-presets", requireAuth, async (req: Request, res: Response) => {
   const { userId } = req as AuthRequest;
   try {
-    const presets = await db
-      .select()
+    const rows = await db
+      .select({
+        id: aiPresetsTable.id,
+        userId: aiPresetsTable.userId,
+        name: aiPresetsTable.name,
+        category: aiPresetsTable.category,
+        goal: aiPresetsTable.goal,
+        tone: aiPresetsTable.tone,
+        improveFields: aiPresetsTable.improveFields,
+        shared: aiPresetsTable.shared,
+        createdAt: aiPresetsTable.createdAt,
+        creatorName: usersTable.name,
+      })
       .from(aiPresetsTable)
+      .leftJoin(usersTable, eq(usersTable.id, aiPresetsTable.userId))
       .where(
         or(
           eq(aiPresetsTable.userId, userId),
@@ -29,7 +41,7 @@ router.get("/me/ai-presets", requireAuth, async (req: Request, res: Response) =>
         sql`coalesce(${aiPresetsTable.category}, '')`,
         asc(aiPresetsTable.name),
       );
-    res.json(presets);
+    res.json(rows);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch presets" });
   }
