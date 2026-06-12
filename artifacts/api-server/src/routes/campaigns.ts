@@ -4,8 +4,88 @@ import { db, emailCampaignsTable, campaignContactsTable, contactsTable } from "@
 import { eq, and, desc, inArray, lte, sql } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 import { Resend } from "resend";
+import { anthropic } from "@workspace/integrations-anthropic-ai";
 
 const router = Router();
+
+// ─── AI Campaign Draft ────────────────────────────────────────────────────────
+
+router.post("/ai-draft", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { goal, tone, context } = req.body as {
+      goal?: string;
+      tone?: string;
+      context?: string;
+    };
+    if (!goal?.trim()) {
+      res.status(400).json({ error: "goal is required" });
+      return;
+    }
+    const toneLabel = tone ?? "Professional";
+
+    const systemPrompt = `You are an expert B2B email marketing copywriter. Your job is to draft a complete marketing email campaign given a goal.
+
+Return ONLY a JSON object with these fields:
+- "name": a short internal campaign name (2-5 words, no punctuation)
+- "subject": a compelling email subject line (under 60 characters)
+- "blocks": an array of email content blocks
+
+Each block in "blocks" must be an object with a "type" field and type-specific fields:
+- type "header": { "type": "header", "content": "...", "align": "left"|"center"|"right", "fontSize": "sm"|"md"|"lg"|"xl" }
+- type "text": { "type": "text", "content": "...", "align": "left"|"center"|"right", "fontSize": "sm"|"md"|"lg"|"xl" }
+- type "button": { "type": "button", "content": "Button label", "url": "https://", "align": "left"|"center"|"right", "buttonColor": "#hex" }
+- type "divider": { "type": "divider", "content": "" }
+- type "columns": { "type": "columns", "content": "", "col1": "left column text", "col2": "right column text", "colRatio": "50-50"|"60-40"|"40-60" }
+
+Guidelines:
+- Always start with a "header" block
+- Use 2-4 "text" blocks for the body (each max 3-4 sentences)
+- End with a "button" block as the call-to-action
+- Use personalization tokens {{firstName}} or {{fullName}} in the header or first text block where natural
+- Tone: ${toneLabel}
+- Aim for 150-250 words total across all text blocks
+- Do NOT include image, spacer, or social blocks — the user can add those manually
+- Do NOT include any markdown, explanation, or text outside the JSON object`;
+
+    const userPrompt = `Campaign goal: ${goal.trim()}${context?.trim() ? `\n\nAdditional context: ${context.trim()}` : ""}
+
+Write the campaign now.`;
+
+    const message = await anthropic.messages.create({
+      model: "claude-haiku-4-5",
+      max_tokens: 4096,
+      messages: [{ role: "user", content: userPrompt }],
+      system: systemPrompt,
+    });
+
+    const rawText = message.content
+      .filter((b) => b.type === "text")
+      .map((b) => (b as { type: "text"; text: string }).text)
+      .join("");
+
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      res.status(500).json({ error: "AI returned unexpected format" });
+      return;
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]) as {
+      name?: string;
+      subject?: string;
+      blocks?: unknown[];
+    };
+
+    if (!parsed.name || !parsed.subject || !Array.isArray(parsed.blocks) || parsed.blocks.length === 0) {
+      res.status(500).json({ error: "AI response missing required fields" });
+      return;
+    }
+
+    res.json({ name: parsed.name, subject: parsed.subject, blocks: parsed.blocks });
+  } catch (err) {
+    console.error("AI campaign draft error:", err);
+    res.status(500).json({ error: "Failed to generate campaign draft" });
+  }
+});
 
 function getResend() {
   const key = process.env.RESEND_API_KEY;

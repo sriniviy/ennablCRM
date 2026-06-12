@@ -22,7 +22,7 @@ import {
   ArrowLeft, ArrowRight, Check, Trash2, Type, AlignLeft, MousePointer,
   Minus, Image, Share2, Maximize2, Users, Calendar, Send, Save,
   ChevronLeft, ChevronRight, Clock, Tag, User, Smile, Columns, Monitor, Smartphone, Code,
-  Mail, Building2, UserCheck, ExternalLink,
+  Mail, Building2, UserCheck, ExternalLink, Sparkles, Loader2,
 } from "lucide-react";
 
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -265,6 +265,13 @@ export function CampaignNewPage() {
   const [previewWidth, setPreviewWidth] = useState<"desktop" | "mobile">("desktop");
   const [uploadingImage, setUploadingImage] = useState(false);
 
+  // AI campaign generation
+  const [showAiPanel, setShowAiPanel] = useState(false);
+  const [aiGoal, setAiGoal] = useState("");
+  const [aiTone, setAiTone] = useState("Professional");
+  const [aiContext, setAiContext] = useState("");
+  const [aiGenerating, setAiGenerating] = useState(false);
+
   const [audienceMode, setAudienceMode] = useState<"segment" | "filter" | "individual">("filter");
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
   const [segmentFilter, setSegmentFilter] = useState<SegmentFilter>({ emailMarketingContact: true });
@@ -440,6 +447,32 @@ export function CampaignNewPage() {
     }
   };
 
+  async function generateAiCampaign() {
+    if (!aiGoal.trim()) return;
+    setAiGenerating(true);
+    try {
+      const headers = await getHeaders();
+      const res = await fetch("/api/campaigns/ai-draft", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ goal: aiGoal.trim(), tone: aiTone, context: aiContext.trim() || undefined }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error ?? "Generation failed");
+      }
+      const data = await res.json() as { name: string; subject: string; blocks: (Omit<Block, "id"> & { id?: string })[] };
+      setName(data.name);
+      setSubject(data.subject);
+      setBlocks(data.blocks.map((b) => ({ ...b, id: uid(), content: b.content ?? "" })));
+      setStep(1);
+    } catch (err) {
+      toast({ title: "AI generation failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
+    } finally {
+      setAiGenerating(false);
+    }
+  }
+
   return (
     <SidebarLayout>
       <div className="max-w-6xl mx-auto space-y-4">
@@ -455,8 +488,29 @@ export function CampaignNewPage() {
         {/* ── STEP 0: Template Gallery ── */}
         {step === 0 && (
           <div>
-            <p className="text-muted-foreground mb-4">Pick a template to get started — or start from scratch.</p>
+            <p className="text-muted-foreground mb-4">Pick a template to get started, or let AI write the whole thing.</p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {/* AI card */}
+              <button
+                onClick={() => setShowAiPanel((v) => !v)}
+                className={`text-left p-4 rounded-xl border-2 transition-all ${showAiPanel ? "border-primary bg-primary/5" : "border-transparent hover:border-primary bg-card hover:shadow-md"}`}
+              >
+                <div className="w-full rounded border overflow-hidden" style={{ height: 120 }}>
+                  <div className="h-2 w-full bg-gradient-to-r from-primary to-violet-500" />
+                  <div className="p-3 flex flex-col items-center justify-center h-[calc(100%-8px)] gap-2">
+                    <Sparkles className="h-8 w-8 text-primary/40" />
+                    <span className="text-[11px] text-muted-foreground text-center">AI will write your email from a brief</span>
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <p className="font-semibold text-sm flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5 text-primary" />
+                    Generate with AI
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Describe your goal, AI does the rest</p>
+                </div>
+              </button>
+
               {TEMPLATES.map(tpl => (
                 <button
                   key={tpl.id}
@@ -471,6 +525,76 @@ export function CampaignNewPage() {
                 </button>
               ))}
             </div>
+
+            {/* AI generation panel */}
+            {showAiPanel && (
+              <div className="mt-4 border border-dashed border-primary/40 rounded-xl p-5 bg-primary/5 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  <p className="text-sm font-semibold text-primary">Generate with AI</p>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2">
+                    <label className="text-xs text-muted-foreground mb-1 block">
+                      Campaign goal <span className="text-destructive">*</span>
+                    </label>
+                    <Textarea
+                      placeholder="e.g. Announce our new risk analytics feature to mid-market CFOs and book a demo call"
+                      value={aiGoal}
+                      onChange={(e) => setAiGoal(e.target.value)}
+                      rows={2}
+                      className="text-sm resize-none"
+                      autoFocus
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Tone</label>
+                    <select
+                      value={aiTone}
+                      onChange={(e) => setAiTone(e.target.value)}
+                      className="w-full h-9 rounded-md border bg-background px-3 text-sm"
+                    >
+                      {["Professional", "Friendly", "Direct", "Urgent"].map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">
+                      Context <span className="text-muted-foreground/60">(optional)</span>
+                    </label>
+                    <Textarea
+                      placeholder="e.g. Audience is insurance brokers. Focus on time savings."
+                      value={aiContext}
+                      onChange={(e) => setAiContext(e.target.value)}
+                      rows={1}
+                      className="text-sm resize-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <Button
+                    size="sm"
+                    onClick={generateAiCampaign}
+                    disabled={!aiGoal.trim() || aiGenerating}
+                    className="gap-2"
+                  >
+                    {aiGenerating ? (
+                      <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating…</>
+                    ) : (
+                      <><Sparkles className="h-3.5 w-3.5" /> Generate campaign</>
+                    )}
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    AI writes the name, subject, and email blocks — you can edit everything after.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
