@@ -77,16 +77,15 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
             name: usersTable.name,
             avatarUrl: usersTable.avatarUrl,
           },
-          campaignEngagementCount: sql<number>`(
-            SELECT COUNT(*)::int FROM campaign_contacts
-            WHERE campaign_contacts.contact_id = ${contactsTable.id}
-              AND (campaign_contacts.opened_at IS NOT NULL OR campaign_contacts.clicked_at IS NOT NULL)
-          )`,
+          engagementOpens: sql<number>`count(distinct case when ${campaignContactsTable.openedAt} is not null then ${campaignContactsTable.id} end)::int`,
+          engagementClicks: sql<number>`count(distinct case when ${campaignContactsTable.clickedAt} is not null then ${campaignContactsTable.id} end)::int`,
         })
         .from(contactsTable)
         .leftJoin(companiesTable, eq(contactsTable.companyId, companiesTable.id))
         .leftJoin(usersTable, eq(contactsTable.assigneeId, usersTable.id))
+        .leftJoin(campaignContactsTable, eq(campaignContactsTable.contactId, contactsTable.id))
         .where(where)
+        .groupBy(contactsTable.id, companiesTable.id, usersTable.id)
         .orderBy(desc(contactsTable.createdAt))
         .limit(ps)
         .offset(offset),
@@ -97,11 +96,12 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
     ]);
 
     res.json({
-      data: contacts.map(({ contact, company, assignee, campaignEngagementCount }) => ({
+      data: contacts.map(({ contact, company, assignee, engagementOpens, engagementClicks }) => ({
         ...contact,
         company: company?.id ? company : null,
         assignee: assignee?.id ? assignee : null,
-        campaignEngagementCount: campaignEngagementCount ?? 0,
+        engagementOpens,
+        engagementClicks,
       })),
       total: count,
       page: pg,

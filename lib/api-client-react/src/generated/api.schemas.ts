@@ -233,7 +233,8 @@ export interface ContactWithRelations {
   assignee?: UserSummary | null;
   dealCount: number;
   taskCount: number;
-  campaignEngagementCount?: number;
+  engagementOpens?: number;
+  engagementClicks?: number;
   createdAt: string;
   updatedAt: string;
 }

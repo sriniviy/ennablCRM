@@ -54,11 +54,40 @@ const CONTACT_COLUMNS: ColumnDef[] = [
 
 const dash = (v: unknown) => (v === null || v === undefined || v === "" ? "—" : String(v));
 
+type EngagementLevel = "High" | "Medium" | "Low";
+
+function getEngagementLevel(opens?: number, clicks?: number): EngagementLevel | null {
+  if ((clicks ?? 0) > 0) return "High";
+  if ((opens ?? 0) > 0) return "Medium";
+  return null;
+}
+
+const ENGAGEMENT_STYLES: Record<EngagementLevel, string> = {
+  High: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+  Medium: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+  Low: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
+};
+
+function EngagementBadge({ opens, clicks }: { opens?: number; clicks?: number }) {
+  const level = getEngagementLevel(opens, clicks);
+  if (!level) return <span className="text-muted-foreground text-xs">—</span>;
+  return (
+    <Badge
+      variant="outline"
+      className={`font-normal border-0 text-xs ${ENGAGEMENT_STYLES[level]}`}
+      title={`${opens ?? 0} open${(opens ?? 0) !== 1 ? "s" : ""}, ${clicks ?? 0} click${(clicks ?? 0) !== 1 ? "s" : ""}`}
+    >
+      {level}
+    </Badge>
+  );
+}
+
 const CARD_FIELDS: CardField<ContactWithRelations>[] = [
   { label: "Email", render: c => dash(c.email) },
   { label: "Phone", render: c => dash(c.phone) },
   { label: "Title", render: c => dash(c.title) },
   { label: "Status", render: c => dash(c.status) },
+  { label: "Engagement", render: c => <EngagementBadge opens={c.engagementOpens} clicks={c.engagementClicks} /> },
   { label: "Review status", render: c => (c.reviewStatus ? c.reviewStatus.replace(/_/g, " ") : "—") },
   { label: "Company", render: c => dash(c.company?.name) },
   { label: "Owner", render: c => dash(c.assignee?.name) },
@@ -255,6 +284,7 @@ export function ContactsPage() {
                   <TableHead>Email</TableHead>
                   <TableHead>Company</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Engagement</TableHead>
                   <TableHead>Review</TableHead>
                   <TableHead>Tags</TableHead>
                   <TableHead className="w-10"></TableHead>
@@ -295,6 +325,9 @@ export function ContactsPage() {
                         <Badge variant="outline" className={`font-normal border-0 ${STATUS_COLORS[contact.status] ?? ""}`}>
                           {contact.status}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <EngagementBadge opens={contact.engagementOpens} clicks={contact.engagementClicks} />
                       </TableCell>
                       <TableCell>
                         {contact.reviewStatus ? (
