@@ -1,6 +1,6 @@
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useState, useCallback, useEffect } from "react";
-import { useCreateCampaign, useListContacts } from "@workspace/api-client-react";
+import { useCreateCampaign, useListContacts, useListCompanies } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +45,7 @@ interface SegmentFilter {
   tags?: string[];
   ennablUser?: boolean;
   emailMarketingContact?: boolean;
+  companyId?: string;
 }
 
 interface SavedSegment { id: string; name: string; filterJson: string; }
@@ -255,6 +256,7 @@ export function CampaignNewPage() {
 
   const createCampaign = useCreateCampaign();
   const { data: contacts } = useListContacts({ page: 1, pageSize: 500 });
+  const { data: companiesData } = useListCompanies({ page: 1, pageSize: 200 });
 
   const getHeaders = useCallback(async () => {
     const { data } = await authClient.getSession();
@@ -804,6 +806,19 @@ export function CampaignNewPage() {
                           placeholder="enterprise, vip"
                           className="h-9 text-sm mt-1"
                         />
+                      </div>
+                      <div className="col-span-2">
+                        <Label className="text-xs">Company</Label>
+                        <select
+                          value={segmentFilter.companyId ?? ""}
+                          onChange={e => setSegmentFilter(p => ({ ...p, companyId: e.target.value || undefined }))}
+                          className="w-full mt-1 h-9 rounded-md border bg-background px-3 text-sm"
+                        >
+                          <option value="">Any company</option>
+                          {companiesData?.data?.map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">

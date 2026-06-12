@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { createHmac } from "crypto";
+import { generateUnsubscribeToken } from "./unsubscribe";
 import { db, emailCampaignsTable, campaignContactsTable, contactsTable } from "@workspace/db";
 import { eq, and, desc, inArray, lte, sql } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
@@ -13,15 +13,6 @@ function getResend() {
   return new Resend(key);
 }
 
-function getSecret(): string {
-  const s = process.env.BETTER_AUTH_SECRET;
-  if (!s) throw new Error("BETTER_AUTH_SECRET environment variable is required but not set");
-  return s;
-}
-
-function generateUnsubscribeToken(contactId: string, campaignId: string): string {
-  return createHmac("sha256", getSecret()).update(`${contactId}:${campaignId}`).digest("hex");
-}
 
 async function executeSend(campaignId: string, contactIds: string[]) {
   const [campaign] = await db
@@ -74,7 +65,7 @@ async function executeSend(campaignId: string, contactIds: string[]) {
     if (!contact.email) continue;
 
     const unsubToken = generateUnsubscribeToken(contact.id, campaignId);
-    const unsubscribeUrl = `${base}/api/unsubscribe?cid=${contact.id}&campaign=${campaignId}&token=${unsubToken}`;
+    const unsubscribeUrl = `${base}/api/unsubscribe?token=${unsubToken}`;
     const trackingPixelUrl = `${base}/api/track/open/${campaignId}?cid=${contact.id}`;
 
     let html = campaign.htmlContent

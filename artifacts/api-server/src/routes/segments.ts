@@ -143,7 +143,7 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
       .values({
         name: body.name,
         filterJson: JSON.stringify(body.filter ?? {}),
-        createdBy: (req as AuthRequest).user?.id ?? null,
+        createdBy: (req as AuthRequest).userId ?? null,
       })
       .returning();
     res.status(201).json(segment);

@@ -12,47 +12,72 @@ function getSecret(): string {
 }
 
 export function generateUnsubscribeToken(contactId: string, campaignId: string): string {
-  return createHmac("sha256", getSecret())
-    .update(`${contactId}:${campaignId}`)
-    .digest("hex");
+  const data = Buffer.from(`${contactId}:${campaignId}`).toString("base64url");
+  const sig = createHmac("sha256", getSecret()).update(data).digest("hex");
+  return `${data}.${sig}`;
 }
 
-function verifyUnsubscribeToken(contactId: string, campaignId: string, token: string): boolean {
-  const expected = generateUnsubscribeToken(contactId, campaignId);
-  if (expected.length !== token.length) return false;
+function verifyUnsubscribeToken(token: string): { contactId: string; campaignId: string } | null {
+  const dotIdx = token.lastIndexOf(".");
+  if (dotIdx < 0) return null;
+  const data = token.slice(0, dotIdx);
+  const sig = token.slice(dotIdx + 1);
+  const expectedSig = createHmac("sha256", getSecret()).update(data).digest("hex");
+  if (expectedSig.length !== sig.length) return null;
   let mismatch = 0;
-  for (let i = 0; i < expected.length; i++) {
-    mismatch |= expected.charCodeAt(i) ^ token.charCodeAt(i);
+  for (let i = 0; i < expectedSig.length; i++) {
+    mismatch |= expectedSig.charCodeAt(i) ^ sig.charCodeAt(i);
   }
-  return mismatch === 0;
+  if (mismatch !== 0) return null;
+  try {
+    const decoded = Buffer.from(data, "base64url").toString("utf-8");
+    const colonIdx = decoded.indexOf(":");
+    if (colonIdx < 0) return null;
+    const contactId = decoded.slice(0, colonIdx);
+    const campaignId = decoded.slice(colonIdx + 1);
+    if (!contactId || !campaignId) return null;
+    return { contactId, campaignId };
+  } catch {
+    return null;
+  }
 }
 
 router.get("/unsubscribe", async (req: Request, res: Response) => {
-  const { cid, campaign, token } = req.query as { cid?: string; campaign?: string; token?: string };
+  const { token } = req.query as { token?: string };
 
-  if (!cid || !campaign || !token) {
+  if (!token) {
     res.status(400).send(unsubscribePage("Invalid Link", "The unsubscribe link is missing required parameters."));
     return;
   }
 
-  if (!verifyUnsubscribeToken(cid, campaign, token)) {
+  let parsed: { contactId: string; campaignId: string } | null;
+  try {
+    parsed = verifyUnsubscribeToken(token);
+  } catch {
     res.status(400).send(unsubscribePage("Invalid Link", "This unsubscribe link is invalid or has expired."));
     return;
   }
+
+  if (!parsed) {
+    res.status(400).send(unsubscribePage("Invalid Link", "This unsubscribe link is invalid or has expired."));
+    return;
+  }
+
+  const { contactId, campaignId } = parsed;
 
   try {
     await db
       .update(contactsTable)
       .set({ emailMarketingContact: false, updatedAt: new Date() })
-      .where(eq(contactsTable.id, cid));
+      .where(eq(contactsTable.id, contactId));
 
     await db
       .update(campaignContactsTable)
       .set({ status: "UNSUBSCRIBED", unsubscribedAt: new Date() })
       .where(
         and(
-          eq(campaignContactsTable.campaignId, campaign),
-          eq(campaignContactsTable.contactId, cid),
+          eq(campaignContactsTable.campaignId, campaignId),
+          eq(campaignContactsTable.contactId, contactId),
         ),
       );
 
