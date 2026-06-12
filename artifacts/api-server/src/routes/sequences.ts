@@ -5,6 +5,8 @@ import {
   sequenceStepsTable,
   sequenceEnrollmentsTable,
   contactsTable,
+  companiesTable,
+  usersTable,
   activitiesTable,
 } from "@workspace/db";
 import { eq, and, lte, inArray, sql, asc } from "drizzle-orm";
@@ -12,6 +14,13 @@ import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 import { Resend } from "resend";
 
 const router = Router();
+
+// Replaces {{token}} placeholders with contact/rep data. Unknown tokens are left as-is.
+function replaceTokens(text: string, tokens: Record<string, string>): string {
+  return text.replace(/\{\{(\w+)\}\}/g, (match, key: string) =>
+    key in tokens ? tokens[key] : match,
+  );
+}
 
 function getResend() {
   const key = process.env.RESEND_API_KEY;
@@ -520,12 +529,14 @@ export async function runSequenceSender() {
       contactEmail: contactsTable.email,
       contactFirstName: contactsTable.firstName,
       contactLastName: contactsTable.lastName,
+      contactCompanyName: companiesTable.name,
     })
     .from(sequenceEnrollmentsTable)
     .innerJoin(
       contactsTable,
       eq(contactsTable.id, sequenceEnrollmentsTable.contactId),
     )
+    .leftJoin(companiesTable, eq(companiesTable.id, contactsTable.companyId))
     .where(
       and(
         inArray(sequenceEnrollmentsTable.id, claimedIds),
@@ -533,7 +544,7 @@ export async function runSequenceSender() {
       ),
     );
 
-  for (const { enrollment, contactEmail, contactFirstName, contactLastName } of claimed) {
+  for (const { enrollment, contactEmail, contactFirstName, contactLastName, contactCompanyName } of claimed) {
     if (!contactEmail) continue;
 
     const steps = await db
@@ -568,6 +579,26 @@ export async function runSequenceSender() {
     const contactName =
       [contactFirstName, contactLastName].filter(Boolean).join(" ") || contactEmail;
 
+    // Fetch the rep (sequence owner) so we can replace {{repName}} / {{repEmail}}.
+    const [repUser] = await db
+      .select({ name: usersTable.name, email: usersTable.email })
+      .from(usersTable)
+      .where(eq(usersTable.id, sequence?.ownerId ?? ""))
+      .limit(1);
+
+    const tokenMap: Record<string, string> = {
+      firstName: contactFirstName || "there",
+      lastName: contactLastName || "",
+      fullName:
+        [contactFirstName, contactLastName].filter(Boolean).join(" ") || "there",
+      companyName: contactCompanyName || "",
+      repName: repUser?.name || "",
+      repEmail: repUser?.email || "",
+    };
+
+    const resolvedSubject = replaceTokens(step.subject, tokenMap);
+    const resolvedBody = replaceTokens(step.body, tokenMap);
+
     // Attempt send — only advance state on success.
     try {
       const fromEmail = process.env.RESEND_FROM_EMAIL ?? "noreply@resend.dev";
@@ -575,9 +606,9 @@ export async function runSequenceSender() {
       await resend.emails.send({
         from: `${fromName} <${fromEmail}>`,
         to: contactEmail,
-        subject: step.subject,
-        html: step.body.replace(/\n/g, "<br>"),
-        text: step.body,
+        subject: resolvedSubject,
+        html: resolvedBody.replace(/\n/g, "<br>"),
+        text: resolvedBody,
       });
     } catch {
       // Send failed — restore original nextSendAt so it's retried next tick.

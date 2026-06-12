@@ -1,5 +1,5 @@
 import { useSessionToken } from "@/hooks/use-session-token";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useRoute, useLocation, Link } from "wouter";
 
@@ -47,10 +47,42 @@ import {
   Mail,
   ChevronUp,
   ChevronDown,
+  Braces,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { format } from "date-fns";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+const TOKENS = [
+  { token: "{{firstName}}", label: "First name", example: "Sarah" },
+  { token: "{{lastName}}", label: "Last name", example: "Chen" },
+  { token: "{{fullName}}", label: "Full name", example: "Sarah Chen" },
+  { token: "{{companyName}}", label: "Company", example: "Acme Inc." },
+  { token: "{{repName}}", label: "Your name", example: "Alex Smith" },
+  { token: "{{repEmail}}", label: "Your email", example: "alex@company.com" },
+] as const;
+
+function highlightTokens(text: string): React.ReactNode {
+  const parts = text.split(/({{[^}]+}})/g);
+  return parts.map((part, i) =>
+    /^\{\{[^}]+\}\}$/.test(part) ? (
+      <span
+        key={i}
+        className="inline-flex items-center bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 rounded px-0.5 font-mono text-[10px] leading-tight"
+      >
+        {part}
+      </span>
+    ) : (
+      part
+    ),
+  );
+}
 
 interface Step {
   id: string;
@@ -154,6 +186,95 @@ export function SequenceDetailPage() {
   );
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState("");
+
+  // Refs for cursor-position-aware token insertion
+  const addSubjectRef = useRef<HTMLInputElement>(null);
+  const addBodyRef = useRef<HTMLTextAreaElement>(null);
+  const editSubjectRef = useRef<HTMLInputElement>(null);
+  const editBodyRef = useRef<HTMLTextAreaElement>(null);
+  const lastSelRef = useRef<{
+    form: "add" | "edit";
+    field: "subject" | "body";
+    start: number;
+    end: number;
+  } | null>(null);
+
+  function trackSel(form: "add" | "edit", field: "subject" | "body") {
+    return (
+      e: React.SyntheticEvent<HTMLInputElement | HTMLTextAreaElement>,
+    ) => {
+      const el = e.currentTarget;
+      lastSelRef.current = {
+        form,
+        field,
+        start: el.selectionStart ?? 0,
+        end: el.selectionEnd ?? 0,
+      };
+    };
+  }
+
+  function insertToken(token: string) {
+    const sel = lastSelRef.current;
+    if (!sel) {
+      setStepForm((f) => ({ ...f, body: f.body + token }));
+      return;
+    }
+    const { form, field, start, end } = sel;
+    const splice = (str: string) =>
+      str.slice(0, start) + token + str.slice(end);
+    const newCursor = start + token.length;
+    if (form === "add") {
+      setStepForm((f) => ({ ...f, [field]: splice(f[field]) }));
+      setTimeout(() => {
+        const el =
+          field === "subject" ? addSubjectRef.current : addBodyRef.current;
+        el?.focus();
+        el?.setSelectionRange(newCursor, newCursor);
+      }, 0);
+    } else {
+      setEditingStep((s) =>
+        s ? { ...s, [field]: splice(s[field]) } : null,
+      );
+      setTimeout(() => {
+        const el =
+          field === "subject" ? editSubjectRef.current : editBodyRef.current;
+        el?.focus();
+        el?.setSelectionRange(newCursor, newCursor);
+      }, 0);
+    }
+  }
+
+  function TokenPicker({ form }: { form: "add" | "edit" }) {
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-[11px] gap-1 text-muted-foreground hover:text-foreground"
+            type="button"
+          >
+            <Braces className="h-3 w-3" />
+            Insert token
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-60">
+          {TOKENS.map(({ token, label }) => (
+            <DropdownMenuItem
+              key={token}
+              onSelect={() => insertToken(token)}
+              className="gap-3"
+            >
+              <span className="font-mono text-[11px] text-blue-600 dark:text-blue-400 shrink-0">
+                {token}
+              </span>
+              <span className="text-xs text-muted-foreground">{label}</span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  }
 
   const { data: sequence, isLoading } = useQuery<SequenceDetail>({
     queryKey: ["sequence", id],
@@ -455,25 +576,47 @@ export function SequenceDetailPage() {
                           </span>
                           Editing step
                         </div>
-                        <Input
-                          placeholder="Email subject"
-                          value={editingStep.subject}
-                          onChange={(e) =>
-                            setEditingStep((s) =>
-                              s ? { ...s, subject: e.target.value } : null,
-                            )
-                          }
-                        />
-                        <Textarea
-                          placeholder="Email body"
-                          value={editingStep.body}
-                          rows={4}
-                          onChange={(e) =>
-                            setEditingStep((s) =>
-                              s ? { ...s, body: e.target.value } : null,
-                            )
-                          }
-                        />
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-xs text-muted-foreground">Subject</label>
+                            <TokenPicker form="edit" />
+                          </div>
+                          <Input
+                            ref={editSubjectRef}
+                            placeholder="Email subject"
+                            value={editingStep.subject}
+                            onChange={(e) =>
+                              setEditingStep((s) =>
+                                s ? { ...s, subject: e.target.value } : null,
+                              )
+                            }
+                            onSelect={trackSel("edit", "subject")}
+                            onKeyUp={trackSel("edit", "subject")}
+                            onMouseUp={trackSel("edit", "subject")}
+                            onFocus={trackSel("edit", "subject")}
+                          />
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-xs text-muted-foreground">Body</label>
+                            <TokenPicker form="edit" />
+                          </div>
+                          <Textarea
+                            ref={editBodyRef}
+                            placeholder="Email body"
+                            value={editingStep.body}
+                            rows={4}
+                            onChange={(e) =>
+                              setEditingStep((s) =>
+                                s ? { ...s, body: e.target.value } : null,
+                              )
+                            }
+                            onSelect={trackSel("edit", "body")}
+                            onKeyUp={trackSel("edit", "body")}
+                            onMouseUp={trackSel("edit", "body")}
+                            onFocus={trackSel("edit", "body")}
+                          />
+                        </div>
                         <div className="flex items-center gap-2">
                           <label className="text-sm text-muted-foreground whitespace-nowrap">
                             Send after
@@ -527,10 +670,10 @@ export function SequenceDetailPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-sm truncate">
-                            {step.subject}
+                            {highlightTokens(step.subject)}
                           </p>
                           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                            {step.body}
+                            {highlightTokens(step.body)}
                           </p>
                           <div className="flex items-center gap-1 mt-1.5 text-xs text-muted-foreground">
                             <Clock className="h-3 w-3" />
@@ -585,22 +728,44 @@ export function SequenceDetailPage() {
                 <p className="text-sm font-medium text-muted-foreground">
                   New step {steps.length + 1}
                 </p>
-                <Input
-                  placeholder="Email subject"
-                  value={stepForm.subject}
-                  onChange={(e) =>
-                    setStepForm((f) => ({ ...f, subject: e.target.value }))
-                  }
-                  autoFocus
-                />
-                <Textarea
-                  placeholder="Email body"
-                  value={stepForm.body}
-                  rows={4}
-                  onChange={(e) =>
-                    setStepForm((f) => ({ ...f, body: e.target.value }))
-                  }
-                />
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-muted-foreground">Subject</label>
+                    <TokenPicker form="add" />
+                  </div>
+                  <Input
+                    ref={addSubjectRef}
+                    placeholder="Email subject"
+                    value={stepForm.subject}
+                    onChange={(e) =>
+                      setStepForm((f) => ({ ...f, subject: e.target.value }))
+                    }
+                    autoFocus
+                    onSelect={trackSel("add", "subject")}
+                    onKeyUp={trackSel("add", "subject")}
+                    onMouseUp={trackSel("add", "subject")}
+                    onFocus={trackSel("add", "subject")}
+                  />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-muted-foreground">Body</label>
+                    <TokenPicker form="add" />
+                  </div>
+                  <Textarea
+                    ref={addBodyRef}
+                    placeholder="Email body"
+                    value={stepForm.body}
+                    rows={4}
+                    onChange={(e) =>
+                      setStepForm((f) => ({ ...f, body: e.target.value }))
+                    }
+                    onSelect={trackSel("add", "body")}
+                    onKeyUp={trackSel("add", "body")}
+                    onMouseUp={trackSel("add", "body")}
+                    onFocus={trackSel("add", "body")}
+                  />
+                </div>
                 <div className="flex items-center gap-2">
                   <label className="text-sm text-muted-foreground whitespace-nowrap">
                     Send after
