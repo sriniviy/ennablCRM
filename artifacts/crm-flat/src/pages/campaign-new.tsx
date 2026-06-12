@@ -241,6 +241,7 @@ export function CampaignNewPage() {
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
   const [previewMode, setPreviewMode] = useState<"canvas" | "preview" | "html">("canvas");
   const [previewWidth, setPreviewWidth] = useState<"desktop" | "mobile">("desktop");
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const [audienceMode, setAudienceMode] = useState<"segment" | "filter" | "individual">("filter");
   const [savedSegments, setSavedSegments] = useState<SavedSegment[]>([]);
@@ -530,9 +531,10 @@ export function CampaignNewPage() {
                       className={`group relative rounded-lg border-2 cursor-pointer p-3 bg-white dark:bg-card transition-colors ${activeBlockId === block.id ? "border-primary" : "border-transparent hover:border-muted-foreground/30"}`}
                     >
                       <div className="absolute right-2 top-2 hidden group-hover:flex items-center gap-0.5 bg-background border rounded-md px-1 shadow-sm z-10">
-                        <button onClick={e => { e.stopPropagation(); moveBlock(block.id, -1); }} disabled={idx === 0} className="p-1 hover:bg-muted rounded disabled:opacity-30 text-xs">▲</button>
-                        <button onClick={e => { e.stopPropagation(); moveBlock(block.id, 1); }} disabled={idx === blocks.length - 1} className="p-1 hover:bg-muted rounded disabled:opacity-30 text-xs">▼</button>
-                        <button onClick={e => { e.stopPropagation(); removeBlock(block.id); }} className="p-1 hover:bg-red-50 text-destructive rounded text-xs"><Trash2 className="h-3 w-3" /></button>
+                        <button onClick={e => { e.stopPropagation(); moveBlock(block.id, -1); }} disabled={idx === 0} className="p-1 hover:bg-muted rounded disabled:opacity-30 text-xs" title="Move up">▲</button>
+                        <button onClick={e => { e.stopPropagation(); moveBlock(block.id, 1); }} disabled={idx === blocks.length - 1} className="p-1 hover:bg-muted rounded disabled:opacity-30 text-xs" title="Move down">▼</button>
+                        <button onClick={e => { e.stopPropagation(); const nb = { ...block, id: uid() }; setBlocks(p => { const i = p.findIndex(b => b.id === block.id); const a = [...p]; a.splice(i + 1, 0, nb); return a; }); setActiveBlockId(nb.id); }} className="p-1 hover:bg-muted rounded text-xs" title="Duplicate">⎘</button>
+                        <button onClick={e => { e.stopPropagation(); removeBlock(block.id); }} className="p-1 hover:bg-red-50 text-destructive rounded text-xs" title="Delete"><Trash2 className="h-3 w-3" /></button>
                       </div>
                       {block.type === "header" && (
                         <div style={{ textAlign: block.align ?? "center", color: block.color || "#111", fontSize: FONT_SIZES[block.fontSize ?? "lg"].px, fontWeight: 700, lineHeight: 1.3 }} className="truncate">
@@ -695,6 +697,55 @@ export function CampaignNewPage() {
                     )}
                     {activeBlock.type === "image" && (
                       <>
+                        <div>
+                          <Label className="text-xs mb-1.5 block">Upload Image</Label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              id={`img-upload-${activeBlock.id}`}
+                              className="hidden"
+                              onChange={async e => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                setUploadingImage(true);
+                                try {
+                                  const headers = await getHeaders();
+                                  const r1 = await fetch("/api/storage/uploads/request-url", {
+                                    method: "POST",
+                                    headers,
+                                    body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
+                                  });
+                                  if (!r1.ok) throw new Error("Failed to get upload URL");
+                                  const { uploadURL, objectPath } = await r1.json();
+                                  await fetch(uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+                                  updateBlock(activeBlock.id, { imageUrl: `/api/storage${objectPath}` });
+                                } catch {
+                                  toast({ title: "Upload failed", variant: "destructive" });
+                                } finally {
+                                  setUploadingImage(false);
+                                  (document.getElementById(`img-upload-${activeBlock.id}`) as HTMLInputElement).value = "";
+                                }
+                              }}
+                            />
+                            <Button
+                              size="sm" variant="outline"
+                              onClick={() => document.getElementById(`img-upload-${activeBlock.id}`)?.click()}
+                              disabled={uploadingImage}
+                              className="text-xs"
+                            >
+                              {uploadingImage ? "Uploading…" : "📁 Upload file"}
+                            </Button>
+                            {activeBlock.imageUrl && (
+                              <button onClick={() => updateBlock(activeBlock.id, { imageUrl: "" })} className="text-xs text-destructive hover:underline">Clear</button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <div className="flex-1 h-px bg-border" />
+                          <span>or paste URL</span>
+                          <div className="flex-1 h-px bg-border" />
+                        </div>
                         <div><Label className="text-xs">Image URL</Label><Input value={activeBlock.imageUrl ?? ""} onChange={e => updateBlock(activeBlock.id, { imageUrl: e.target.value })} placeholder="https://..." className="text-sm h-8 mt-1" /></div>
                         <div><Label className="text-xs">Alt Text</Label><Input value={activeBlock.imageAlt ?? ""} onChange={e => updateBlock(activeBlock.id, { imageAlt: e.target.value })} placeholder="Describe the image" className="text-sm h-8 mt-1" /></div>
                         <div>

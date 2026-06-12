@@ -145,7 +145,7 @@ function getStats(campaignId: string) {
   return db
     .select({
       total: sql<number>`count(*)::int`,
-      sent: sql<number>`count(case when ${campaignContactsTable.status} != 'PENDING' and ${campaignContactsTable.status} != 'UNSUBSCRIBED' then 1 end)::int`,
+      sent: sql<number>`count(case when ${campaignContactsTable.status} != 'PENDING' then 1 end)::int`,
       opened: sql<number>`count(case when ${campaignContactsTable.openedAt} is not null then 1 end)::int`,
       clicked: sql<number>`count(case when ${campaignContactsTable.clickedAt} is not null then 1 end)::int`,
       unsubscribed: sql<number>`count(case when ${campaignContactsTable.status} = 'UNSUBSCRIBED' then 1 end)::int`,
@@ -180,7 +180,7 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
         .select({
           campaign: emailCampaignsTable,
           total: sql<number>`count(distinct ${campaignContactsTable.id})::int`,
-          sent: sql<number>`count(distinct case when ${campaignContactsTable.status} != 'PENDING' and ${campaignContactsTable.status} != 'UNSUBSCRIBED' then ${campaignContactsTable.id} end)::int`,
+          sent: sql<number>`count(distinct case when ${campaignContactsTable.status} != 'PENDING' then ${campaignContactsTable.id} end)::int`,
           opened: sql<number>`count(distinct case when ${campaignContactsTable.openedAt} is not null then ${campaignContactsTable.id} end)::int`,
           clicked: sql<number>`count(distinct case when ${campaignContactsTable.clickedAt} is not null then ${campaignContactsTable.id} end)::int`,
           unsubscribed: sql<number>`count(distinct case when ${campaignContactsTable.status} = 'UNSUBSCRIBED' then ${campaignContactsTable.id} end)::int`,
