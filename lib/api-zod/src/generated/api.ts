@@ -1412,6 +1412,157 @@ export const SendCampaignResponse = zod.object({
 
 
 /**
+ * @summary List all saved segments
+ */
+export const ListSegmentsResponseItem = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "filterJson": zod.string(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListSegmentsResponse = zod.array(ListSegmentsResponseItem)
+
+
+/**
+ * @summary Create a new segment
+ */
+export const CreateSegmentBody = zod.object({
+  "name": zod.string(),
+  "filter": zod.object({
+  "status": zod.string().nullish(),
+  "tags": zod.array(zod.string()).optional(),
+  "ennablUser": zod.boolean().nullish(),
+  "emailMarketingContact": zod.boolean().nullish(),
+  "companyId": zod.string().nullish()
+}).optional()
+})
+
+
+/**
+ * @summary Count contacts matching a filter without saving it
+ */
+export const CountSegmentFilterBody = zod.object({
+  "filter": zod.object({
+  "status": zod.string().nullish(),
+  "tags": zod.array(zod.string()).optional(),
+  "ennablUser": zod.boolean().nullish(),
+  "emailMarketingContact": zod.boolean().nullish(),
+  "companyId": zod.string().nullish()
+}).optional()
+})
+
+export const CountSegmentFilterResponse = zod.object({
+  "count": zod.number()
+})
+
+
+/**
+ * @summary Evaluate a filter and return matching contact IDs
+ */
+export const EvaluateSegmentFilterBody = zod.object({
+  "filter": zod.object({
+  "status": zod.string().nullish(),
+  "tags": zod.array(zod.string()).optional(),
+  "ennablUser": zod.boolean().nullish(),
+  "emailMarketingContact": zod.boolean().nullish(),
+  "companyId": zod.string().nullish()
+}).optional()
+})
+
+export const EvaluateSegmentFilterResponse = zod.object({
+  "ids": zod.array(zod.string())
+})
+
+
+/**
+ * @summary Get a segment by ID
+ */
+export const GetSegmentParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetSegmentResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "filterJson": zod.string(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update a segment's name or filter
+ */
+export const UpdateSegmentParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const UpdateSegmentBody = zod.object({
+  "name": zod.string().optional(),
+  "filter": zod.object({
+  "status": zod.string().nullish(),
+  "tags": zod.array(zod.string()).optional(),
+  "ennablUser": zod.boolean().nullish(),
+  "emailMarketingContact": zod.boolean().nullish(),
+  "companyId": zod.string().nullish()
+}).optional()
+})
+
+export const UpdateSegmentResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "filterJson": zod.string(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a segment
+ */
+export const DeleteSegmentParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+
+/**
+ * @summary Count contacts matching a saved segment's filter
+ */
+export const CountSegmentParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const CountSegmentResponse = zod.object({
+  "count": zod.number()
+})
+
+
+/**
+ * @summary List contacts matching a saved segment
+ */
+export const ListSegmentContactsParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const ListSegmentContactsResponse = zod.object({
+  "data": zod.array(zod.object({
+  "id": zod.string(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "email": zod.string().nullish(),
+  "status": zod.string(),
+  "title": zod.string().nullish(),
+  "companyName": zod.string().nullish()
+})),
+  "total": zod.number()
+})
+
+
+/**
  * @summary Get CRM overview stats for dashboard
  */
 export const GetDashboardStatsResponse = zod.object({

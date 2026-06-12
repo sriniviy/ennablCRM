@@ -31,6 +31,8 @@ tags:
     description: Audit log operations
   - name: search
     description: Global search operations
+  - name: segments
+    description: Audience segment operations
   - name: storage
     description: Object storage upload and serving endpoints.
 
@@ -917,6 +919,179 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CampaignWithStats"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Segments ───────────────────────────────────────────────────────────────
+
+  /segments:
+    get:
+      operationId: listSegments
+      tags: [segments]
+      summary: List all saved segments
+      responses:
+        "200":
+          description: Segment list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Segment"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createSegment
+      tags: [segments]
+      summary: Create a new segment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSegmentInput"
+      responses:
+        "201":
+          description: Created segment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Segment"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /segments/count:
+    post:
+      operationId: countSegmentFilter
+      tags: [segments]
+      summary: Count contacts matching a filter without saving it
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SegmentFilterInput"
+      responses:
+        "200":
+          description: Match count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SegmentCountResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /segments/evaluate:
+    post:
+      operationId: evaluateSegmentFilter
+      tags: [segments]
+      summary: Evaluate a filter and return matching contact IDs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SegmentFilterInput"
+      responses:
+        "200":
+          description: Matching contact IDs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SegmentEvaluateResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /segments/{id}:
+    get:
+      operationId: getSegment
+      tags: [segments]
+      summary: Get a segment by ID
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Segment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Segment"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    patch:
+      operationId: updateSegment
+      tags: [segments]
+      summary: Update a segment's name or filter
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSegmentInput"
+      responses:
+        "200":
+          description: Updated segment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Segment"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    delete:
+      operationId: deleteSegment
+      tags: [segments]
+      summary: Delete a segment
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /segments/{id}/count:
+    get:
+      operationId: countSegment
+      tags: [segments]
+      summary: Count contacts matching a saved segment's filter
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Match count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SegmentCountResult"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /segments/{id}/contacts:
+    get:
+      operationId: listSegmentContacts
+      tags: [segments]
+      summary: List contacts matching a saved segment
+      parameters:
+        - $ref: "#/components/parameters/IdParam"
+      responses:
+        "200":
+          description: Matching contacts (first 100, with total)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SegmentContactsResult"
         "404":
           $ref: "#/components/responses/NotFound"
         "401":
@@ -2507,3 +2682,117 @@ components:
       properties:
         error:
           type: string
+
+    # ── Segments ─────────────────────────────────────────────────────────────
+
+    SegmentFilter:
+      type: object
+      properties:
+        status:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+        ennablUser:
+          type: boolean
+          nullable: true
+        emailMarketingContact:
+          type: boolean
+          nullable: true
+        companyId:
+          type: string
+          nullable: true
+
+    SegmentFilterInput:
+      type: object
+      properties:
+        filter:
+          $ref: "#/components/schemas/SegmentFilter"
+
+    Segment:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        filterJson:
+          type: string
+        createdBy:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, name, filterJson, createdAt, updatedAt]
+
+    CreateSegmentInput:
+      type: object
+      properties:
+        name:
+          type: string
+        filter:
+          $ref: "#/components/schemas/SegmentFilter"
+      required: [name]
+
+    UpdateSegmentInput:
+      type: object
+      properties:
+        name:
+          type: string
+        filter:
+          $ref: "#/components/schemas/SegmentFilter"
+
+    SegmentCountResult:
+      type: object
+      properties:
+        count:
+          type: integer
+      required: [count]
+
+    SegmentEvaluateResult:
+      type: object
+      properties:
+        ids:
+          type: array
+          items:
+            type: string
+      required: [ids]
+
+    SegmentContactResult:
+      type: object
+      properties:
+        id:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          nullable: true
+        status:
+          type: string
+        title:
+          type: string
+          nullable: true
+        companyName:
+          type: string
+          nullable: true
+      required: [id, firstName, lastName, status]
+
+    SegmentContactsResult:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SegmentContactResult"
+        total:
+          type: integer
+      required: [data, total]

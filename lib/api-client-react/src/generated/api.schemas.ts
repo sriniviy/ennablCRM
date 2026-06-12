@@ -160,12 +160,6 @@ export interface Company {
   country?: string | null;
   createdAt: string;
   updatedAt: string;
-  /** Computed on list endpoint: number of associated contacts */
-  contactCount?: number;
-  /** Computed on list endpoint: number of open deals */
-  openDeals?: number;
-  /** Computed on list endpoint: sum of all deal values */
-  totalDealsValue?: number;
 }
 
 export interface CompanySummary {
@@ -709,6 +703,60 @@ export interface UploadUrlResponse {
 
 export interface ErrorEnvelope {
   error: string;
+}
+
+export interface SegmentFilter {
+  status?: string | null;
+  tags?: string[];
+  ennablUser?: boolean | null;
+  emailMarketingContact?: boolean | null;
+  companyId?: string | null;
+}
+
+export interface SegmentFilterInput {
+  filter?: SegmentFilter;
+}
+
+export interface Segment {
+  id: string;
+  name: string;
+  filterJson: string;
+  createdBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateSegmentInput {
+  name: string;
+  filter?: SegmentFilter;
+}
+
+export interface UpdateSegmentInput {
+  name?: string;
+  filter?: SegmentFilter;
+}
+
+export interface SegmentCountResult {
+  count: number;
+}
+
+export interface SegmentEvaluateResult {
+  ids: string[];
+}
+
+export interface SegmentContactResult {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email?: string | null;
+  status: string;
+  title?: string | null;
+  companyName?: string | null;
+}
+
+export interface SegmentContactsResult {
+  data: SegmentContactResult[];
+  total: number;
 }
 
 /**

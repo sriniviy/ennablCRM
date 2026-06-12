@@ -34,6 +34,7 @@ import type {
   CreateCompanyInput,
   CreateContactInput,
   CreateDealInput,
+  CreateSegmentInput,
   CreateTaskInput,
   DashboardStats,
   DealStage,
@@ -63,6 +64,11 @@ import type {
   PaginatedTasks,
   PipelineColumn,
   SearchResults,
+  Segment,
+  SegmentContactsResult,
+  SegmentCountResult,
+  SegmentEvaluateResult,
+  SegmentFilterInput,
   SendCampaignInput,
   TaskWithRelations,
   TrackEmailClickParams,
@@ -71,6 +77,7 @@ import type {
   UpdateCompanyInput,
   UpdateContactInput,
   UpdateDealInput,
+  UpdateSegmentInput,
   UpdateTaskInput,
   UploadUrlRequest,
   UploadUrlResponse,
@@ -2927,6 +2934,669 @@ export const useSendCampaign = <TError = ErrorType<UnauthorizedResponse | NotFou
       > => {
       return useMutation(getSendCampaignMutationOptions(options));
     }
+
+export const getListSegmentsUrl = () => {
+
+
+
+
+  return `/api/segments`
+}
+
+/**
+ * @summary List all saved segments
+ */
+export const listSegments = async ( options?: RequestInit): Promise<Segment[]> => {
+
+  return customFetch<Segment[]>(getListSegmentsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListSegmentsQueryKey = () => {
+    return [
+    `/api/segments`
+    ] as const;
+    }
+
+
+export const getListSegmentsQueryOptions = <TData = Awaited<ReturnType<typeof listSegments>>, TError = ErrorType<UnauthorizedResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSegments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListSegmentsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSegments>>> = ({ signal }) => listSegments({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSegments>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListSegmentsQueryResult = NonNullable<Awaited<ReturnType<typeof listSegments>>>
+export type ListSegmentsQueryError = ErrorType<UnauthorizedResponse>
+
+
+/**
+ * @summary List all saved segments
+ */
+
+export function useListSegments<TData = Awaited<ReturnType<typeof listSegments>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSegments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListSegmentsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateSegmentUrl = () => {
+
+
+
+
+  return `/api/segments`
+}
+
+/**
+ * @summary Create a new segment
+ */
+export const createSegment = async (createSegmentInput: CreateSegmentInput, options?: RequestInit): Promise<Segment> => {
+
+  return customFetch<Segment>(getCreateSegmentUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      createSegmentInput,)
+  }
+);}
+
+
+
+
+export const getCreateSegmentMutationOptions = <TError = ErrorType<UnauthorizedResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSegment>>, TError,{data: BodyType<CreateSegmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createSegment>>, TError,{data: BodyType<CreateSegmentInput>}, TContext> => {
+
+const mutationKey = ['createSegment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createSegment>>, {data: BodyType<CreateSegmentInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createSegment(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateSegmentMutationResult = NonNullable<Awaited<ReturnType<typeof createSegment>>>
+    export type CreateSegmentMutationBody = BodyType<CreateSegmentInput>
+    export type CreateSegmentMutationError = ErrorType<UnauthorizedResponse>
+
+    /**
+ * @summary Create a new segment
+ */
+export const useCreateSegment = <TError = ErrorType<UnauthorizedResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSegment>>, TError,{data: BodyType<CreateSegmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createSegment>>,
+        TError,
+        {data: BodyType<CreateSegmentInput>},
+        TContext
+      > => {
+      return useMutation(getCreateSegmentMutationOptions(options));
+    }
+
+export const getCountSegmentFilterUrl = () => {
+
+
+
+
+  return `/api/segments/count`
+}
+
+/**
+ * @summary Count contacts matching a filter without saving it
+ */
+export const countSegmentFilter = async (segmentFilterInput: SegmentFilterInput, options?: RequestInit): Promise<SegmentCountResult> => {
+
+  return customFetch<SegmentCountResult>(getCountSegmentFilterUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      segmentFilterInput,)
+  }
+);}
+
+
+
+
+export const getCountSegmentFilterMutationOptions = <TError = ErrorType<UnauthorizedResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof countSegmentFilter>>, TError,{data: BodyType<SegmentFilterInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof countSegmentFilter>>, TError,{data: BodyType<SegmentFilterInput>}, TContext> => {
+
+const mutationKey = ['countSegmentFilter'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof countSegmentFilter>>, {data: BodyType<SegmentFilterInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  countSegmentFilter(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CountSegmentFilterMutationResult = NonNullable<Awaited<ReturnType<typeof countSegmentFilter>>>
+    export type CountSegmentFilterMutationBody = BodyType<SegmentFilterInput>
+    export type CountSegmentFilterMutationError = ErrorType<UnauthorizedResponse>
+
+    /**
+ * @summary Count contacts matching a filter without saving it
+ */
+export const useCountSegmentFilter = <TError = ErrorType<UnauthorizedResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof countSegmentFilter>>, TError,{data: BodyType<SegmentFilterInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof countSegmentFilter>>,
+        TError,
+        {data: BodyType<SegmentFilterInput>},
+        TContext
+      > => {
+      return useMutation(getCountSegmentFilterMutationOptions(options));
+    }
+
+export const getEvaluateSegmentFilterUrl = () => {
+
+
+
+
+  return `/api/segments/evaluate`
+}
+
+/**
+ * @summary Evaluate a filter and return matching contact IDs
+ */
+export const evaluateSegmentFilter = async (segmentFilterInput: SegmentFilterInput, options?: RequestInit): Promise<SegmentEvaluateResult> => {
+
+  return customFetch<SegmentEvaluateResult>(getEvaluateSegmentFilterUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      segmentFilterInput,)
+  }
+);}
+
+
+
+
+export const getEvaluateSegmentFilterMutationOptions = <TError = ErrorType<UnauthorizedResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof evaluateSegmentFilter>>, TError,{data: BodyType<SegmentFilterInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof evaluateSegmentFilter>>, TError,{data: BodyType<SegmentFilterInput>}, TContext> => {
+
+const mutationKey = ['evaluateSegmentFilter'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof evaluateSegmentFilter>>, {data: BodyType<SegmentFilterInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  evaluateSegmentFilter(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type EvaluateSegmentFilterMutationResult = NonNullable<Awaited<ReturnType<typeof evaluateSegmentFilter>>>
+    export type EvaluateSegmentFilterMutationBody = BodyType<SegmentFilterInput>
+    export type EvaluateSegmentFilterMutationError = ErrorType<UnauthorizedResponse>
+
+    /**
+ * @summary Evaluate a filter and return matching contact IDs
+ */
+export const useEvaluateSegmentFilter = <TError = ErrorType<UnauthorizedResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof evaluateSegmentFilter>>, TError,{data: BodyType<SegmentFilterInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof evaluateSegmentFilter>>,
+        TError,
+        {data: BodyType<SegmentFilterInput>},
+        TContext
+      > => {
+      return useMutation(getEvaluateSegmentFilterMutationOptions(options));
+    }
+
+export const getGetSegmentUrl = (id: string,) => {
+
+
+
+
+  return `/api/segments/${id}`
+}
+
+/**
+ * @summary Get a segment by ID
+ */
+export const getSegment = async (id: string, options?: RequestInit): Promise<Segment> => {
+
+  return customFetch<Segment>(getGetSegmentUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSegmentQueryKey = (id: string,) => {
+    return [
+    `/api/segments/${id}`
+    ] as const;
+    }
+
+
+export const getGetSegmentQueryOptions = <TData = Awaited<ReturnType<typeof getSegment>>, TError = ErrorType<UnauthorizedResponse | NotFoundResponse>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSegment>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSegmentQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSegment>>> = ({ signal }) => getSegment(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSegment>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSegmentQueryResult = NonNullable<Awaited<ReturnType<typeof getSegment>>>
+export type GetSegmentQueryError = ErrorType<UnauthorizedResponse | NotFoundResponse>
+
+
+/**
+ * @summary Get a segment by ID
+ */
+
+export function useGetSegment<TData = Awaited<ReturnType<typeof getSegment>>, TError = ErrorType<UnauthorizedResponse | NotFoundResponse>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSegment>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSegmentQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateSegmentUrl = (id: string,) => {
+
+
+
+
+  return `/api/segments/${id}`
+}
+
+/**
+ * @summary Update a segment's name or filter
+ */
+export const updateSegment = async (id: string,
+    updateSegmentInput: UpdateSegmentInput, options?: RequestInit): Promise<Segment> => {
+
+  return customFetch<Segment>(getUpdateSegmentUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      updateSegmentInput,)
+  }
+);}
+
+
+
+
+export const getUpdateSegmentMutationOptions = <TError = ErrorType<UnauthorizedResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSegment>>, TError,{id: string;data: BodyType<UpdateSegmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateSegment>>, TError,{id: string;data: BodyType<UpdateSegmentInput>}, TContext> => {
+
+const mutationKey = ['updateSegment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateSegment>>, {id: string;data: BodyType<UpdateSegmentInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateSegment(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateSegmentMutationResult = NonNullable<Awaited<ReturnType<typeof updateSegment>>>
+    export type UpdateSegmentMutationBody = BodyType<UpdateSegmentInput>
+    export type UpdateSegmentMutationError = ErrorType<UnauthorizedResponse | NotFoundResponse>
+
+    /**
+ * @summary Update a segment's name or filter
+ */
+export const useUpdateSegment = <TError = ErrorType<UnauthorizedResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSegment>>, TError,{id: string;data: BodyType<UpdateSegmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateSegment>>,
+        TError,
+        {id: string;data: BodyType<UpdateSegmentInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateSegmentMutationOptions(options));
+    }
+
+export const getDeleteSegmentUrl = (id: string,) => {
+
+
+
+
+  return `/api/segments/${id}`
+}
+
+/**
+ * @summary Delete a segment
+ */
+export const deleteSegment = async (id: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteSegmentUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteSegmentMutationOptions = <TError = ErrorType<UnauthorizedResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSegment>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteSegment>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['deleteSegment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteSegment>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteSegment(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteSegmentMutationResult = NonNullable<Awaited<ReturnType<typeof deleteSegment>>>
+
+    export type DeleteSegmentMutationError = ErrorType<UnauthorizedResponse | NotFoundResponse>
+
+    /**
+ * @summary Delete a segment
+ */
+export const useDeleteSegment = <TError = ErrorType<UnauthorizedResponse | NotFoundResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSegment>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteSegment>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getDeleteSegmentMutationOptions(options));
+    }
+
+export const getCountSegmentUrl = (id: string,) => {
+
+
+
+
+  return `/api/segments/${id}/count`
+}
+
+/**
+ * @summary Count contacts matching a saved segment's filter
+ */
+export const countSegment = async (id: string, options?: RequestInit): Promise<SegmentCountResult> => {
+
+  return customFetch<SegmentCountResult>(getCountSegmentUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getCountSegmentQueryKey = (id: string,) => {
+    return [
+    `/api/segments/${id}/count`
+    ] as const;
+    }
+
+
+export const getCountSegmentQueryOptions = <TData = Awaited<ReturnType<typeof countSegment>>, TError = ErrorType<UnauthorizedResponse | NotFoundResponse>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof countSegment>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getCountSegmentQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof countSegment>>> = ({ signal }) => countSegment(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof countSegment>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type CountSegmentQueryResult = NonNullable<Awaited<ReturnType<typeof countSegment>>>
+export type CountSegmentQueryError = ErrorType<UnauthorizedResponse | NotFoundResponse>
+
+
+/**
+ * @summary Count contacts matching a saved segment's filter
+ */
+
+export function useCountSegment<TData = Awaited<ReturnType<typeof countSegment>>, TError = ErrorType<UnauthorizedResponse | NotFoundResponse>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof countSegment>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getCountSegmentQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getListSegmentContactsUrl = (id: string,) => {
+
+
+
+
+  return `/api/segments/${id}/contacts`
+}
+
+/**
+ * @summary List contacts matching a saved segment
+ */
+export const listSegmentContacts = async (id: string, options?: RequestInit): Promise<SegmentContactsResult> => {
+
+  return customFetch<SegmentContactsResult>(getListSegmentContactsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListSegmentContactsQueryKey = (id: string,) => {
+    return [
+    `/api/segments/${id}/contacts`
+    ] as const;
+    }
+
+
+export const getListSegmentContactsQueryOptions = <TData = Awaited<ReturnType<typeof listSegmentContacts>>, TError = ErrorType<UnauthorizedResponse | NotFoundResponse>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSegmentContacts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListSegmentContactsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSegmentContacts>>> = ({ signal }) => listSegmentContacts(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSegmentContacts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListSegmentContactsQueryResult = NonNullable<Awaited<ReturnType<typeof listSegmentContacts>>>
+export type ListSegmentContactsQueryError = ErrorType<UnauthorizedResponse | NotFoundResponse>
+
+
+/**
+ * @summary List contacts matching a saved segment
+ */
+
+export function useListSegmentContacts<TData = Awaited<ReturnType<typeof listSegmentContacts>>, TError = ErrorType<UnauthorizedResponse | NotFoundResponse>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSegmentContacts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListSegmentContactsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getGetDashboardStatsUrl = () => {
 

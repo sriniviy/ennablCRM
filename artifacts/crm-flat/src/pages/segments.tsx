@@ -1,6 +1,22 @@
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useState, useCallback, useEffect } from "react";
-import { useListCompanies } from "@workspace/api-client-react";
+import {
+  useListSegments,
+  useCreateSegment,
+  useUpdateSegment,
+  useDeleteSegment,
+  useCountSegment,
+  useListSegmentContacts,
+  countSegmentFilter,
+  getListSegmentsQueryKey,
+  useListCompanies,
+} from "@workspace/api-client-react";
+import type {
+  Segment,
+  SegmentFilter,
+  SegmentContactResult,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,32 +41,6 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { authClient } from "@/lib/auth-client";
 import { Users, Pencil, Trash2, Plus, Filter, Tag, Building2, UserCheck, Mail, ChevronRight, Megaphone, TriangleAlert } from "lucide-react";
-
-interface SegmentFilter {
-  status?: string;
-  tags?: string[];
-  ennablUser?: boolean;
-  emailMarketingContact?: boolean;
-  companyId?: string;
-}
-
-interface Segment {
-  id: string;
-  name: string;
-  filterJson: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface MatchedContact {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string | null;
-  status: string;
-  title: string | null;
-  companyName: string | null;
-}
 
 interface SegmentCampaign {
   id: string;
@@ -170,22 +160,38 @@ function FilterEditor({
   );
 }
 
+function SegmentCountBadge({ id }: { id: string }) {
+  const { data, isLoading } = useCountSegment(id);
+  if (isLoading) return <Skeleton className="h-5 w-16 inline-block" />;
+  if (!data) return null;
+  return (
+    <Badge variant="outline" className="text-xs font-normal">
+      {data.count.toLocaleString()} contact{data.count !== 1 ? "s" : ""}
+    </Badge>
+  );
+}
+
 export function SegmentsPage() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { data: companiesData } = useListCompanies({ page: 1, pageSize: 200 });
+  const { data: segments, isLoading: loading } = useListSegments();
 
-  const [segments, setSegments] = useState<Segment[]>([]);
-  const [counts, setCounts] = useState<Record<string, number>>({});
+  const createSegmentMutation = useCreateSegment();
+  const updateSegmentMutation = useUpdateSegment();
+  const deleteSegmentMutation = useDeleteSegment();
+
   const [campaignCounts, setCampaignCounts] = useState<Record<string, number>>({});
   const [campaignsBySegment, setCampaignsBySegment] = useState<Record<string, SegmentCampaign[]>>({});
   const [campaignPopoverOpen, setCampaignPopoverOpen] = useState<Record<string, boolean>>({});
   const [campaignLoading, setCampaignLoading] = useState<Record<string, boolean>>({});
-  const [loading, setLoading] = useState(true);
 
   const [detailTarget, setDetailTarget] = useState<Segment | null>(null);
-  const [detailContacts, setDetailContacts] = useState<MatchedContact[]>([]);
-  const [detailTotal, setDetailTotal] = useState(0);
-  const [detailLoading, setDetailLoading] = useState(false);
+  const { data: segmentContactsData, isLoading: detailLoading } = useListSegmentContacts(
+    detailTarget?.id ?? ""
+  );
+  const detailContacts: SegmentContactResult[] = segmentContactsData?.data ?? [];
+  const detailTotal = segmentContactsData?.total ?? 0;
 
   const [editTarget, setEditTarget] = useState<Segment | null>(null);
   const [editName, setEditName] = useState("");
@@ -213,43 +219,23 @@ export function SegmentsPage() {
     };
   }, []);
 
-  const loadSegments = useCallback(async () => {
-    setLoading(true);
-    try {
+  useEffect(() => {
+    if (!segments || segments.length === 0) return;
+    (async () => {
       const headers = await getHeaders();
-      const res = await fetch("/api/segments", { headers });
-      if (res.ok) {
-        const data: Segment[] = await res.json();
-        setSegments(data);
-        const [countEntries, campaignCountEntries] = await Promise.all([
-          Promise.all(
-            data.map(async (seg) => {
-              const r = await fetch(`/api/segments/${seg.id}/count`, { headers });
-              if (r.ok) {
-                const { count } = await r.json();
-                return [seg.id, count] as const;
-              }
-              return [seg.id, 0] as const;
-            })
-          ),
-          Promise.all(
-            data.map(async (seg) => {
-              const r = await fetch(`/api/segments/${seg.id}/campaigns`, { headers });
-              if (r.ok) {
-                const campaigns: SegmentCampaign[] = await r.json();
-                return [seg.id, campaigns.length] as const;
-              }
-              return [seg.id, 0] as const;
-            })
-          ),
-        ]);
-        setCounts(Object.fromEntries(countEntries));
-        setCampaignCounts(Object.fromEntries(campaignCountEntries));
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [getHeaders]);
+      const entries = await Promise.all(
+        segments.map(async (seg) => {
+          const r = await fetch(`/api/segments/${seg.id}/campaigns`, { headers });
+          if (r.ok) {
+            const campaigns: SegmentCampaign[] = await r.json();
+            return [seg.id, campaigns.length] as const;
+          }
+          return [seg.id, 0] as const;
+        })
+      );
+      setCampaignCounts(Object.fromEntries(entries));
+    })();
+  }, [segments, getHeaders]);
 
   const openCampaignPopover = useCallback(async (segId: string) => {
     setCampaignPopoverOpen(p => ({ ...p, [segId]: true }));
@@ -267,41 +253,25 @@ export function SegmentsPage() {
     }
   }, [getHeaders, campaignsBySegment]);
 
-  useEffect(() => { loadSegments(); }, [loadSegments]);
-
   const refreshEditCount = useCallback(async (filter: SegmentFilter) => {
     setEditCountLoading(true);
     try {
-      const headers = await getHeaders();
-      const res = await fetch("/api/segments/count", {
-        method: "POST", headers,
-        body: JSON.stringify({ filter }),
-      });
-      if (res.ok) {
-        const { count } = await res.json();
-        setEditCount(count);
-      }
+      const result = await countSegmentFilter({ filter });
+      setEditCount(result.count);
     } finally {
       setEditCountLoading(false);
     }
-  }, [getHeaders]);
+  }, []);
 
   const refreshNewCount = useCallback(async (filter: SegmentFilter) => {
     setNewCountLoading(true);
     try {
-      const headers = await getHeaders();
-      const res = await fetch("/api/segments/count", {
-        method: "POST", headers,
-        body: JSON.stringify({ filter }),
-      });
-      if (res.ok) {
-        const { count } = await res.json();
-        setNewCount(count);
-      }
+      const result = await countSegmentFilter({ filter });
+      setNewCount(result.count);
     } finally {
       setNewCountLoading(false);
     }
-  }, [getHeaders]);
+  }, []);
 
   useEffect(() => {
     if (!editTarget) return;
@@ -315,29 +285,11 @@ export function SegmentsPage() {
     return () => clearTimeout(t);
   }, [newFilter, createOpen, refreshNewCount]);
 
-  const openDetail = useCallback(async (seg: Segment) => {
-    setDetailTarget(seg);
-    setDetailContacts([]);
-    setDetailTotal(0);
-    setDetailLoading(true);
-    try {
-      const headers = await getHeaders();
-      const res = await fetch(`/api/segments/${seg.id}/contacts`, { headers });
-      if (res.ok) {
-        const { data, total } = await res.json();
-        setDetailContacts(data);
-        setDetailTotal(total);
-      }
-    } finally {
-      setDetailLoading(false);
-    }
-  }, [getHeaders]);
-
   const openEdit = async (seg: Segment) => {
     setEditTarget(seg);
     setEditName(seg.name);
     setEditFilter(filterFromJson(seg.filterJson));
-    setEditCount(counts[seg.id] ?? null);
+    setEditCount(null);
     setEditSentCampaignCount(null);
     try {
       const headers = await getHeaders();
@@ -355,20 +307,15 @@ export function SegmentsPage() {
     if (!editTarget || !editName.trim()) return;
     setEditLoading(true);
     try {
-      const headers = await getHeaders();
-      const res = await fetch(`/api/segments/${editTarget.id}`, {
-        method: "PATCH", headers,
-        body: JSON.stringify({ name: editName.trim(), filter: editFilter }),
+      await updateSegmentMutation.mutateAsync({
+        id: editTarget.id,
+        data: { name: editName.trim(), filter: editFilter },
       });
-      if (res.ok) {
-        const updated: Segment = await res.json();
-        setSegments(p => p.map(s => s.id === updated.id ? updated : s));
-        if (editCount !== null) setCounts(p => ({ ...p, [updated.id]: editCount }));
-        setEditTarget(null);
-        toast({ title: "Segment updated" });
-      } else {
-        toast({ title: "Failed to update segment", variant: "destructive" });
-      }
+      await queryClient.invalidateQueries({ queryKey: getListSegmentsQueryKey() });
+      setEditTarget(null);
+      toast({ title: "Segment updated" });
+    } catch {
+      toast({ title: "Failed to update segment", variant: "destructive" });
     } finally {
       setEditLoading(false);
     }
@@ -378,15 +325,12 @@ export function SegmentsPage() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      const headers = await getHeaders();
-      const res = await fetch(`/api/segments/${deleteTarget.id}`, { method: "DELETE", headers });
-      if (res.ok) {
-        setSegments(p => p.filter(s => s.id !== deleteTarget.id));
-        setDeleteTarget(null);
-        toast({ title: "Segment deleted" });
-      } else {
-        toast({ title: "Failed to delete segment", variant: "destructive" });
-      }
+      await deleteSegmentMutation.mutateAsync({ id: deleteTarget.id });
+      await queryClient.invalidateQueries({ queryKey: getListSegmentsQueryKey() });
+      setDeleteTarget(null);
+      toast({ title: "Segment deleted" });
+    } catch {
+      toast({ title: "Failed to delete segment", variant: "destructive" });
     } finally {
       setDeleting(false);
     }
@@ -396,29 +340,24 @@ export function SegmentsPage() {
     if (!newName.trim()) return;
     setCreating(true);
     try {
-      const headers = await getHeaders();
-      const res = await fetch("/api/segments", {
-        method: "POST", headers,
-        body: JSON.stringify({ name: newName.trim(), filter: newFilter }),
+      await createSegmentMutation.mutateAsync({
+        data: { name: newName.trim(), filter: newFilter },
       });
-      if (res.ok) {
-        const seg: Segment = await res.json();
-        setSegments(p => [seg, ...p]);
-        if (newCount !== null) setCounts(p => ({ ...p, [seg.id]: newCount }));
-        setCreateOpen(false);
-        setNewName("");
-        setNewFilter({ emailMarketingContact: true });
-        setNewCount(null);
-        toast({ title: "Segment created" });
-      } else {
-        toast({ title: "Failed to create segment", variant: "destructive" });
-      }
+      await queryClient.invalidateQueries({ queryKey: getListSegmentsQueryKey() });
+      setCreateOpen(false);
+      setNewName("");
+      setNewFilter({ emailMarketingContact: true });
+      setNewCount(null);
+      toast({ title: "Segment created" });
+    } catch {
+      toast({ title: "Failed to create segment", variant: "destructive" });
     } finally {
       setCreating(false);
     }
   };
 
   const companies = companiesData?.data ?? [];
+  const segmentList = segments ?? [];
 
   return (
     <SidebarLayout>
@@ -446,7 +385,7 @@ export function SegmentsPage() {
               </div>
             ))}
           </div>
-        ) : segments.length === 0 ? (
+        ) : segmentList.length === 0 ? (
           <div className="rounded-xl border bg-muted/30 flex flex-col items-center justify-center py-16 text-center gap-3">
             <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
               <Filter className="h-5 w-5 text-muted-foreground" />
@@ -458,9 +397,8 @@ export function SegmentsPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {segments.map(seg => {
+            {segmentList.map(seg => {
               const filter = filterFromJson(seg.filterJson);
-              const count = counts[seg.id];
               return (
                 <div
                   key={seg.id}
@@ -468,7 +406,7 @@ export function SegmentsPage() {
                 >
                   <button
                     className="flex items-start gap-4 p-4 flex-1 min-w-0 text-left group"
-                    onClick={() => openDetail(seg)}
+                    onClick={() => setDetailTarget(seg)}
                   >
                     <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
                       <Users className="h-4 w-4 text-primary" />
@@ -476,12 +414,8 @@ export function SegmentsPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <span className="font-semibold text-sm group-hover:text-primary transition-colors">{seg.name}</span>
-                        {count !== undefined && (
-                          <Badge variant="outline" className="text-xs font-normal">
-                            {count.toLocaleString()} contact{count !== 1 ? "s" : ""}
-                          </Badge>
-                        )}
-                        {campaignCounts[seg.id] !== undefined && (
+                        <SegmentCountBadge id={seg.id} />
+                        {campaignCounts[seg.id] !== undefined && campaignCounts[seg.id] > 0 && (
                           <Popover
                             open={campaignPopoverOpen[seg.id] ?? false}
                             onOpenChange={(open) => {
@@ -537,17 +471,15 @@ export function SegmentsPage() {
                                   ))}
                                 </ul>
                               )}
-                              {campaignCounts[seg.id] > 0 && (
-                                <div className="border-t px-3 py-2">
-                                  <Link
-                                    href="/campaigns"
-                                    onClick={() => setCampaignPopoverOpen(p => ({ ...p, [seg.id]: false }))}
-                                    className="text-xs text-primary hover:underline"
-                                  >
-                                    View all campaigns →
-                                  </Link>
-                                </div>
-                              )}
+                              <div className="border-t px-3 py-2">
+                                <Link
+                                  href="/campaigns"
+                                  onClick={() => setCampaignPopoverOpen(p => ({ ...p, [seg.id]: false }))}
+                                  className="text-xs text-primary hover:underline"
+                                >
+                                  View all campaigns →
+                                </Link>
+                              </div>
                             </PopoverContent>
                           </Popover>
                         )}

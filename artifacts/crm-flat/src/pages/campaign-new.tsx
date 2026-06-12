@@ -1,6 +1,13 @@
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useState, useCallback, useEffect } from "react";
-import { useCreateCampaign, useListContacts, useListCompanies } from "@workspace/api-client-react";
+import {
+  useCreateCampaign, useListContacts, useListCompanies,
+  useListSegments, useCreateSegment, useCountSegment,
+  countSegmentFilter, countSegment, evaluateSegmentFilter,
+  getListSegmentsQueryKey,
+} from "@workspace/api-client-react";
+import type { SegmentFilter } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,15 +49,6 @@ interface Block {
   colRatio?: ColRatio;
 }
 
-interface SegmentFilter {
-  status?: string;
-  tags?: string[];
-  ennablUser?: boolean;
-  emailMarketingContact?: boolean;
-  companyId?: string;
-}
-
-interface SavedSegment { id: string; name: string; filterJson: string; }
 
 function filterSummaryChips(filterJson: string): { label: string; icon: React.ReactNode }[] {
   let filter: SegmentFilter = {};
@@ -240,6 +238,16 @@ function StepIndicator({ current }: { current: number }) {
   );
 }
 
+function SegmentCountInline({ id }: { id: string }) {
+  const { data } = useCountSegment(id);
+  if (!data) return null;
+  return (
+    <Badge variant="outline" className="text-xs font-normal py-0">
+      {data.count.toLocaleString()}
+    </Badge>
+  );
+}
+
 export function CampaignNewPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -258,14 +266,17 @@ export function CampaignNewPage() {
   const [uploadingImage, setUploadingImage] = useState(false);
 
   const [audienceMode, setAudienceMode] = useState<"segment" | "filter" | "individual">("filter");
-  const [savedSegments, setSavedSegments] = useState<SavedSegment[]>([]);
-  const [segmentCounts, setSegmentCounts] = useState<Record<string, number>>({});
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
   const [segmentFilter, setSegmentFilter] = useState<SegmentFilter>({ emailMarketingContact: true });
   const [filterCount, setFilterCount] = useState<number | null>(null);
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [newSegmentName, setNewSegmentName] = useState("");
   const [savingSegment, setSavingSegment] = useState(false);
+
+  const queryClient = useQueryClient();
+  const { data: segmentsData } = useListSegments();
+  const savedSegments = segmentsData ?? [];
+  const createSegmentMutation = useCreateSegment();
 
   const [sendTiming, setSendTiming] = useState<"now" | "schedule">("now");
   const [scheduledAt, setScheduledAt] = useState("");
@@ -283,47 +294,23 @@ export function CampaignNewPage() {
   }, []);
 
   useEffect(() => {
-    getHeaders().then(async (headers) => {
-      const res = await fetch("/api/segments", { headers }).catch(() => null);
-      if (!res?.ok) return;
-      const segs: SavedSegment[] = await res.json();
-      setSavedSegments(segs);
-      const entries = await Promise.all(
-        segs.map(async (seg) => {
-          const r = await fetch(`/api/segments/${seg.id}/count`, { headers }).catch(() => null);
-          if (r?.ok) { const { count } = await r.json(); return [seg.id, count] as const; }
-          return [seg.id, 0] as const;
-        })
-      );
-      setSegmentCounts(Object.fromEntries(entries));
-    });
-  }, [getHeaders]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       if (audienceMode === "filter") {
-        getHeaders().then(headers =>
-          fetch("/api/segments/count", {
-            method: "POST", headers,
-            body: JSON.stringify({ filter: segmentFilter }),
-          })
-            .then(r => r.ok ? r.json() : null)
-            .then(d => d && setFilterCount(d.count))
-            .catch(() => {})
-        );
+        try {
+          const result = await countSegmentFilter({ filter: segmentFilter });
+          setFilterCount(result.count);
+        } catch { /* ignore */ }
       } else if (audienceMode === "segment" && selectedSegmentId) {
-        getHeaders().then(headers =>
-          fetch(`/api/segments/${selectedSegmentId}/count`, { headers })
-            .then(r => r.ok ? r.json() : null)
-            .then(d => d && setFilterCount(d.count))
-            .catch(() => {})
-        );
+        try {
+          const result = await countSegment(selectedSegmentId);
+          setFilterCount(result.count);
+        } catch { /* ignore */ }
       } else if (audienceMode === "individual") {
         setFilterCount(selectedContacts.size);
       }
     }, 400);
     return () => clearTimeout(timer);
-  }, [segmentFilter, audienceMode, selectedSegmentId, selectedContacts, getHeaders]);
+  }, [segmentFilter, audienceMode, selectedSegmentId, selectedContacts]);
 
   const activeBlock = blocks.find(b => b.id === activeBlockId) ?? null;
   const generatedHtml = blocksToHtml(blocks);
@@ -370,19 +357,16 @@ export function CampaignNewPage() {
     if (!newSegmentName.trim()) return;
     setSavingSegment(true);
     try {
-      const headers = await getHeaders();
-      const res = await fetch("/api/segments", {
-        method: "POST", headers,
-        body: JSON.stringify({ name: newSegmentName.trim(), filter: segmentFilter }),
+      const seg = await createSegmentMutation.mutateAsync({
+        data: { name: newSegmentName.trim(), filter: segmentFilter },
       });
-      if (res.ok) {
-        const seg = await res.json();
-        setSavedSegments(p => [seg, ...p]);
-        setSelectedSegmentId(seg.id);
-        setAudienceMode("segment");
-        setNewSegmentName("");
-        toast({ title: "Segment saved!" });
-      }
+      await queryClient.invalidateQueries({ queryKey: getListSegmentsQueryKey() });
+      setSelectedSegmentId(seg.id);
+      setAudienceMode("segment");
+      setNewSegmentName("");
+      toast({ title: "Segment saved!" });
+    } catch {
+      toast({ title: "Failed to save segment", variant: "destructive" });
     } finally {
       setSavingSegment(false);
     }
@@ -395,14 +379,12 @@ export function CampaignNewPage() {
       ? JSON.parse(savedSegments.find(s => s.id === selectedSegmentId)?.filterJson ?? "{}")
       : segmentFilter;
 
-    const headers = await getHeaders();
-    const res = await fetch("/api/segments/evaluate", {
-      method: "POST", headers,
-      body: JSON.stringify({ filter }),
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return data.ids ?? [];
+    try {
+      const result = await evaluateSegmentFilter({ filter });
+      return result.ids ?? [];
+    } catch {
+      return [];
+    }
   };
 
   const handleFinish = async (mode: "draft" | "send" | "schedule") => {
@@ -926,7 +908,6 @@ export function CampaignNewPage() {
                       <>
                         {savedSegments.map(seg => {
                           const chips = filterSummaryChips(seg.filterJson);
-                          const count = segmentCounts[seg.id];
                           return (
                             <button
                               key={seg.id}
@@ -936,11 +917,7 @@ export function CampaignNewPage() {
                               <div className="flex items-center justify-between mb-1.5">
                                 <div className="flex items-center gap-2">
                                   <span className="font-medium text-sm">{seg.name}</span>
-                                  {count !== undefined && (
-                                    <Badge variant="outline" className="text-xs font-normal py-0">
-                                      {count.toLocaleString()}
-                                    </Badge>
-                                  )}
+                                  <SegmentCountInline id={seg.id} />
                                 </div>
                                 {selectedSegmentId === seg.id && <Check className="h-4 w-4 text-primary shrink-0" />}
                               </div>
