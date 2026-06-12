@@ -15,6 +15,7 @@ import {
 import { eq, and, lte, inArray, sql, asc } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 import { Resend } from "resend";
+import { anthropic } from "@workspace/integrations-anthropic-ai";
 
 const router = Router();
 
@@ -47,6 +48,71 @@ async function getOwnedSequence(sequenceId: string, userId: string) {
 }
 
 // ─── Sequences CRUD ──────────────────────────────────────────────────────────
+
+// ─── AI Draft Step ───────────────────────────────────────────────────────────
+
+router.post("/ai-draft-step", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { goal, tone, context, stepNumber, totalSteps } = req.body as {
+      goal?: string;
+      tone?: string;
+      context?: string;
+      stepNumber?: number;
+      totalSteps?: number;
+    };
+    if (!goal?.trim()) {
+      res.status(400).json({ error: "goal is required" });
+      return;
+    }
+    const toneLabel = tone ?? "Professional";
+    const stepCtx =
+      stepNumber != null && totalSteps != null
+        ? `This is step ${stepNumber} of ${totalSteps} in a multi-step outreach sequence.`
+        : "";
+
+    const systemPrompt = `You are an expert B2B sales email writer. Your job is to draft a single outreach email for a sales sequence. Return ONLY a JSON object with two fields: "subject" (a short, compelling subject line) and "body" (the email body). Do not include any markdown, explanation, or text outside the JSON object.
+
+Guidelines:
+- Keep emails concise (3-5 short paragraphs max)
+- Sound human and natural, not like a template
+- Tone should be ${toneLabel}
+- Never use phrases like "I hope this email finds you well"
+- End with a clear, low-friction call to action
+${stepCtx}`;
+
+    const userPrompt = `Goal of this email: ${goal.trim()}${context?.trim() ? `\n\nAdditional context: ${context.trim()}` : ""}
+
+Write the email now.`;
+
+    const message = await anthropic.messages.create({
+      model: "claude-haiku-4-5",
+      max_tokens: 8192,
+      messages: [{ role: "user", content: userPrompt }],
+      system: systemPrompt,
+    });
+
+    const rawText = message.content
+      .filter((b) => b.type === "text")
+      .map((b) => (b as { type: "text"; text: string }).text)
+      .join("");
+
+    // Extract JSON from the response (handle ```json``` fences if present)
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      res.status(500).json({ error: "AI returned unexpected format" });
+      return;
+    }
+    const parsed = JSON.parse(jsonMatch[0]) as { subject?: string; body?: string };
+    if (!parsed.subject || !parsed.body) {
+      res.status(500).json({ error: "AI response missing subject or body" });
+      return;
+    }
+    res.json({ subject: parsed.subject, body: parsed.body });
+  } catch (err) {
+    console.error("AI draft step error:", err);
+    res.status(500).json({ error: "Failed to generate email draft" });
+  }
+});
 
 // Returns the distinct contactIds that have at least one active TRIGGER enrollment.
 // Used by the contacts list and deal cards to show the auto-enrolled indicator.

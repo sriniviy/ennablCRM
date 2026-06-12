@@ -50,6 +50,9 @@ import {
   Braces,
   ShieldOff,
   Zap,
+  Sparkles,
+  Loader2,
+  RefreshCw,
 } from "lucide-react";
 import {
   Select,
@@ -215,6 +218,14 @@ export function SequenceDetailPage() {
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState("");
 
+  // AI writer state (shared between add and edit forms)
+  const [aiPanelOpen, setAiPanelOpen] = useState<"add" | "edit" | null>(null);
+  const [aiGoal, setAiGoal] = useState("");
+  const [aiTone, setAiTone] = useState("Professional");
+  const [aiContext, setAiContext] = useState("");
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiGeneratedFor, setAiGeneratedFor] = useState<"add" | "edit" | null>(null);
+
   // Refs for cursor-position-aware token insertion
   const addSubjectRef = useRef<HTMLInputElement>(null);
   const addBodyRef = useRef<HTMLTextAreaElement>(null);
@@ -302,6 +313,38 @@ export function SequenceDetailPage() {
         </DropdownMenuContent>
       </DropdownMenu>
     );
+  }
+
+  // Calls the AI endpoint and populates the target form's subject/body.
+  async function generateAiDraft(targetForm: "add" | "edit", stepNumber: number, totalSteps: number) {
+    if (!aiGoal.trim()) return;
+    setAiGenerating(true);
+    try {
+      const result = (await apiFetch("/sequences/ai-draft-step", {
+        method: "POST",
+        body: JSON.stringify({
+          goal: aiGoal.trim(),
+          tone: aiTone,
+          context: aiContext.trim() || undefined,
+          stepNumber,
+          totalSteps,
+        }),
+      })) as { subject: string; body: string };
+      if (targetForm === "add") {
+        setStepForm((f) => ({ ...f, subject: result.subject, body: result.body }));
+      } else {
+        setEditingStep((s) => (s ? { ...s, subject: result.subject, body: result.body } : null));
+      }
+      setAiGeneratedFor(targetForm);
+    } catch (err) {
+      toast({
+        title: "AI generation failed",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setAiGenerating(false);
+    }
   }
 
   const { data: sequence, isLoading } = useQuery<SequenceDetail>({
@@ -658,7 +701,19 @@ export function SequenceDetailPage() {
                         <div>
                           <div className="flex items-center justify-between mb-1">
                             <label className="text-xs text-muted-foreground">Subject</label>
-                            <TokenPicker form="edit" />
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2 text-[11px] gap-1 text-primary/70 hover:text-primary"
+                                type="button"
+                                onClick={() => setAiPanelOpen(aiPanelOpen === "edit" ? null : "edit")}
+                              >
+                                <Sparkles className="h-3 w-3" />
+                                Write with AI
+                              </Button>
+                              <TokenPicker form="edit" />
+                            </div>
                           </div>
                           <Input
                             ref={editSubjectRef}
@@ -696,6 +751,67 @@ export function SequenceDetailPage() {
                             onFocus={trackSel("edit", "body")}
                           />
                         </div>
+                        {/* AI Writer Panel — edit form */}
+                        {aiPanelOpen === "edit" && (
+                          <div className="border border-dashed border-primary/40 rounded-lg p-3 space-y-2.5 bg-primary/5">
+                            <p className="text-xs font-semibold text-primary flex items-center gap-1.5">
+                              <Sparkles className="h-3.5 w-3.5" />
+                              Write with AI
+                            </p>
+                            <div>
+                              <label className="text-xs text-muted-foreground">Goal — what should this email accomplish?</label>
+                              <Input
+                                placeholder="e.g. Introduce ourselves and request a 15-min call"
+                                value={aiGoal}
+                                onChange={(e) => setAiGoal(e.target.value)}
+                                className="mt-1 text-sm"
+                                onKeyDown={(e) => { if (e.key === "Enter") generateAiDraft("edit", i + 1, steps.length); }}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs text-muted-foreground">Tone</label>
+                              <Select value={aiTone} onValueChange={setAiTone}>
+                                <SelectTrigger className="mt-1 h-8 text-sm">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {["Friendly", "Professional", "Direct", "Urgent"].map((t) => (
+                                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <label className="text-xs text-muted-foreground">Context <span className="opacity-60">(optional — anything else the AI should know?)</span></label>
+                              <Textarea
+                                placeholder="e.g. They recently downloaded our whitepaper on risk management"
+                                value={aiContext}
+                                onChange={(e) => setAiContext(e.target.value)}
+                                rows={2}
+                                className="mt-1 text-sm resize-none"
+                              />
+                            </div>
+                            <Button
+                              size="sm"
+                              type="button"
+                              onClick={() => generateAiDraft("edit", i + 1, steps.length)}
+                              disabled={!aiGoal.trim() || aiGenerating}
+                              className="gap-1.5"
+                            >
+                              {aiGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                              {aiGenerating ? "Generating…" : aiGeneratedFor === "edit" ? "Regenerate" : "Generate draft"}
+                            </Button>
+                          </div>
+                        )}
+                        {aiGeneratedFor === "edit" && aiPanelOpen !== "edit" && (
+                          <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                            <Sparkles className="h-3 w-3" />
+                            AI-generated — review before saving.
+                            <button type="button" onClick={() => setAiPanelOpen("edit")} className="underline hover:no-underline ml-0.5">
+                              <RefreshCw className="h-2.5 w-2.5 inline mr-0.5" />Regenerate
+                            </button>
+                          </p>
+                        )}
                         <div className="flex items-center gap-2">
                           <label className="text-sm text-muted-foreground whitespace-nowrap">
                             Send after
@@ -733,7 +849,7 @@ export function SequenceDetailPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => setEditingStep(null)}
+                            onClick={() => { setEditingStep(null); setAiPanelOpen(null); setAiGeneratedFor(null); }}
                           >
                             Cancel
                           </Button>
@@ -810,7 +926,19 @@ export function SequenceDetailPage() {
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs text-muted-foreground">Subject</label>
-                    <TokenPicker form="add" />
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-[11px] gap-1 text-primary/70 hover:text-primary"
+                        type="button"
+                        onClick={() => setAiPanelOpen(aiPanelOpen === "add" ? null : "add")}
+                      >
+                        <Sparkles className="h-3 w-3" />
+                        Write with AI
+                      </Button>
+                      <TokenPicker form="add" />
+                    </div>
                   </div>
                   <Input
                     ref={addSubjectRef}
@@ -845,6 +973,67 @@ export function SequenceDetailPage() {
                     onFocus={trackSel("add", "body")}
                   />
                 </div>
+                {/* AI Writer Panel — add form */}
+                {aiPanelOpen === "add" && (
+                  <div className="border border-dashed border-primary/40 rounded-lg p-3 space-y-2.5 bg-primary/5">
+                    <p className="text-xs font-semibold text-primary flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5" />
+                      Write with AI
+                    </p>
+                    <div>
+                      <label className="text-xs text-muted-foreground">Goal — what should this email accomplish?</label>
+                      <Input
+                        placeholder="e.g. Introduce ourselves and request a 15-min call"
+                        value={aiGoal}
+                        onChange={(e) => setAiGoal(e.target.value)}
+                        className="mt-1 text-sm"
+                        onKeyDown={(e) => { if (e.key === "Enter") generateAiDraft("add", steps.length + 1, steps.length + 1); }}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">Tone</label>
+                      <Select value={aiTone} onValueChange={setAiTone}>
+                        <SelectTrigger className="mt-1 h-8 text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {["Friendly", "Professional", "Direct", "Urgent"].map((t) => (
+                            <SelectItem key={t} value={t}>{t}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">Context <span className="opacity-60">(optional — anything else the AI should know?)</span></label>
+                      <Textarea
+                        placeholder="e.g. They recently downloaded our whitepaper on risk management"
+                        value={aiContext}
+                        onChange={(e) => setAiContext(e.target.value)}
+                        rows={2}
+                        className="mt-1 text-sm resize-none"
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      type="button"
+                      onClick={() => generateAiDraft("add", steps.length + 1, steps.length + 1)}
+                      disabled={!aiGoal.trim() || aiGenerating}
+                      className="gap-1.5"
+                    >
+                      {aiGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                      {aiGenerating ? "Generating…" : aiGeneratedFor === "add" ? "Regenerate" : "Generate draft"}
+                    </Button>
+                  </div>
+                )}
+                {aiGeneratedFor === "add" && aiPanelOpen !== "add" && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                    <Sparkles className="h-3 w-3" />
+                    AI-generated — review before saving.
+                    <button type="button" onClick={() => setAiPanelOpen("add")} className="underline hover:no-underline ml-0.5">
+                      <RefreshCw className="h-2.5 w-2.5 inline mr-0.5" />Regenerate
+                    </button>
+                  </p>
+                )}
                 <div className="flex items-center gap-2">
                   <label className="text-sm text-muted-foreground whitespace-nowrap">
                     Send after
