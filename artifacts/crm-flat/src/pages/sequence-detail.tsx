@@ -1603,11 +1603,31 @@ export function SequenceDetailPage() {
                       <span className="bg-primary text-primary-foreground rounded-full h-6 w-6 flex items-center justify-center text-xs font-bold shrink-0">
                         {i + 1}
                       </span>
-                      <span className="text-xs text-muted-foreground">
-                        {i === 0
-                          ? "Send immediately"
-                          : `Send ${step.delayDays} day${step.delayDays !== 1 ? "s" : ""} after step ${i}`}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <label className="text-xs text-muted-foreground whitespace-nowrap">
+                          Send after
+                        </label>
+                        <Input
+                          type="number"
+                          min={0}
+                          className="h-7 w-16 text-xs px-2"
+                          value={step.delayDays}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value) || 0;
+                            setAiDraftPreview((prev) =>
+                              prev
+                                ? prev.map((s, idx) =>
+                                    idx === i ? { ...s, delayDays: val } : s,
+                                  )
+                                : prev,
+                            );
+                          }}
+                        />
+                        <label className="text-xs text-muted-foreground whitespace-nowrap">
+                          day{step.delayDays !== 1 ? "s" : ""}{" "}
+                          {i === 0 ? "from enrollment" : `after step ${i}`}
+                        </label>
+                      </div>
                     </div>
                     <div>
                       <label className="text-xs text-muted-foreground mb-1 block">Subject</label>
