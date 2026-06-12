@@ -1809,30 +1809,70 @@ export function SequenceDetailPage() {
                       <span className="bg-primary text-primary-foreground rounded-full h-6 w-6 flex items-center justify-center text-xs font-bold shrink-0">
                         {i + 1}
                       </span>
-                      {i === 0 ? (
-                        <span className="text-xs text-muted-foreground">Send immediately</span>
-                      ) : (
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <span>Send</span>
-                          <Input
-                            type="number"
-                            min={1}
-                            value={step.delayDays}
-                            onChange={(e) => {
-                              const val = Math.max(1, parseInt(e.target.value) || 1);
-                              setAiDraftPreview((prev) =>
-                                prev
-                                  ? prev.map((s, j) =>
-                                      j === i ? { ...s, delayDays: val } : s,
-                                    )
-                                  : prev,
-                              );
-                            }}
-                            className="h-6 w-14 text-xs text-center px-1 py-0"
-                          />
-                          <span>day{step.delayDays !== 1 ? "s" : ""} after step {i}</span>
-                        </div>
-                      )}
+                      <div className="flex-1">
+                        {i === 0 ? (
+                          <span className="text-xs text-muted-foreground">Send immediately</span>
+                        ) : (
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <span>Send</span>
+                            <Input
+                              type="number"
+                              min={1}
+                              value={step.delayDays}
+                              onChange={(e) => {
+                                const val = Math.max(1, parseInt(e.target.value) || 1);
+                                setAiDraftPreview((prev) =>
+                                  prev
+                                    ? prev.map((s, j) =>
+                                        j === i ? { ...s, delayDays: val } : s,
+                                      )
+                                    : prev,
+                                );
+                              }}
+                              className="h-6 w-14 text-xs text-center px-1 py-0"
+                            />
+                            <span>day{step.delayDays !== 1 ? "s" : ""} after step {i}</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-0.5">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                          disabled={i === 0}
+                          onClick={() =>
+                            setAiDraftPreview((prev) => {
+                              if (!prev) return prev;
+                              const next = [...prev];
+                              [next[i - 1], next[i]] = [next[i], next[i - 1]];
+                              return next;
+                            })
+                          }
+                          title="Move up"
+                          type="button"
+                        >
+                          <ChevronUp className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                          disabled={i === aiDraftPreview.length - 1}
+                          onClick={() =>
+                            setAiDraftPreview((prev) => {
+                              if (!prev) return prev;
+                              const next = [...prev];
+                              [next[i], next[i + 1]] = [next[i + 1], next[i]];
+                              return next;
+                            })
+                          }
+                          title="Move down"
+                          type="button"
+                        >
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </div>
                     <div>
                       <label className="text-xs text-muted-foreground mb-1 block">Subject</label>
