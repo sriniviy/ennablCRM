@@ -3,6 +3,7 @@ import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useState, useEffect } from "react";
 
 import { useListContacts, ContactStatus, ReviewStatus, useGetMe, type ContactWithRelations } from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Plus, Upload, Download, CopyCheck, Mail } from "lucide-react";
+import { Search, Plus, Upload, Download, CopyCheck, Mail, Zap } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useUrlFilters } from "@/hooks/use-url-filters";
 import { useTeamMembers } from "@/hooks/use-team-members";
@@ -170,6 +171,19 @@ export function ContactsPage() {
       setExporting(false);
     }
   };
+
+  const { data: triggerEnrolledData } = useQuery<{ contactIds: string[] }>({
+    queryKey: ["trigger-enrolled-contacts"],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch("/api/sequences/trigger-enrolled-contacts", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return res.json();
+    },
+    staleTime: 60_000,
+  });
+  const triggerEnrolledSet = new Set(triggerEnrolledData?.contactIds ?? []);
 
   const { data, isLoading } = useListContacts({
     search: debouncedSearch || undefined,
@@ -343,20 +357,36 @@ export function ContactsPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {(contact.campaignEngagementCount ?? 0) > 0 && (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="inline-flex items-center justify-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 h-6 w-6 cursor-default" onClick={e => e.stopPropagation()}>
-                                  <Mail className="h-3.5 w-3.5" />
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent side="left">
-                                Engaged with {contact.campaignEngagementCount} campaign{contact.campaignEngagementCount === 1 ? "" : "s"}
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        )}
+                        <div className="flex items-center gap-1">
+                          {(contact.campaignEngagementCount ?? 0) > 0 && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex items-center justify-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 h-6 w-6 cursor-default" onClick={e => e.stopPropagation()}>
+                                    <Mail className="h-3.5 w-3.5" />
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent side="left">
+                                  Engaged with {contact.campaignEngagementCount} campaign{contact.campaignEngagementCount === 1 ? "" : "s"}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                          {triggerEnrolledSet.has(contact.id) && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex items-center justify-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 h-6 w-6 cursor-default" onClick={e => e.stopPropagation()}>
+                                    <Zap className="h-3.5 w-3.5" />
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent side="left">
+                                  Auto-enrolled in a sequence via trigger
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))

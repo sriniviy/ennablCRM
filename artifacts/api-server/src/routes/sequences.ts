@@ -48,6 +48,25 @@ async function getOwnedSequence(sequenceId: string, userId: string) {
 
 // ─── Sequences CRUD ──────────────────────────────────────────────────────────
 
+// Returns the distinct contactIds that have at least one active TRIGGER enrollment.
+// Used by the contacts list and deal cards to show the auto-enrolled indicator.
+router.get("/trigger-enrolled-contacts", requireAuth, async (_req: Request, res: Response) => {
+  try {
+    const rows = await db
+      .selectDistinct({ contactId: sequenceEnrollmentsTable.contactId })
+      .from(sequenceEnrollmentsTable)
+      .where(
+        and(
+          eq(sequenceEnrollmentsTable.enrolledVia, "TRIGGER"),
+          eq(sequenceEnrollmentsTable.status, "ACTIVE"),
+        ),
+      );
+    res.json({ contactIds: rows.map((r) => r.contactId) });
+  } catch {
+    res.status(500).json({ error: "Failed to fetch trigger-enrolled contacts" });
+  }
+});
+
 router.get("/", requireAuth, async (req: Request, res: Response) => {
   try {
     const { dbUser } = req as AuthRequest;

@@ -6,11 +6,12 @@ import { useListDeals, useMoveDeal, useListDealStages, getListDealsQueryKey, typ
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Download, ChevronDown } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Plus, Download, ChevronDown, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { formatCurrency } from "@/lib/utils";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { DealDialog } from "@/components/deals/deal-dialog";
 import { ExportColumnsDialog, type ColumnDef } from "@/components/export-columns-dialog";
 import { useUrlFilters } from "@/hooks/use-url-filters";
@@ -69,6 +70,19 @@ export function DealsPage() {
   });
   const moveDeal = useMoveDeal();
   const queryClient = useQueryClient();
+
+  const { data: triggerEnrolledData } = useQuery<{ contactIds: string[] }>({
+    queryKey: ["trigger-enrolled-contacts"],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch("/api/sequences/trigger-enrolled-contacts", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return res.json();
+    },
+    staleTime: 60_000,
+  });
+  const triggerEnrolledSet = new Set(triggerEnrolledData?.contactIds ?? []);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editDeal, setEditDeal] = useState<DealWithRelations | undefined>();
@@ -364,6 +378,22 @@ export function DealsPage() {
                                   <div className="text-xs font-semibold leading-snug mb-1.5 text-foreground line-clamp-2">
                                     {deal.title}
                                   </div>
+                                  {/* Auto-enroll trigger indicator */}
+                                  {deal.contactId && triggerEnrolledSet.has(deal.contactId) && (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-600 dark:text-amber-400 mb-1 cursor-default">
+                                            <Zap className="h-3 w-3" />
+                                            Auto-enrolled
+                                          </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top">
+                                          Contact auto-enrolled in a sequence via trigger
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
                                   {/* Value */}
                                   <div
                                     className="text-sm font-bold mb-2"
