@@ -611,7 +611,7 @@ export async function runSequenceSender() {
           .where(
             and(
               eq(dealsTable.contactId, enrollment.contactId),
-              eq(dealStagesTable.name, "Won"),
+              eq(dealStagesTable.name, "Closed Won"),
             ),
           )
           .limit(1);
@@ -626,7 +626,7 @@ export async function runSequenceSender() {
           .where(
             and(
               eq(dealsTable.contactId, enrollment.contactId),
-              eq(dealStagesTable.name, "Lost"),
+              eq(dealStagesTable.name, "Closed Lost"),
             ),
           )
           .limit(1);
