@@ -277,6 +277,8 @@ export function CampaignNewPage() {
   // Expanded text editor dialog
   const [expandedBlockId, setExpandedBlockId] = useState<string | null>(null);
   const [expandedValue, setExpandedValue] = useState("");
+  const [expandedFontSize, setExpandedFontSize] = useState<FontSize>("md");
+  const [expandedColor, setExpandedColor] = useState("#333333");
 
   // AI campaign generation
   const [showAiPanel, setShowAiPanel] = useState(false);
@@ -824,7 +826,7 @@ export function CampaignNewPage() {
                             <div className="flex items-center gap-2">
                               {activeBlock.type === "text" && (
                                 <button
-                                  onClick={() => { setExpandedBlockId(activeBlock.id); setExpandedValue(activeBlock.content); }}
+                                  onClick={() => { setExpandedBlockId(activeBlock.id); setExpandedValue(activeBlock.content); setExpandedFontSize(activeBlock.fontSize ?? "md"); setExpandedColor(activeBlock.color || "#333333"); }}
                                   className="text-xs text-primary hover:underline flex items-center gap-1"
                                   title="Open full editor"
                                 >
@@ -1263,18 +1265,48 @@ export function CampaignNewPage() {
             </DialogTitle>
           </DialogHeader>
 
+          {/* Font size + color controls */}
+          <div className="flex items-center gap-4 px-0.5">
+            <div className="flex items-center gap-1.5">
+              <Label className="text-xs text-muted-foreground shrink-0">Size</Label>
+              <div className="flex gap-1">
+                {(["sm", "md", "lg", "xl"] as FontSize[]).map(s => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setExpandedFontSize(s)}
+                    className={`h-6 w-8 text-xs rounded border font-medium transition-colors ${expandedFontSize === s ? "bg-primary text-primary-foreground border-primary" : "border-muted hover:bg-muted"}`}
+                  >
+                    {FONT_SIZES[s].label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="w-px h-4 bg-border" />
+            <div className="flex items-center gap-1.5">
+              <Label className="text-xs text-muted-foreground shrink-0">Color</Label>
+              <input
+                type="color"
+                value={expandedColor}
+                onChange={e => setExpandedColor(e.target.value)}
+                className="w-7 h-7 rounded border cursor-pointer p-0.5 bg-transparent"
+              />
+              <span className="text-xs text-muted-foreground font-mono">{expandedColor}</span>
+            </div>
+          </div>
+
           <RichEmailEditor
             value={expandedValue}
             onChange={setExpandedValue}
             placeholder="Write your text block here…"
             tokens={PERSONALIZATION_TOKENS}
-            minHeight="360px"
+            minHeight="320px"
           />
 
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setExpandedBlockId(null)}>Cancel</Button>
             <Button onClick={() => {
-              if (expandedBlockId) updateBlock(expandedBlockId, { content: expandedValue });
+              if (expandedBlockId) updateBlock(expandedBlockId, { content: expandedValue, fontSize: expandedFontSize, color: expandedColor });
               setExpandedBlockId(null);
             }}>
               Save
