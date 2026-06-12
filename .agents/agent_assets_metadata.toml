@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "It6hpFinnRWc_EAICViit"
+uri = "file://artifacts/crm-flat/DESIGN.md"
+type = "text"
+title = "MyCRM Design System Reference"
