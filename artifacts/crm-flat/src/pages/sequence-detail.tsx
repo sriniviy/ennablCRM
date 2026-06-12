@@ -1881,6 +1881,9 @@ export function SequenceDetailPage() {
                               prev ? prev.filter((_, j) => j !== i) : prev,
                             )
                           }
+                          disabled={aiDraftPreview.length <= 1}
+                          title="Remove step"
+                          type="button"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                           <span className="sr-only">Remove step {i + 1}</span>
