@@ -49,7 +49,15 @@ import {
   ChevronDown,
   Braces,
   ShieldOff,
+  Zap,
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
   DropdownMenu,
@@ -94,6 +102,18 @@ interface Step {
   stepOrder: number;
 }
 
+interface Trigger {
+  id: string;
+  triggerType: string;
+  triggerValue: string;
+}
+
+interface DealStage {
+  id: string;
+  name: string;
+  color: string;
+}
+
 interface Enrollment {
   id: string;
   contactId: string;
@@ -104,6 +124,7 @@ interface Enrollment {
   enrolledAt: string;
   nextSendAt: string | null;
   exitReason: string | null;
+  enrolledVia: "MANUAL" | "TRIGGER";
 }
 
 interface SequenceDetail {
@@ -113,6 +134,7 @@ interface SequenceDetail {
   exitOnDealLost: boolean;
   exitOnUnsubscribe: boolean;
   steps: Step[];
+  triggers: Trigger[];
   enrollments: Enrollment[];
 }
 
@@ -424,6 +446,42 @@ export function SequenceDetailPage() {
       qc.invalidateQueries({ queryKey: ["sequences"] });
       setLocation("/sequences");
       toast({ title: "Sequence deleted" });
+    },
+    onError: (err: Error) =>
+      toast({ title: "Failed", description: err.message, variant: "destructive" }),
+  });
+
+  const { data: dealStages = [] } = useQuery<DealStage[]>({
+    queryKey: ["deal-stages"],
+    queryFn: () => apiFetch("/deal-stages"),
+    staleTime: 60_000,
+  });
+
+  const [addingTrigger, setAddingTrigger] = useState(false);
+  const [triggerStageValue, setTriggerStageValue] = useState("");
+
+  const addTriggerMutation = useMutation({
+    mutationFn: (triggerValue: string) =>
+      apiFetch(`/sequences/${id}/triggers`, {
+        method: "POST",
+        body: JSON.stringify({ triggerValue }),
+      }),
+    onSuccess: () => {
+      invalidate();
+      setAddingTrigger(false);
+      setTriggerStageValue("");
+      toast({ title: "Trigger added" });
+    },
+    onError: (err: Error) =>
+      toast({ title: "Failed", description: err.message, variant: "destructive" }),
+  });
+
+  const deleteTriggerMutation = useMutation({
+    mutationFn: (triggerId: string) =>
+      apiFetch(`/sequences/${id}/triggers/${triggerId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      invalidate();
+      toast({ title: "Trigger removed" });
     },
     onError: (err: Error) =>
       toast({ title: "Failed", description: err.message, variant: "destructive" }),
@@ -835,6 +893,108 @@ export function SequenceDetailPage() {
           </CardContent>
         </Card>
 
+        {/* Triggers */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Zap className="h-5 w-5" />
+                  Triggers
+                </CardTitle>
+                <CardDescription>
+                  Automatically enroll contacts when a deal moves to a specific
+                  stage.
+                </CardDescription>
+              </div>
+              {!addingTrigger && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setAddingTrigger(true)}
+                >
+                  <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Trigger
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {sequence.triggers.map((t) => (
+                <div
+                  key={t.id}
+                  className="flex items-center gap-3 rounded-md border px-3 py-2"
+                >
+                  <Zap className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span className="text-sm flex-1">
+                    When a deal moves to{" "}
+                    <span className="font-medium">{t.triggerValue}</span>
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
+                    onClick={() => deleteTriggerMutation.mutate(t.id)}
+                    disabled={deleteTriggerMutation.isPending}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+              {sequence.triggers.length === 0 && !addingTrigger && (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No triggers yet. Add one to auto-enroll contacts.
+                </p>
+              )}
+              {addingTrigger && (
+                <div className="border rounded-md p-3 space-y-3 bg-muted/30 mt-2">
+                  <p className="text-sm font-medium">When a deal moves to…</p>
+                  <Select
+                    value={triggerStageValue}
+                    onValueChange={setTriggerStageValue}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Pick a stage" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {dealStages.map((s) => (
+                        <SelectItem key={s.id} value={s.name}>
+                          <span className="flex items-center gap-2">
+                            <span
+                              className="h-2 w-2 rounded-full shrink-0"
+                              style={{ backgroundColor: s.color }}
+                            />
+                            {s.name}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      disabled={!triggerStageValue || addTriggerMutation.isPending}
+                      onClick={() => addTriggerMutation.mutate(triggerStageValue)}
+                    >
+                      {addTriggerMutation.isPending ? "Saving…" : "Save Trigger"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setAddingTrigger(false);
+                        setTriggerStageValue("");
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Exit conditions */}
         <Card>
           <CardHeader className="pb-3">
@@ -915,9 +1075,18 @@ export function SequenceDetailPage() {
                     className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
                   >
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-medium">{e.contactName}</span>
                         <StatusBadge status={e.status} />
+                        {e.enrolledVia === "TRIGGER" && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] font-normal gap-1 h-4 px-1.5 border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-400"
+                          >
+                            <Zap className="h-2.5 w-2.5" />
+                            Auto
+                          </Badge>
+                        )}
                       </div>
                       <div className="text-xs text-muted-foreground mt-0.5">
                         {e.contactEmail && (

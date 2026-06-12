@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
-import { db, dealsTable, dealStagesTable, contactsTable, companiesTable, usersTable, customFieldDefinitionsTable, customFieldValuesTable } from "@workspace/db";
-import { eq, ilike, and, asc, desc, inArray } from "drizzle-orm";
+import { db, dealsTable, dealStagesTable, contactsTable, companiesTable, usersTable, customFieldDefinitionsTable, customFieldValuesTable, sequenceTriggersTable, sequenceEnrollmentsTable, sequenceStepsTable, sequencesTable, activitiesTable } from "@workspace/db";
+import { eq, ilike, and, asc, desc, inArray, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin, type AuthRequest } from "../middlewares/requireAuth";
 import { logActivity } from "../lib/activity";
 import { logAudit } from "../lib/audit";
@@ -332,6 +332,78 @@ router.patch("/:id/move", requireAuth, async (req: Request, res: Response) => {
         userId: dbUser.id,
         dealId: id,
       });
+
+      // Auto-enroll: find all triggers matching the new stage name.
+      if (newStage && updated.contactId) {
+        const matchingTriggers = await db
+          .select()
+          .from(sequenceTriggersTable)
+          .where(
+            and(
+              eq(sequenceTriggersTable.triggerType, "DEAL_STAGE_CHANGE"),
+              eq(sequenceTriggersTable.triggerValue, newStage.name),
+            ),
+          );
+
+        for (const trigger of matchingTriggers) {
+          // Skip if contact is already actively enrolled.
+          const [existing_enrollment] = await db
+            .select({ id: sequenceEnrollmentsTable.id })
+            .from(sequenceEnrollmentsTable)
+            .where(
+              and(
+                eq(sequenceEnrollmentsTable.sequenceId, trigger.sequenceId),
+                eq(sequenceEnrollmentsTable.contactId, updated.contactId),
+                eq(sequenceEnrollmentsTable.status, "ACTIVE"),
+              ),
+            )
+            .limit(1);
+          if (existing_enrollment) continue;
+
+          // Fetch the sequence's first step for scheduling.
+          const steps = await db
+            .select()
+            .from(sequenceStepsTable)
+            .where(eq(sequenceStepsTable.sequenceId, trigger.sequenceId))
+            .orderBy(sql`${sequenceStepsTable.stepOrder} asc`)
+            .limit(1);
+          if (steps.length === 0) continue;
+
+          const firstStep = steps[0];
+          const firstSendAt = new Date(
+            Date.now() + firstStep.delayDays * 24 * 60 * 60 * 1000,
+          );
+
+          await db.insert(sequenceEnrollmentsTable).values({
+            sequenceId: trigger.sequenceId,
+            contactId: updated.contactId,
+            currentStep: 0,
+            nextSendAt: firstSendAt,
+            status: "ACTIVE",
+            enrolledVia: "TRIGGER",
+          });
+
+          const [seq] = await db
+            .select({ name: sequencesTable.name })
+            .from(sequencesTable)
+            .where(eq(sequencesTable.id, trigger.sequenceId))
+            .limit(1);
+
+          await db.insert(activitiesTable).values({
+            type: "SEQUENCE_ENROLLED",
+            title: `Auto-enrolled in sequence "${seq?.name ?? trigger.sequenceId}"`,
+            description: `Triggered by deal moving to "${newStage.name}"`,
+            contactId: updated.contactId,
+            userId: dbUser.id,
+            metadata: {
+              sequenceId: trigger.sequenceId,
+              sequenceName: seq?.name,
+              triggerId: trigger.id,
+              triggerValue: newStage.name,
+            },
+          });
+        }
+      }
     }
 
     await logAudit({

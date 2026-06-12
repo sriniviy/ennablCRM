@@ -62,12 +62,31 @@ export const sequenceEnrollmentsTable = pgTable(
       .defaultNow(),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     exitReason: text("exit_reason"),
+    enrolledVia: text("enrolled_via").notNull().default("MANUAL"),
   },
   (t) => [
     index("sequence_enrollments_seq_idx").on(t.sequenceId),
     index("sequence_enrollments_contact_idx").on(t.contactId),
     index("sequence_enrollments_next_send_idx").on(t.nextSendAt),
   ],
+);
+
+export const sequenceTriggersTable = pgTable(
+  "sequence_triggers",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    sequenceId: text("sequence_id")
+      .notNull()
+      .references(() => sequencesTable.id, { onDelete: "cascade" }),
+    triggerType: text("trigger_type").notNull().default("DEAL_STAGE_CHANGE"),
+    triggerValue: text("trigger_value").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("sequence_triggers_seq_idx").on(t.sequenceId)],
 );
 
 export const insertSequenceSchema = createInsertSchema(sequencesTable).omit({

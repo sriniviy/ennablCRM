@@ -4,6 +4,7 @@ import {
   sequencesTable,
   sequenceStepsTable,
   sequenceEnrollmentsTable,
+  sequenceTriggersTable,
   contactsTable,
   companiesTable,
   usersTable,
@@ -109,30 +110,37 @@ router.get("/:id", requireAuth, async (req: Request, res: Response) => {
       res.status(404).json({ error: "Sequence not found" });
       return;
     }
-    const steps = await db
-      .select()
-      .from(sequenceStepsTable)
-      .where(eq(sequenceStepsTable.sequenceId, sequence.id))
-      .orderBy(asc(sequenceStepsTable.stepOrder));
-
-    const enrollments = await db
-      .select({
-        enrollment: sequenceEnrollmentsTable,
-        contactFirstName: contactsTable.firstName,
-        contactLastName: contactsTable.lastName,
-        contactEmail: contactsTable.email,
-      })
-      .from(sequenceEnrollmentsTable)
-      .innerJoin(
-        contactsTable,
-        eq(contactsTable.id, sequenceEnrollmentsTable.contactId),
-      )
-      .where(eq(sequenceEnrollmentsTable.sequenceId, sequence.id))
-      .orderBy(sql`${sequenceEnrollmentsTable.enrolledAt} desc`);
+    const [steps, enrollments, triggers] = await Promise.all([
+      db
+        .select()
+        .from(sequenceStepsTable)
+        .where(eq(sequenceStepsTable.sequenceId, sequence.id))
+        .orderBy(asc(sequenceStepsTable.stepOrder)),
+      db
+        .select({
+          enrollment: sequenceEnrollmentsTable,
+          contactFirstName: contactsTable.firstName,
+          contactLastName: contactsTable.lastName,
+          contactEmail: contactsTable.email,
+        })
+        .from(sequenceEnrollmentsTable)
+        .innerJoin(
+          contactsTable,
+          eq(contactsTable.id, sequenceEnrollmentsTable.contactId),
+        )
+        .where(eq(sequenceEnrollmentsTable.sequenceId, sequence.id))
+        .orderBy(sql`${sequenceEnrollmentsTable.enrolledAt} desc`),
+      db
+        .select()
+        .from(sequenceTriggersTable)
+        .where(eq(sequenceTriggersTable.sequenceId, sequence.id))
+        .orderBy(sql`${sequenceTriggersTable.createdAt} asc`),
+    ]);
 
     res.json({
       ...sequence,
       steps,
+      triggers,
       enrollments: enrollments.map(({ enrollment, contactFirstName, contactLastName, contactEmail }) => ({
         ...enrollment,
         contactName: [contactFirstName, contactLastName].filter(Boolean).join(" ") || contactEmail,
@@ -495,6 +503,80 @@ router.delete(
       res.json({ ok: true });
     } catch {
       res.status(500).json({ error: "Failed to unenroll" });
+    }
+  },
+);
+
+// ─── Triggers ────────────────────────────────────────────────────────────────
+
+router.get("/:id/triggers", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { dbUser } = req as AuthRequest;
+    const sequence = await getOwnedSequence(req.params.id as string, dbUser.id);
+    if (!sequence) {
+      res.status(404).json({ error: "Sequence not found" });
+      return;
+    }
+    const triggers = await db
+      .select()
+      .from(sequenceTriggersTable)
+      .where(eq(sequenceTriggersTable.sequenceId, sequence.id))
+      .orderBy(sql`${sequenceTriggersTable.createdAt} asc`);
+    res.json(triggers);
+  } catch {
+    res.status(500).json({ error: "Failed to list triggers" });
+  }
+});
+
+router.post("/:id/triggers", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { dbUser } = req as AuthRequest;
+    const sequence = await getOwnedSequence(req.params.id as string, dbUser.id);
+    if (!sequence) {
+      res.status(404).json({ error: "Sequence not found" });
+      return;
+    }
+    const { triggerValue } = req.body as { triggerValue?: string };
+    if (!triggerValue?.trim()) {
+      res.status(400).json({ error: "triggerValue (stage name) is required" });
+      return;
+    }
+    const [trigger] = await db
+      .insert(sequenceTriggersTable)
+      .values({
+        sequenceId: sequence.id,
+        triggerType: "DEAL_STAGE_CHANGE",
+        triggerValue: triggerValue.trim(),
+      })
+      .returning();
+    res.status(201).json(trigger);
+  } catch {
+    res.status(500).json({ error: "Failed to create trigger" });
+  }
+});
+
+router.delete(
+  "/:id/triggers/:triggerId",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const { dbUser } = req as AuthRequest;
+      const sequence = await getOwnedSequence(req.params.id as string, dbUser.id);
+      if (!sequence) {
+        res.status(404).json({ error: "Sequence not found" });
+        return;
+      }
+      await db
+        .delete(sequenceTriggersTable)
+        .where(
+          and(
+            eq(sequenceTriggersTable.id, req.params.triggerId as string),
+            eq(sequenceTriggersTable.sequenceId, sequence.id),
+          ),
+        );
+      res.status(204).send();
+    } catch {
+      res.status(500).json({ error: "Failed to delete trigger" });
     }
   },
 );
