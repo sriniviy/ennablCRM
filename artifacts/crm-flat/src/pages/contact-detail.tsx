@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Mail, Phone, Building2, Calendar, MessageSquare, Linkedin, CheckSquare, Pencil, CopyCheck } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Building2, Calendar, MessageSquare, Linkedin, CheckSquare, Pencil, CopyCheck, Send, Eye, MousePointerClick } from "lucide-react";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { NotesFeed } from "@/components/notes/notes-feed";
 import { useNotesCount } from "@/hooks/use-notes-count";
@@ -27,6 +27,7 @@ import { useSaveCustomFieldValuesForRecord } from "@/hooks/use-custom-fields";
 import { AiSuggestions } from "@/components/ai/ai-suggestions";
 import { ActivitySummary } from "@/components/ai/activity-summary";
 import { AttachmentsPanel } from "@/components/attachments/attachments-panel";
+import { useContactCampaigns } from "@/hooks/use-contact-campaigns";
 
 function NotesTabLabel({ entityType, entityId }: { entityType: string; entityId: string }) {
   const { data } = useNotesCount(entityType, entityId);
@@ -40,6 +41,70 @@ function NotesTabLabel({ entityType, entityId }: { entityType: string; entityId:
         </span>
       )}
     </span>
+  );
+}
+
+function ContactCampaignsTab({ contactId }: { contactId: string }) {
+  const { data, isLoading } = useContactCampaigns(contactId);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full" />)}
+      </div>
+    );
+  }
+
+  if (!data || data.length === 0) {
+    return <p className="text-muted-foreground text-sm">This contact has not received any campaigns yet.</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {data.map(row => (
+        <div key={row.campaignId} className="flex items-start justify-between gap-4 p-4 border rounded-lg bg-card">
+          <div className="min-w-0 flex-1">
+            <Link href={`/campaigns/${row.campaignId}`} className="font-medium hover:underline">
+              {row.campaignName}
+            </Link>
+            <p className="text-sm text-muted-foreground mt-0.5">{row.campaignSubject}</p>
+            <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-muted-foreground">
+              {row.sentAt && (
+                <span className="flex items-center gap-1">
+                  <Send className="h-3 w-3" />
+                  Sent {new Date(row.sentAt).toLocaleString()}
+                </span>
+              )}
+              {row.openedAt && (
+                <span className="flex items-center gap-1 text-blue-600">
+                  <Eye className="h-3 w-3" />
+                  Opened {new Date(row.openedAt).toLocaleString()}
+                </span>
+              )}
+              {row.clickedAt && (
+                <span className="flex items-center gap-1 text-green-600">
+                  <MousePointerClick className="h-3 w-3" />
+                  Clicked {new Date(row.clickedAt).toLocaleString()}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex-shrink-0">
+            {row.status === "UNSUBSCRIBED" ? (
+              <Badge variant="destructive" className="text-xs">Unsubscribed</Badge>
+            ) : row.clickedAt ? (
+              <Badge variant="outline" className="text-xs text-green-700 border-green-300 bg-green-50">Clicked</Badge>
+            ) : row.openedAt ? (
+              <Badge variant="outline" className="text-xs text-blue-700 border-blue-300 bg-blue-50">Opened</Badge>
+            ) : row.sentAt ? (
+              <Badge variant="outline" className="text-xs">Sent</Badge>
+            ) : (
+              <Badge variant="secondary" className="text-xs">Pending</Badge>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -251,6 +316,9 @@ export function ContactDetailPage() {
                 <TabsTrigger value="history" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   History
                 </TabsTrigger>
+                <TabsTrigger value="campaigns" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
+                  Campaigns
+                </TabsTrigger>
                 <TabsTrigger value="files" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   Files
                 </TabsTrigger>
@@ -413,6 +481,11 @@ export function ContactDetailPage() {
               <TabsContent value="history" className="pt-6">
                 <AuditHistory objectType="contact" objectId={contact.id} />
               </TabsContent>
+
+              <TabsContent value="campaigns" className="pt-6">
+                <ContactCampaignsTab contactId={id} />
+              </TabsContent>
+
               <TabsContent value="files" className="pt-6">
                 <AttachmentsPanel objectType="contact" recordId={contact.id} />
               </TabsContent>

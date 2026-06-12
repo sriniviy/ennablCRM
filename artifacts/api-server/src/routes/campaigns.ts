@@ -265,6 +265,35 @@ router.get("/:id/recipients", requireAuth, async (req: Request, res: Response) =
   }
 });
 
+router.get("/for-contact/:contactId", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { contactId } = req.params as { contactId: string };
+
+    const rows = await db
+      .select({
+        campaignId: campaignContactsTable.campaignId,
+        email: campaignContactsTable.email,
+        status: campaignContactsTable.status,
+        sentAt: campaignContactsTable.sentAt,
+        openedAt: campaignContactsTable.openedAt,
+        clickedAt: campaignContactsTable.clickedAt,
+        unsubscribedAt: campaignContactsTable.unsubscribedAt,
+        campaignName: emailCampaignsTable.name,
+        campaignSubject: emailCampaignsTable.subject,
+        campaignStatus: emailCampaignsTable.status,
+        campaignSentAt: emailCampaignsTable.sentAt,
+      })
+      .from(campaignContactsTable)
+      .innerJoin(emailCampaignsTable, eq(emailCampaignsTable.id, campaignContactsTable.campaignId))
+      .where(eq(campaignContactsTable.contactId, contactId))
+      .orderBy(desc(campaignContactsTable.sentAt));
+
+    res.json(rows);
+  } catch {
+    res.status(500).json({ error: "Failed to get contact campaign history" });
+  }
+});
+
 router.post("/", requireAuth, async (req: Request, res: Response) => {
   try {
     const body = req.body;
