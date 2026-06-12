@@ -1,5 +1,6 @@
 import { useSessionToken } from "@/hooks/use-session-token";
 import { useState, useRef } from "react";
+import { cn } from "@/lib/utils";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useRoute, useLocation, Link } from "wouter";
 
@@ -224,6 +225,7 @@ export function SequenceDetailPage() {
   const [aiGoal, setAiGoal] = useState("");
   const [aiTone, setAiTone] = useState("Professional");
   const [aiContext, setAiContext] = useState("");
+  const [aiImproveFields, setAiImproveFields] = useState<"subject" | "body" | "both">("both");
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiGeneratedFor, setAiGeneratedFor] = useState<"add" | "edit" | null>(null);
 
@@ -398,16 +400,24 @@ export function SequenceDetailPage() {
           stepNumber,
           totalSteps,
           ...(isImprove && targetForm === "edit" && editingStep
-            ? { existingSubject: editingStep.subject, existingBody: editingStep.body }
+            ? { existingSubject: editingStep.subject, existingBody: editingStep.body, improveFields: aiImproveFields }
             : isImprove && targetForm === "add"
-              ? { existingSubject: stepForm.subject, existingBody: stepForm.body }
+              ? { existingSubject: stepForm.subject, existingBody: stepForm.body, improveFields: aiImproveFields }
               : {}),
         }),
-      })) as { subject: string; body: string };
+      })) as { subject?: string; body?: string };
       if (targetForm === "add") {
-        setStepForm((f) => ({ ...f, subject: result.subject, body: result.body }));
+        setStepForm((f) => ({ ...f, subject: result.subject ?? f.subject, body: result.body ?? f.body }));
       } else {
-        setEditingStep((s) => (s ? { ...s, subject: result.subject, body: result.body } : null));
+        setEditingStep((s) =>
+          s
+            ? {
+                ...s,
+                ...(result.subject !== undefined ? { subject: result.subject } : {}),
+                ...(result.body !== undefined ? { body: result.body } : {}),
+              }
+            : null,
+        );
       }
       setAiGeneratedFor(targetForm);
     } catch (err) {
@@ -861,6 +871,29 @@ export function SequenceDetailPage() {
                               {aiMode === "improve" ? <RefreshCw className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
                               {aiMode === "improve" ? "Improve with AI" : "Write with AI"}
                             </p>
+                            {aiMode === "improve" && (
+                              <div>
+                                <label className="text-xs text-muted-foreground">Improve</label>
+                                <div className="mt-1 flex rounded-md border overflow-hidden text-[11px] font-medium">
+                                  {(["subject", "body", "both"] as const).map((option, idx) => (
+                                    <button
+                                      key={option}
+                                      type="button"
+                                      onClick={() => setAiImproveFields(option)}
+                                      className={cn(
+                                        "flex-1 py-1.5 transition-colors",
+                                        idx > 0 && "border-l",
+                                        aiImproveFields === option
+                                          ? "bg-primary text-primary-foreground"
+                                          : "bg-background hover:bg-muted text-muted-foreground",
+                                      )}
+                                    >
+                                      {option === "both" ? "Subject + Body" : option.charAt(0).toUpperCase() + option.slice(1)}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                             <div>
                               <label className="text-xs text-muted-foreground">
                                 {aiMode === "improve" ? "Goal — how should the email be improved?" : "Goal — what should this email accomplish?"}
@@ -1117,6 +1150,29 @@ export function SequenceDetailPage() {
                       {aiMode === "improve" ? <RefreshCw className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
                       {aiMode === "improve" ? "Improve with AI" : "Write with AI"}
                     </p>
+                    {aiMode === "improve" && (
+                      <div>
+                        <label className="text-xs text-muted-foreground">Improve</label>
+                        <div className="mt-1 flex rounded-md border overflow-hidden text-[11px] font-medium">
+                          {(["subject", "body", "both"] as const).map((option, idx) => (
+                            <button
+                              key={option}
+                              type="button"
+                              onClick={() => setAiImproveFields(option)}
+                              className={cn(
+                                "flex-1 py-1.5 transition-colors",
+                                idx > 0 && "border-l",
+                                aiImproveFields === option
+                                  ? "bg-primary text-primary-foreground"
+                                  : "bg-background hover:bg-muted text-muted-foreground",
+                              )}
+                            >
+                              {option === "both" ? "Subject + Body" : option.charAt(0).toUpperCase() + option.slice(1)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <div>
                       <label className="text-xs text-muted-foreground">
                         {aiMode === "improve" ? "Goal — how should the email be improved?" : "Goal — what should this email accomplish?"}

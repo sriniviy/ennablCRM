@@ -53,7 +53,7 @@ async function getOwnedSequence(sequenceId: string, userId: string) {
 
 router.post("/ai-draft-step", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { goal, tone, context, stepNumber, totalSteps, existingSubject, existingBody } = req.body as {
+    const { goal, tone, context, stepNumber, totalSteps, existingSubject, existingBody, improveFields } = req.body as {
       goal?: string;
       tone?: string;
       context?: string;
@@ -61,6 +61,7 @@ router.post("/ai-draft-step", requireAuth, async (req: Request, res: Response) =
       totalSteps?: number;
       existingSubject?: string;
       existingBody?: string;
+      improveFields?: "subject" | "body" | "both";
     };
     if (!goal?.trim()) {
       res.status(400).json({ error: "goal is required" });
@@ -73,8 +74,20 @@ router.post("/ai-draft-step", requireAuth, async (req: Request, res: Response) =
         : "";
     const isImprove = !!(existingSubject?.trim() || existingBody?.trim());
 
+    // Determine which fields to generate
+    const fields = isImprove ? (improveFields ?? "both") : "both";
+    const wantSubject = fields === "subject" || fields === "both";
+    const wantBody = fields === "body" || fields === "both";
+
+    // Build the JSON shape description for the prompt
+    const jsonShape = wantSubject && wantBody
+      ? `"subject" (a short, compelling subject line) and "body" (the email body)`
+      : wantSubject
+        ? `"subject" (a short, compelling subject line)`
+        : `"body" (the email body)`;
+
     const systemPrompt = isImprove
-      ? `You are an expert B2B sales email editor. Your job is to improve an existing outreach email for a sales sequence. Return ONLY a JSON object with two fields: "subject" (a short, compelling subject line) and "body" (the email body). Do not include any markdown, explanation, or text outside the JSON object.
+      ? `You are an expert B2B sales email editor. Your job is to improve an existing outreach email for a sales sequence. Return ONLY a JSON object with ${jsonShape}. Do not include any markdown, explanation, or text outside the JSON object.
 
 Guidelines:
 - Preserve the intent and key points of the original email unless the goal says otherwise
@@ -84,7 +97,7 @@ Guidelines:
 - Never use phrases like "I hope this email finds you well"
 - End with a clear, low-friction call to action
 ${stepCtx}`
-      : `You are an expert B2B sales email writer. Your job is to draft a single outreach email for a sales sequence. Return ONLY a JSON object with two fields: "subject" (a short, compelling subject line) and "body" (the email body). Do not include any markdown, explanation, or text outside the JSON object.
+      : `You are an expert B2B sales email writer. Your job is to draft a single outreach email for a sales sequence. Return ONLY a JSON object with "subject" (a short, compelling subject line) and "body" (the email body). Do not include any markdown, explanation, or text outside the JSON object.
 
 Guidelines:
 - Keep emails concise (3-5 short paragraphs max)
@@ -94,15 +107,15 @@ Guidelines:
 - End with a clear, low-friction call to action
 ${stepCtx}`;
 
+    const improveContext = isImprove
+      ? `\nExisting email to improve:${wantSubject ? `\nSubject: ${existingSubject?.trim() ?? ""}` : ""}${wantBody ? `\nBody:\n${existingBody?.trim() ?? ""}` : ""}`
+      : "";
+
     const userPrompt = isImprove
       ? `Goal: ${goal.trim()}
+${improveContext}${context?.trim() ? `\n\nAdditional context: ${context.trim()}` : ""}
 
-Existing email to improve:
-Subject: ${existingSubject?.trim() ?? ""}
-Body:
-${existingBody?.trim() ?? ""}${context?.trim() ? `\n\nAdditional context: ${context.trim()}` : ""}
-
-Rewrite this email now.`
+Rewrite ${fields === "both" ? "the email" : `only the ${fields}`} now.`
       : `Goal of this email: ${goal.trim()}${context?.trim() ? `\n\nAdditional context: ${context.trim()}` : ""}
 
 Write the email now.`;
@@ -126,11 +139,18 @@ Write the email now.`;
       return;
     }
     const parsed = JSON.parse(jsonMatch[0]) as { subject?: string; body?: string };
-    if (!parsed.subject || !parsed.body) {
-      res.status(500).json({ error: "AI response missing subject or body" });
+    if (wantSubject && !parsed.subject) {
+      res.status(500).json({ error: "AI response missing subject" });
       return;
     }
-    res.json({ subject: parsed.subject, body: parsed.body });
+    if (wantBody && !parsed.body) {
+      res.status(500).json({ error: "AI response missing body" });
+      return;
+    }
+    const responsePayload: { subject?: string; body?: string } = {};
+    if (wantSubject) responsePayload.subject = parsed.subject;
+    if (wantBody) responsePayload.body = parsed.body;
+    res.json(responsePayload);
   } catch (err) {
     console.error("AI draft step error:", err);
     res.status(500).json({ error: "Failed to generate email draft" });
