@@ -241,6 +241,11 @@ export function SequenceDetailPage() {
   >(null);
   const [aiDraftSaving, setAiDraftSaving] = useState(false);
 
+  // AI compare state — holds the pending AI draft until rep accepts or discards
+  const [aiProposed, setAiProposed] = useState<{ subject: string; body: string } | null>(null);
+  const [aiOriginalSnapshot, setAiOriginalSnapshot] = useState<{ subject: string; body: string } | null>(null);
+  const [aiCompareFor, setAiCompareFor] = useState<"add" | "edit" | null>(null);
+
   // Refs for cursor-position-aware token insertion
   const addSubjectRef = useRef<HTMLInputElement>(null);
   const addBodyRef = useRef<HTMLTextAreaElement>(null);
@@ -385,7 +390,7 @@ export function SequenceDetailPage() {
     }
   }
 
-  // Calls the AI endpoint and populates the target form's subject/body.
+  // Calls the AI endpoint and shows a compare view — rep must Accept or Discard.
   async function generateAiDraft(targetForm: "add" | "edit", stepNumber: number, totalSteps: number) {
     if (!aiGoal.trim()) return;
     setAiGenerating(true);
@@ -406,20 +411,24 @@ export function SequenceDetailPage() {
               : {}),
         }),
       })) as { subject?: string; body?: string };
-      if (targetForm === "add") {
-        setStepForm((f) => ({ ...f, subject: result.subject ?? f.subject, body: result.body ?? f.body }));
-      } else {
-        setEditingStep((s) =>
-          s
-            ? {
-                ...s,
-                ...(result.subject !== undefined ? { subject: result.subject } : {}),
-                ...(result.body !== undefined ? { body: result.body } : {}),
-              }
-            : null,
-        );
-      }
+
+      // Snapshot the current content so the rep can compare before accepting
+      const original =
+        targetForm === "add"
+          ? { subject: stepForm.subject, body: stepForm.body }
+          : { subject: editingStep?.subject ?? "", body: editingStep?.body ?? "" };
+
+      // For selective improve, fall back to original for any field not returned by AI
+      const proposed = {
+        subject: result.subject ?? original.subject,
+        body: result.body ?? original.body,
+      };
+
+      setAiOriginalSnapshot(original);
+      setAiProposed(proposed);
+      setAiCompareFor(targetForm);
       setAiGeneratedFor(targetForm);
+      setAiPanelOpen(null); // collapse the prompt panel to give room for the diff
     } catch (err) {
       toast({
         title: "AI generation failed",
@@ -429,6 +438,25 @@ export function SequenceDetailPage() {
     } finally {
       setAiGenerating(false);
     }
+  }
+
+  function acceptAiDraft() {
+    if (!aiProposed || !aiCompareFor) return;
+    if (aiCompareFor === "add") {
+      setStepForm((f) => ({ ...f, subject: aiProposed.subject, body: aiProposed.body }));
+    } else {
+      setEditingStep((s) => (s ? { ...s, subject: aiProposed.subject, body: aiProposed.body } : null));
+    }
+    setAiProposed(null);
+    setAiOriginalSnapshot(null);
+    setAiCompareFor(null);
+  }
+
+  function discardAiDraft() {
+    setAiProposed(null);
+    setAiOriginalSnapshot(null);
+    setAiCompareFor(null);
+    setAiGeneratedFor(null);
   }
 
   const { data: sequence, isLoading } = useQuery<SequenceDetail>({
@@ -953,7 +981,63 @@ export function SequenceDetailPage() {
                             </Button>
                           </div>
                         )}
-                        {aiGeneratedFor === "edit" && aiPanelOpen !== "edit" && (
+                        {/* AI Compare View — shows after generation, before accept/discard */}
+                        {aiCompareFor === "edit" && aiProposed && (
+                          <div className="border border-primary/30 rounded-lg overflow-hidden">
+                            <div className="bg-primary/5 border-b border-primary/20 px-3 py-2 flex items-center justify-between">
+                              <p className="text-xs font-semibold text-primary flex items-center gap-1.5">
+                                <Sparkles className="h-3.5 w-3.5" />
+                                Review AI rewrite — accept or discard
+                              </p>
+                              <div className="flex items-center gap-1.5">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 px-2 text-[11px] gap-1 border-destructive/40 text-destructive hover:bg-destructive/10"
+                                  type="button"
+                                  onClick={discardAiDraft}
+                                >
+                                  Discard
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  className="h-6 px-2 text-[11px] gap-1"
+                                  type="button"
+                                  onClick={acceptAiDraft}
+                                >
+                                  Accept rewrite
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 divide-x divide-border">
+                              <div className="p-3 space-y-2 min-w-0">
+                                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Original</p>
+                                <div className="space-y-1.5">
+                                  <p className="text-[11px] font-medium text-muted-foreground leading-snug line-clamp-1">
+                                    {aiOriginalSnapshot?.subject || <span className="italic opacity-50">No subject</span>}
+                                  </p>
+                                  <p className="text-[11px] text-muted-foreground/80 leading-relaxed whitespace-pre-wrap line-clamp-6">
+                                    {aiOriginalSnapshot?.body || <span className="italic opacity-50">No body</span>}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="p-3 space-y-2 min-w-0 bg-primary/[0.03]">
+                                <p className="text-[10px] font-semibold uppercase tracking-wide text-primary/70">AI Rewrite</p>
+                                <div className="space-y-1.5">
+                                  <p className="text-[11px] font-medium leading-snug line-clamp-1">{aiProposed.subject}</p>
+                                  <p className="text-[11px] text-foreground/80 leading-relaxed whitespace-pre-wrap line-clamp-6">{aiProposed.body}</p>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="bg-amber-50 dark:bg-amber-950/30 border-t border-amber-200/60 dark:border-amber-800/40 px-3 py-1.5">
+                              <p className="text-[11px] text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                                <Sparkles className="h-3 w-3 shrink-0" />
+                                AI-generated — review before saving. You can also edit manually after accepting.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                        {aiGeneratedFor === "edit" && aiPanelOpen !== "edit" && !aiCompareFor && (
                           <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
                             <Sparkles className="h-3 w-3" />
                             AI-generated — review before saving.
@@ -999,7 +1083,7 @@ export function SequenceDetailPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => { setEditingStep(null); setAiPanelOpen(null); setAiGeneratedFor(null); setAiMode("write"); setAiGoal(""); }}
+                            onClick={() => { setEditingStep(null); setAiPanelOpen(null); setAiGeneratedFor(null); setAiMode("write"); setAiGoal(""); setAiProposed(null); setAiOriginalSnapshot(null); setAiCompareFor(null); }}
                           >
                             Cancel
                           </Button>
@@ -1232,7 +1316,69 @@ export function SequenceDetailPage() {
                     </Button>
                   </div>
                 )}
-                {aiGeneratedFor === "add" && aiPanelOpen !== "add" && (
+                {/* AI Compare View — shows after generation, before accept/discard */}
+                {aiCompareFor === "add" && aiProposed && (
+                  <div className="border border-primary/30 rounded-lg overflow-hidden">
+                    <div className="bg-primary/5 border-b border-primary/20 px-3 py-2 flex items-center justify-between">
+                      <p className="text-xs font-semibold text-primary flex items-center gap-1.5">
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Review AI draft — accept or discard
+                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 px-2 text-[11px] gap-1 border-destructive/40 text-destructive hover:bg-destructive/10"
+                          type="button"
+                          onClick={discardAiDraft}
+                        >
+                          Discard
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="h-6 px-2 text-[11px] gap-1"
+                          type="button"
+                          onClick={acceptAiDraft}
+                        >
+                          Accept draft
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 divide-x divide-border">
+                      <div className="p-3 space-y-2 min-w-0">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Your draft</p>
+                        <div className="space-y-1.5">
+                          {aiOriginalSnapshot?.subject || aiOriginalSnapshot?.body ? (
+                            <>
+                              <p className="text-[11px] font-medium text-muted-foreground leading-snug line-clamp-1">
+                                {aiOriginalSnapshot.subject || <span className="italic opacity-50">No subject</span>}
+                              </p>
+                              <p className="text-[11px] text-muted-foreground/80 leading-relaxed whitespace-pre-wrap line-clamp-6">
+                                {aiOriginalSnapshot.body || <span className="italic opacity-50">No body</span>}
+                              </p>
+                            </>
+                          ) : (
+                            <p className="text-[11px] text-muted-foreground/50 italic">Empty — no existing draft</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="p-3 space-y-2 min-w-0 bg-primary/[0.03]">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-primary/70">AI Draft</p>
+                        <div className="space-y-1.5">
+                          <p className="text-[11px] font-medium leading-snug line-clamp-1">{aiProposed.subject}</p>
+                          <p className="text-[11px] text-foreground/80 leading-relaxed whitespace-pre-wrap line-clamp-6">{aiProposed.body}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-amber-50 dark:bg-amber-950/30 border-t border-amber-200/60 dark:border-amber-800/40 px-3 py-1.5">
+                      <p className="text-[11px] text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                        <Sparkles className="h-3 w-3 shrink-0" />
+                        AI-generated — review before saving. You can also edit manually after accepting.
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {aiGeneratedFor === "add" && aiPanelOpen !== "add" && !aiCompareFor && (
                   <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
                     <Sparkles className="h-3 w-3" />
                     AI-generated — review before saving.
@@ -1279,6 +1425,10 @@ export function SequenceDetailPage() {
                     onClick={() => {
                       setAddingStep(false);
                       setStepForm({ subject: "", body: "", delayDays: 1 });
+                      setAiProposed(null);
+                      setAiOriginalSnapshot(null);
+                      setAiCompareFor(null);
+                      setAiGeneratedFor(null);
                     }}
                   >
                     Cancel
