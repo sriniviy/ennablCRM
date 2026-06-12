@@ -361,6 +361,7 @@ export function SequenceDetailPage() {
   const [aiProposedEdits, setAiProposedEdits] = useState<{ subject: string; body: string } | null>(null);
 
   // Refs for subject token insertion (body uses the rich editor's built-in token picker)
+  // and cursor-position-aware token insertion
   const addSubjectRef = useRef<HTMLInputElement>(null);
   const editSubjectRef = useRef<HTMLInputElement>(null);
   const lastSubjectSelRef = useRef<{
@@ -2281,24 +2282,62 @@ export function SequenceDetailPage() {
                                     </div>
                                   )}
                                 </div>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
-                                  onClick={() =>
-                                    setAiDraftPreview((prev) => {
-                                      if (!prev) return prev;
-                                      const next = prev.filter((_, j) => j !== i);
-                                      return next.length === 0 ? null : next;
-                                    })
-                                  }
-                                  disabled={aiDraftPreview.length <= 1}
-                                  title="Remove step"
-                                  type="button"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                  <span className="sr-only">Remove step {i + 1}</span>
-                                </Button>
+                                <div className="flex items-center gap-0.5">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                    disabled={i === 0}
+                                    onClick={() =>
+                                      setAiDraftPreview((prev) => {
+                                        if (!prev) return prev;
+                                        const next = [...prev];
+                                        [next[i - 1], next[i]] = [next[i], next[i - 1]];
+                                        return next;
+                                      })
+                                    }
+                                    title="Move up"
+                                    type="button"
+                                  >
+                                    <ChevronUp className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                    disabled={i === aiDraftPreview.length - 1}
+                                    onClick={() =>
+                                      setAiDraftPreview((prev) => {
+                                        if (!prev) return prev;
+                                        const next = [...prev];
+                                        [next[i], next[i + 1]] = [next[i + 1], next[i]];
+                                        return next;
+                                      })
+                                    }
+                                    title="Move down"
+                                    type="button"
+                                  >
+                                    <ChevronDown className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
+                                    onClick={() =>
+                                      setAiDraftPreview((prev) => {
+                                        if (!prev) return prev;
+                                        const next = prev.filter((_, j) => j !== i);
+                                        return next.length === 0 ? null : next;
+                                      })
+                                    }
+                                    disabled={aiDraftPreview.length <= 1}
+                                    title="Remove step"
+                                    type="button"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    <span className="sr-only">Remove step {i + 1}</span>
+                                  </Button>
+                                </div>
                               </div>
                               <div>
                                 <label className="text-xs text-muted-foreground mb-1 block">Subject</label>
