@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Users, Mail, MailOpen, MousePointerClick, UserMinus, Search, XCircle, RefreshCw, Copy, Check, Tag } from "lucide-react";
+import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { authClient } from "@/lib/auth-client";
@@ -64,6 +65,56 @@ function StatFunnel({ total, sent, opened, clicked, unsubscribed }: { total: num
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+function EngagementChart({ sent, opened, clicked, unsubscribed }: { sent: number; opened: number; clicked: number; unsubscribed: number }) {
+  if (sent === 0) return null;
+
+  const chartData = [
+    { name: "Sent", Count: sent, fill: "#3b82f6" },
+    { name: "Opened", Count: opened, fill: "#22c55e" },
+    { name: "Clicked", Count: clicked, fill: "#a855f7" },
+    { name: "Unsubscribed", Count: unsubscribed, fill: "#ef4444" },
+  ];
+
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-3">
+        Engagement Breakdown
+      </p>
+      <ResponsiveContainer width="100%" height={180}>
+        <BarChart data={chartData} barCategoryGap="35%" margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+          <XAxis
+            dataKey="name"
+            tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <YAxis
+            allowDecimals={false}
+            tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <Tooltip
+            contentStyle={{
+              background: "hsl(var(--popover))",
+              border: "1px solid hsl(var(--border))",
+              borderRadius: 8,
+              fontSize: 12,
+            }}
+            cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }}
+          />
+          <Bar dataKey="Count" radius={[4, 4, 0, 0]} maxBarSize={48}>
+            {chartData.map((entry) => (
+              <Cell key={entry.name} fill={entry.fill} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
     </div>
   );
 }
@@ -244,6 +295,13 @@ export function CampaignDetailPage() {
 
         <StatFunnel
           total={stats.total}
+          sent={stats.sent}
+          opened={stats.opened}
+          clicked={stats.clicked}
+          unsubscribed={stats.unsubscribed ?? 0}
+        />
+
+        <EngagementChart
           sent={stats.sent}
           opened={stats.opened}
           clicked={stats.clicked}
