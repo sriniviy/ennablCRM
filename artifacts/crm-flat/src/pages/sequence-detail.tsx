@@ -388,7 +388,7 @@ export function SequenceDetailPage() {
     if (!aiGoal.trim()) return;
     setAiGenerating(true);
     try {
-      const isImprove = aiMode === "improve" && targetForm === "edit";
+      const isImprove = aiMode === "improve";
       const result = (await apiFetch("/sequences/ai-draft-step", {
         method: "POST",
         body: JSON.stringify({
@@ -397,9 +397,11 @@ export function SequenceDetailPage() {
           context: aiContext.trim() || undefined,
           stepNumber,
           totalSteps,
-          ...(isImprove && editingStep
+          ...(isImprove && targetForm === "edit" && editingStep
             ? { existingSubject: editingStep.subject, existingBody: editingStep.body }
-            : {}),
+            : isImprove && targetForm === "add"
+              ? { existingSubject: stepForm.subject, existingBody: stepForm.body }
+              : {}),
         }),
       })) as { subject: string; body: string };
       if (targetForm === "add") {
@@ -1047,11 +1049,31 @@ export function SequenceDetailPage() {
                         size="sm"
                         className="h-6 px-2 text-[11px] gap-1 text-primary/70 hover:text-primary"
                         type="button"
-                        onClick={() => setAiPanelOpen(aiPanelOpen === "add" ? null : "add")}
+                        onClick={() => {
+                          setAiMode("write");
+                          setAiGoal("");
+                          setAiPanelOpen(aiPanelOpen === "add" && aiMode === "write" ? null : "add");
+                        }}
                       >
                         <Sparkles className="h-3 w-3" />
                         Write with AI
                       </Button>
+                      {(stepForm.subject.trim() || stepForm.body.trim()) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-[11px] gap-1 text-violet-600/80 hover:text-violet-700 dark:text-violet-400/80 dark:hover:text-violet-300"
+                          type="button"
+                          onClick={() => {
+                            setAiMode("improve");
+                            setAiGoal("Improve the email below");
+                            setAiPanelOpen(aiPanelOpen === "add" && aiMode === "improve" ? null : "add");
+                          }}
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                          Improve with AI
+                        </Button>
+                      )}
                       <TokenPicker form="add" />
                     </div>
                   </div>
@@ -1092,13 +1114,15 @@ export function SequenceDetailPage() {
                 {aiPanelOpen === "add" && (
                   <div className="border border-dashed border-primary/40 rounded-lg p-3 space-y-2.5 bg-primary/5">
                     <p className="text-xs font-semibold text-primary flex items-center gap-1.5">
-                      <Sparkles className="h-3.5 w-3.5" />
-                      Write with AI
+                      {aiMode === "improve" ? <RefreshCw className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
+                      {aiMode === "improve" ? "Improve with AI" : "Write with AI"}
                     </p>
                     <div>
-                      <label className="text-xs text-muted-foreground">Goal — what should this email accomplish?</label>
+                      <label className="text-xs text-muted-foreground">
+                        {aiMode === "improve" ? "Goal — how should the email be improved?" : "Goal — what should this email accomplish?"}
+                      </label>
                       <Input
-                        placeholder="e.g. Introduce ourselves and request a 15-min call"
+                        placeholder={aiMode === "improve" ? "e.g. Make it shorter and more direct" : "e.g. Introduce ourselves and request a 15-min call"}
                         value={aiGoal}
                         onChange={(e) => setAiGoal(e.target.value)}
                         className="mt-1 text-sm"
@@ -1135,8 +1159,20 @@ export function SequenceDetailPage() {
                       disabled={!aiGoal.trim() || aiGenerating}
                       className="gap-1.5"
                     >
-                      {aiGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                      {aiGenerating ? "Generating…" : aiGeneratedFor === "add" ? "Regenerate" : "Generate draft"}
+                      {aiGenerating ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : aiMode === "improve" ? (
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      ) : (
+                        <Sparkles className="h-3.5 w-3.5" />
+                      )}
+                      {aiGenerating
+                        ? "Generating…"
+                        : aiGeneratedFor === "add"
+                          ? "Regenerate"
+                          : aiMode === "improve"
+                            ? "Improve draft"
+                            : "Generate draft"}
                     </Button>
                   </div>
                 )}
