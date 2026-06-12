@@ -56,6 +56,8 @@ import {
   Sparkles,
   Loader2,
   RefreshCw,
+  BookmarkPlus,
+  X,
 } from "lucide-react";
 import {
   Select,
@@ -250,6 +252,10 @@ export function SequenceDetailPage() {
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiGeneratedFor, setAiGeneratedFor] = useState<"add" | "edit" | null>(null);
 
+  // AI preset state
+  const [aiPresetNaming, setAiPresetNaming] = useState(false);
+  const [aiPresetName, setAiPresetName] = useState("");
+
   // AI draft sequence dialog state
   const [aiDraftOpen, setAiDraftOpen] = useState(false);
   const [aiDraftGoal, setAiDraftGoal] = useState("");
@@ -337,6 +343,198 @@ export function SequenceDetailPage() {
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
+    );
+  }
+
+  function AiWriterPanel({ panelKey, stepNumber, totalSteps }: { panelKey: "add" | "edit"; stepNumber: number; totalSteps: number }) {
+    const isImproveMode = aiMode === "improve";
+
+    return (
+      <div className="border border-dashed border-primary/40 rounded-lg p-3 space-y-2.5 bg-primary/5">
+        <p className="text-xs font-semibold text-primary flex items-center gap-1.5">
+          {isImproveMode ? <RefreshCw className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
+          {isImproveMode ? "Improve with AI" : "Write with AI"}
+        </p>
+
+        {/* Preset dropdown — improve mode only */}
+        {isImproveMode && aiPresets.length > 0 && (
+          <div>
+            <label className="text-xs text-muted-foreground">Load preset</label>
+            <div className="mt-1 flex gap-1.5 items-center">
+              <Select
+                value=""
+                onValueChange={(presetId) => {
+                  const preset = aiPresets.find((p) => p.id === presetId);
+                  if (!preset) return;
+                  setAiGoal(preset.goal);
+                  setAiTone(preset.tone);
+                  setAiImproveFields(preset.improveFields as "subject" | "body" | "both");
+                  setAiPresetNaming(false);
+                  setAiPresetName("");
+                }}
+              >
+                <SelectTrigger className="h-8 text-sm flex-1">
+                  <SelectValue placeholder="Select a saved preset…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {aiPresets.map((preset) => (
+                    <div key={preset.id} className="flex items-center group">
+                      <SelectItem value={preset.id} className="flex-1">
+                        {preset.name}
+                      </SelectItem>
+                      <button
+                        type="button"
+                        className="mr-2 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deletePresetMutation.mutate(preset.id);
+                        }}
+                        title="Delete preset"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
+
+        {/* improveFields selector — improve mode only */}
+        {isImproveMode && (
+          <div>
+            <label className="text-xs text-muted-foreground">Improve</label>
+            <div className="mt-1 flex rounded-md border overflow-hidden text-[11px] font-medium">
+              {(["subject", "body", "both"] as const).map((option, idx) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setAiImproveFields(option)}
+                  className={cn(
+                    "flex-1 py-1.5 transition-colors",
+                    idx > 0 && "border-l",
+                    aiImproveFields === option
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-background hover:bg-muted text-muted-foreground",
+                  )}
+                >
+                  {option === "both" ? "Subject + Body" : option.charAt(0).toUpperCase() + option.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div>
+          <label className="text-xs text-muted-foreground">
+            {isImproveMode ? "Goal — how should the email be improved?" : "Goal — what should this email accomplish?"}
+          </label>
+          <Input
+            placeholder={isImproveMode ? "e.g. Make it shorter and more direct" : "e.g. Introduce ourselves and request a 15-min call"}
+            value={aiGoal}
+            onChange={(e) => setAiGoal(e.target.value)}
+            className="mt-1 text-sm"
+            onKeyDown={(e) => { if (e.key === "Enter") generateAiDraft(panelKey, stepNumber, totalSteps); }}
+          />
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">Tone</label>
+          <Select value={aiTone} onValueChange={setAiTone}>
+            <SelectTrigger className="mt-1 h-8 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {["Friendly", "Professional", "Direct", "Urgent"].map((t) => (
+                <SelectItem key={t} value={t}>{t}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">Context <span className="opacity-60">(optional — anything else the AI should know?)</span></label>
+          <Textarea
+            placeholder="e.g. They recently downloaded our whitepaper on risk management"
+            value={aiContext}
+            onChange={(e) => setAiContext(e.target.value)}
+            rows={2}
+            className="mt-1 text-sm resize-none"
+          />
+        </div>
+        <Button
+          size="sm"
+          type="button"
+          onClick={() => generateAiDraft(panelKey, stepNumber, totalSteps)}
+          disabled={!aiGoal.trim() || aiGenerating}
+          className="gap-1.5"
+        >
+          {aiGenerating ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : isImproveMode ? (
+            <RefreshCw className="h-3.5 w-3.5" />
+          ) : (
+            <Sparkles className="h-3.5 w-3.5" />
+          )}
+          {aiGenerating
+            ? "Generating…"
+            : aiGeneratedFor === panelKey
+              ? "Regenerate"
+              : isImproveMode
+                ? "Improve draft"
+                : "Generate draft"}
+        </Button>
+
+        {/* Save as preset — improve mode only, shown when goal is filled */}
+        {isImproveMode && aiGoal.trim() && (
+          <div className="border-t pt-2">
+            {aiPresetNaming ? (
+              <div className="flex gap-1.5 items-center">
+                <Input
+                  placeholder="Preset name…"
+                  value={aiPresetName}
+                  onChange={(e) => setAiPresetName(e.target.value)}
+                  className="h-7 text-xs flex-1"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && aiPresetName.trim()) {
+                      savePresetMutation.mutate({ name: aiPresetName.trim(), goal: aiGoal.trim(), tone: aiTone, improveFields: aiImproveFields });
+                    }
+                    if (e.key === "Escape") { setAiPresetNaming(false); setAiPresetName(""); }
+                  }}
+                  autoFocus
+                />
+                <Button
+                  size="sm"
+                  type="button"
+                  variant="default"
+                  className="h-7 px-2 text-xs"
+                  disabled={!aiPresetName.trim() || savePresetMutation.isPending}
+                  onClick={() => savePresetMutation.mutate({ name: aiPresetName.trim(), goal: aiGoal.trim(), tone: aiTone, improveFields: aiImproveFields })}
+                >
+                  {savePresetMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+                </Button>
+                <Button
+                  size="sm"
+                  type="button"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => { setAiPresetNaming(false); setAiPresetName(""); }}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors"
+                onClick={() => setAiPresetNaming(true)}
+              >
+                <BookmarkPlus className="h-3 w-3" />
+                Save as preset
+              </button>
+            )}
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -472,6 +670,39 @@ export function SequenceDetailPage() {
     queryFn: () => apiFetch(`/sequences/${id}`),
     enabled: !!id,
     staleTime: 30_000,
+  });
+
+  type AiPreset = { id: string; name: string; goal: string; tone: string; improveFields: string };
+  const { data: aiPresets = [] } = useQuery<AiPreset[]>({
+    queryKey: ["ai-presets"],
+    queryFn: () => apiFetch("/users/me/ai-presets"),
+  });
+
+  const savePresetMutation = useMutation({
+    mutationFn: (payload: { name: string; goal: string; tone: string; improveFields: string }) =>
+      apiFetch("/users/me/ai-presets", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ai-presets"] });
+      setAiPresetNaming(false);
+      setAiPresetName("");
+      toast({ title: "Preset saved" });
+    },
+    onError: (err: Error) =>
+      toast({ title: "Failed to save preset", description: err.message, variant: "destructive" }),
+  });
+
+  const deletePresetMutation = useMutation({
+    mutationFn: (presetId: string) =>
+      apiFetch(`/users/me/ai-presets/${presetId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ai-presets"] });
+      toast({ title: "Preset deleted" });
+    },
+    onError: (err: Error) =>
+      toast({ title: "Failed to delete preset", description: err.message, variant: "destructive" }),
   });
 
   const { data: contactsData } = useListContacts({ page: 1, pageSize: 200 });
@@ -894,92 +1125,7 @@ export function SequenceDetailPage() {
                         </div>
                         {/* AI Writer Panel — edit form */}
                         {aiPanelOpen === "edit" && (
-                          <div className="border border-dashed border-primary/40 rounded-lg p-3 space-y-2.5 bg-primary/5">
-                            <p className="text-xs font-semibold text-primary flex items-center gap-1.5">
-                              {aiMode === "improve" ? <RefreshCw className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
-                              {aiMode === "improve" ? "Improve with AI" : "Write with AI"}
-                            </p>
-                            {aiMode === "improve" && (
-                              <div>
-                                <label className="text-xs text-muted-foreground">Improve</label>
-                                <div className="mt-1 flex rounded-md border overflow-hidden text-[11px] font-medium">
-                                  {(["subject", "body", "both"] as const).map((option, idx) => (
-                                    <button
-                                      key={option}
-                                      type="button"
-                                      onClick={() => setAiImproveFields(option)}
-                                      className={cn(
-                                        "flex-1 py-1.5 transition-colors",
-                                        idx > 0 && "border-l",
-                                        aiImproveFields === option
-                                          ? "bg-primary text-primary-foreground"
-                                          : "bg-background hover:bg-muted text-muted-foreground",
-                                      )}
-                                    >
-                                      {option === "both" ? "Subject + Body" : option.charAt(0).toUpperCase() + option.slice(1)}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                            <div>
-                              <label className="text-xs text-muted-foreground">
-                                {aiMode === "improve" ? "Goal — how should the email be improved?" : "Goal — what should this email accomplish?"}
-                              </label>
-                              <Input
-                                placeholder={aiMode === "improve" ? "e.g. Make it shorter and more direct" : "e.g. Introduce ourselves and request a 15-min call"}
-                                value={aiGoal}
-                                onChange={(e) => setAiGoal(e.target.value)}
-                                className="mt-1 text-sm"
-                                onKeyDown={(e) => { if (e.key === "Enter") generateAiDraft("edit", i + 1, steps.length); }}
-                              />
-                            </div>
-                            <div>
-                              <label className="text-xs text-muted-foreground">Tone</label>
-                              <Select value={aiTone} onValueChange={setAiTone}>
-                                <SelectTrigger className="mt-1 h-8 text-sm">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {["Friendly", "Professional", "Direct", "Urgent"].map((t) => (
-                                    <SelectItem key={t} value={t}>{t}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div>
-                              <label className="text-xs text-muted-foreground">Context <span className="opacity-60">(optional — anything else the AI should know?)</span></label>
-                              <Textarea
-                                placeholder="e.g. They recently downloaded our whitepaper on risk management"
-                                value={aiContext}
-                                onChange={(e) => setAiContext(e.target.value)}
-                                rows={2}
-                                className="mt-1 text-sm resize-none"
-                              />
-                            </div>
-                            <Button
-                              size="sm"
-                              type="button"
-                              onClick={() => generateAiDraft("edit", i + 1, steps.length)}
-                              disabled={!aiGoal.trim() || aiGenerating}
-                              className="gap-1.5"
-                            >
-                              {aiGenerating ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : aiMode === "improve" ? (
-                                <RefreshCw className="h-3.5 w-3.5" />
-                              ) : (
-                                <Sparkles className="h-3.5 w-3.5" />
-                              )}
-                              {aiGenerating
-                                ? "Generating…"
-                                : aiGeneratedFor === "edit"
-                                  ? "Regenerate"
-                                  : aiMode === "improve"
-                                    ? "Improve draft"
-                                    : "Generate draft"}
-                            </Button>
-                          </div>
+                          <AiWriterPanel panelKey="edit" stepNumber={i + 1} totalSteps={steps.length} />
                         )}
                         {/* AI Compare View — shows after generation, before accept/discard */}
                         {aiCompareFor === "edit" && aiProposed && (
@@ -1223,92 +1369,7 @@ export function SequenceDetailPage() {
                 </div>
                 {/* AI Writer Panel — add form */}
                 {aiPanelOpen === "add" && (
-                  <div className="border border-dashed border-primary/40 rounded-lg p-3 space-y-2.5 bg-primary/5">
-                    <p className="text-xs font-semibold text-primary flex items-center gap-1.5">
-                      {aiMode === "improve" ? <RefreshCw className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
-                      {aiMode === "improve" ? "Improve with AI" : "Write with AI"}
-                    </p>
-                    {aiMode === "improve" && (
-                      <div>
-                        <label className="text-xs text-muted-foreground">Improve</label>
-                        <div className="mt-1 flex rounded-md border overflow-hidden text-[11px] font-medium">
-                          {(["subject", "body", "both"] as const).map((option, idx) => (
-                            <button
-                              key={option}
-                              type="button"
-                              onClick={() => setAiImproveFields(option)}
-                              className={cn(
-                                "flex-1 py-1.5 transition-colors",
-                                idx > 0 && "border-l",
-                                aiImproveFields === option
-                                  ? "bg-primary text-primary-foreground"
-                                  : "bg-background hover:bg-muted text-muted-foreground",
-                              )}
-                            >
-                              {option === "both" ? "Subject + Body" : option.charAt(0).toUpperCase() + option.slice(1)}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    <div>
-                      <label className="text-xs text-muted-foreground">
-                        {aiMode === "improve" ? "Goal — how should the email be improved?" : "Goal — what should this email accomplish?"}
-                      </label>
-                      <Input
-                        placeholder={aiMode === "improve" ? "e.g. Make it shorter and more direct" : "e.g. Introduce ourselves and request a 15-min call"}
-                        value={aiGoal}
-                        onChange={(e) => setAiGoal(e.target.value)}
-                        className="mt-1 text-sm"
-                        onKeyDown={(e) => { if (e.key === "Enter") generateAiDraft("add", steps.length + 1, steps.length + 1); }}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-muted-foreground">Tone</label>
-                      <Select value={aiTone} onValueChange={setAiTone}>
-                        <SelectTrigger className="mt-1 h-8 text-sm">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {["Friendly", "Professional", "Direct", "Urgent"].map((t) => (
-                            <SelectItem key={t} value={t}>{t}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="text-xs text-muted-foreground">Context <span className="opacity-60">(optional — anything else the AI should know?)</span></label>
-                      <Textarea
-                        placeholder="e.g. They recently downloaded our whitepaper on risk management"
-                        value={aiContext}
-                        onChange={(e) => setAiContext(e.target.value)}
-                        rows={2}
-                        className="mt-1 text-sm resize-none"
-                      />
-                    </div>
-                    <Button
-                      size="sm"
-                      type="button"
-                      onClick={() => generateAiDraft("add", steps.length + 1, steps.length + 1)}
-                      disabled={!aiGoal.trim() || aiGenerating}
-                      className="gap-1.5"
-                    >
-                      {aiGenerating ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : aiMode === "improve" ? (
-                        <RefreshCw className="h-3.5 w-3.5" />
-                      ) : (
-                        <Sparkles className="h-3.5 w-3.5" />
-                      )}
-                      {aiGenerating
-                        ? "Generating…"
-                        : aiGeneratedFor === "add"
-                          ? "Regenerate"
-                          : aiMode === "improve"
-                            ? "Improve draft"
-                            : "Generate draft"}
-                    </Button>
-                  </div>
+                  <AiWriterPanel panelKey="add" stepNumber={steps.length + 1} totalSteps={steps.length + 1} />
                 )}
                 {/* AI Compare View — shows after generation, before accept/discard */}
                 {aiCompareFor === "add" && aiProposed && (
