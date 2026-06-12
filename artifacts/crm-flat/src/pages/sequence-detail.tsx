@@ -222,10 +222,10 @@ export function SequenceDetailPage() {
   // AI writer state (shared between add and edit forms)
   const [aiPanelOpen, setAiPanelOpen] = useState<"add" | "edit" | null>(null);
   const [aiMode, setAiMode] = useState<"write" | "improve">("write");
+  const [aiImproveFields, setAiImproveFields] = useState<"subject" | "body" | "both">("both");
   const [aiGoal, setAiGoal] = useState("");
   const [aiTone, setAiTone] = useState("Professional");
   const [aiContext, setAiContext] = useState("");
-  const [aiImproveFields, setAiImproveFields] = useState<"subject" | "body" | "both">("both");
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiGeneratedFor, setAiGeneratedFor] = useState<"add" | "edit" | null>(null);
 
