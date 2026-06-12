@@ -1,4 +1,5 @@
 import { useSessionToken } from "@/hooks/use-session-token";
+import { useAiPrefs } from "@/hooks/use-ai-prefs";
 import { useState, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
@@ -222,9 +223,8 @@ export function SequenceDetailPage() {
   // AI writer state (shared between add and edit forms)
   const [aiPanelOpen, setAiPanelOpen] = useState<"add" | "edit" | null>(null);
   const [aiMode, setAiMode] = useState<"write" | "improve">("write");
+  const { tone: aiTone, setTone: setAiTone, goal: aiGoal, setGoal: setAiGoal } = useAiPrefs();
   const [aiImproveFields, setAiImproveFields] = useState<"subject" | "body" | "both">("both");
-  const [aiGoal, setAiGoal] = useState("");
-  const [aiTone, setAiTone] = useState("Professional");
   const [aiContext, setAiContext] = useState("");
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiGeneratedFor, setAiGeneratedFor] = useState<"add" | "edit" | null>(null);
@@ -233,7 +233,6 @@ export function SequenceDetailPage() {
   const [aiDraftOpen, setAiDraftOpen] = useState(false);
   const [aiDraftGoal, setAiDraftGoal] = useState("");
   const [aiDraftNumSteps, setAiDraftNumSteps] = useState(3);
-  const [aiDraftTone, setAiDraftTone] = useState("Professional");
   const [aiDraftContext, setAiDraftContext] = useState("");
   const [aiDraftGenerating, setAiDraftGenerating] = useState(false);
   const [aiDraftPreview, setAiDraftPreview] = useState<
@@ -346,7 +345,7 @@ export function SequenceDetailPage() {
         body: JSON.stringify({
           goal: aiDraftGoal.trim(),
           numSteps: aiDraftNumSteps,
-          tone: aiDraftTone,
+          tone: aiTone,
           context: aiDraftContext.trim() || undefined,
         }),
       })) as { steps: { subject: string; body: string; delayDays: number }[] };
@@ -1757,7 +1756,7 @@ export function SequenceDetailPage() {
                 </div>
                 <div>
                   <label className="text-sm font-medium">Tone</label>
-                  <Select value={aiDraftTone} onValueChange={setAiDraftTone}>
+                  <Select value={aiTone} onValueChange={setAiTone}>
                     <SelectTrigger className="mt-1.5">
                       <SelectValue />
                     </SelectTrigger>

@@ -1,4 +1,5 @@
 import { useSessionToken } from "@/hooks/use-session-token";
+import { useAiPrefs } from "@/hooks/use-ai-prefs";
 import { useState } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { Link, useLocation } from "wouter";
@@ -95,9 +96,8 @@ export function SequencesPage() {
   // ── AI-create dialog ──────────────────────────────────────────────────────
   const [showAiCreate, setShowAiCreate] = useState(false);
   const [aiName, setAiName] = useState("");
-  const [aiGoal, setAiGoal] = useState("");
+  const { tone: aiTone, setTone: setAiTone, goal: aiGoal, setGoal: setAiGoal } = useAiPrefs();
   const [aiNumSteps, setAiNumSteps] = useState(3);
-  const [aiTone, setAiTone] = useState("Professional");
   const [aiContext, setAiContext] = useState("");
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiPreview, setAiPreview] = useState<
