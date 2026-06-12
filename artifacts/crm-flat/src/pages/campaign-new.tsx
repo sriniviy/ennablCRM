@@ -22,8 +22,9 @@ import {
   ArrowLeft, ArrowRight, Check, Trash2, Type, AlignLeft, MousePointer,
   Minus, Image, Share2, Maximize2, Users, Calendar, Send, Save,
   ChevronLeft, ChevronRight, Clock, Tag, User, Smile, Columns, Monitor, Smartphone, Code,
-  Mail, Building2, UserCheck, ExternalLink, Sparkles, Loader2,
+  Mail, Building2, UserCheck, ExternalLink, Sparkles, Loader2, GripVertical, Copy,
 } from "lucide-react";
+import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 
@@ -447,6 +448,19 @@ export function CampaignNewPage() {
     }
   };
 
+  function handleDragEnd(result: DropResult) {
+    if (!result.destination) return;
+    const from = result.source.index;
+    const to = result.destination.index;
+    if (from === to) return;
+    setBlocks(prev => {
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  }
+
   async function generateAiCampaign() {
     if (!aiGoal.trim()) return;
     setAiGenerating(true);
@@ -647,69 +661,104 @@ export function CampaignNewPage() {
               </div>
 
               {previewMode === "canvas" && (
-                <div className="rounded-xl border bg-muted/30 p-4 min-h-[600px] space-y-2">
-                  {blocks.length === 0 && (
-                    <div className="flex items-center justify-center h-40 text-muted-foreground text-sm opacity-50">
-                      Click a block type on the left to add it
-                    </div>
-                  )}
-                  {blocks.map((block, idx) => (
-                    <div
-                      key={block.id}
-                      onClick={() => setActiveBlockId(block.id)}
-                      className={`group relative rounded-lg border-2 cursor-pointer p-3 bg-white dark:bg-card transition-colors ${activeBlockId === block.id ? "border-primary" : "border-transparent hover:border-muted-foreground/30"}`}
-                    >
-                      <div className="absolute right-2 top-2 hidden group-hover:flex items-center gap-0.5 bg-background border rounded-md px-1 shadow-sm z-10">
-                        <button onClick={e => { e.stopPropagation(); moveBlock(block.id, -1); }} disabled={idx === 0} className="p-1 hover:bg-muted rounded disabled:opacity-30 text-xs" title="Move up">▲</button>
-                        <button onClick={e => { e.stopPropagation(); moveBlock(block.id, 1); }} disabled={idx === blocks.length - 1} className="p-1 hover:bg-muted rounded disabled:opacity-30 text-xs" title="Move down">▼</button>
-                        <button onClick={e => { e.stopPropagation(); const nb = { ...block, id: uid() }; setBlocks(p => { const i = p.findIndex(b => b.id === block.id); const a = [...p]; a.splice(i + 1, 0, nb); return a; }); setActiveBlockId(nb.id); }} className="p-1 hover:bg-muted rounded text-xs" title="Duplicate">⎘</button>
-                        <button onClick={e => { e.stopPropagation(); removeBlock(block.id); }} className="p-1 hover:bg-red-50 text-destructive rounded text-xs" title="Delete"><Trash2 className="h-3 w-3" /></button>
+                <DragDropContext onDragEnd={handleDragEnd}>
+                  <div className="rounded-xl border bg-muted/30 p-4 min-h-[600px]">
+                    {blocks.length === 0 && (
+                      <div className="flex items-center justify-center h-40 text-muted-foreground text-sm opacity-50">
+                        Click a block type on the left to add it
                       </div>
-                      {block.type === "header" && (
-                        <div style={{ textAlign: block.align ?? "center", color: block.color || "#111", fontSize: FONT_SIZES[block.fontSize ?? "lg"].px, fontWeight: 700, lineHeight: 1.3 }} className="truncate">
-                          {block.content || <span className="text-muted-foreground">Heading</span>}
+                    )}
+                    <Droppable droppableId="campaign-blocks">
+                      {(provided) => (
+                        <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
+                          {blocks.map((block, idx) => (
+                            <Draggable key={block.id} draggableId={block.id} index={idx}>
+                              {(draggable, snapshot) => (
+                                <div
+                                  ref={draggable.innerRef}
+                                  {...draggable.draggableProps}
+                                  onClick={() => setActiveBlockId(block.id)}
+                                  className={`group relative flex items-stretch rounded-lg border-2 bg-white dark:bg-card transition-colors ${snapshot.isDragging ? "shadow-lg border-primary/40" : activeBlockId === block.id ? "border-primary" : "border-transparent hover:border-muted-foreground/30"}`}
+                                >
+                                  {/* drag handle */}
+                                  <div
+                                    {...draggable.dragHandleProps}
+                                    onClick={e => e.stopPropagation()}
+                                    className="flex items-center px-1.5 text-muted-foreground/25 hover:text-muted-foreground/60 cursor-grab active:cursor-grabbing shrink-0 transition-colors"
+                                    title="Drag to reorder"
+                                  >
+                                    <GripVertical className="h-4 w-4" />
+                                  </div>
+
+                                  {/* block content */}
+                                  <div className="flex-1 py-3 pr-3 min-w-0">
+                                    {block.type === "header" && (
+                                      <div style={{ textAlign: block.align ?? "center", color: block.color || "#111", fontSize: FONT_SIZES[block.fontSize ?? "lg"].px, fontWeight: 700, lineHeight: 1.3 }} className="truncate">
+                                        {block.content || <span className="text-muted-foreground">Heading</span>}
+                                      </div>
+                                    )}
+                                    {block.type === "text" && (
+                                      <p style={{ textAlign: block.align ?? "left", color: block.color || "#444", fontSize: FONT_SIZES[block.fontSize ?? "md"].px, lineHeight: 1.6 }} className="text-sm whitespace-pre-wrap">
+                                        {block.content || <span className="text-muted-foreground">Text block</span>}
+                                      </p>
+                                    )}
+                                    {block.type === "columns" && (
+                                      <div className="grid gap-2" style={{ gridTemplateColumns: block.colRatio === "60-40" ? "3fr 2fr" : block.colRatio === "40-60" ? "2fr 3fr" : "1fr 1fr" }}>
+                                        <div className="rounded border border-dashed border-muted-foreground/20 p-2 text-xs text-muted-foreground whitespace-pre-wrap bg-muted/20">{block.col1 || "Left column"}</div>
+                                        <div className="rounded border border-dashed border-muted-foreground/20 p-2 text-xs text-muted-foreground whitespace-pre-wrap bg-muted/20">{block.col2 || "Right column"}</div>
+                                      </div>
+                                    )}
+                                    {block.type === "image" && (
+                                      block.imageUrl
+                                        ? <img src={block.imageUrl} alt={block.imageAlt} className="max-w-full rounded" />
+                                        : <div className="h-20 bg-muted rounded-lg border-2 border-dashed flex items-center justify-center text-muted-foreground text-sm"><Image className="h-5 w-5 mr-2" /> Add image URL in panel →</div>
+                                    )}
+                                    {block.type === "button" && (
+                                      <div style={{ textAlign: block.align ?? "center" }}>
+                                        <span className="inline-block px-5 py-2.5 text-sm font-semibold rounded-md text-white" style={{ background: block.buttonColor || "#6366f1" }}>
+                                          {block.content || "Button"}
+                                        </span>
+                                      </div>
+                                    )}
+                                    {block.type === "divider" && <Separator />}
+                                    {block.type === "spacer" && (
+                                      <div className="flex items-center justify-center text-xs text-muted-foreground py-1">
+                                        <Maximize2 className="h-3 w-3 mr-1" /> Spacer ({block.spacerHeight ?? "md"})
+                                      </div>
+                                    )}
+                                    {block.type === "social" && (
+                                      <div style={{ textAlign: block.align ?? "center" }} className="text-xs text-muted-foreground space-x-3">
+                                        <span>LinkedIn</span><span>X / Twitter</span><span>Website</span>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* action toolbar */}
+                                  <div className="absolute right-2 top-2 hidden group-hover:flex items-center gap-0.5 bg-background border rounded-md px-1 shadow-sm z-10">
+                                    <button onClick={e => { e.stopPropagation(); moveBlock(block.id, -1); }} disabled={idx === 0} className="p-1 hover:bg-muted rounded disabled:opacity-30 text-xs" title="Move up">▲</button>
+                                    <button onClick={e => { e.stopPropagation(); moveBlock(block.id, 1); }} disabled={idx === blocks.length - 1} className="p-1 hover:bg-muted rounded disabled:opacity-30 text-xs" title="Move down">▼</button>
+                                    <button
+                                      onClick={e => { e.stopPropagation(); const nb = { ...block, id: uid() }; setBlocks(p => { const i = p.findIndex(b => b.id === block.id); const a = [...p]; a.splice(i + 1, 0, nb); return a; }); setActiveBlockId(nb.id); }}
+                                      className="flex items-center gap-1 px-1.5 py-1 hover:bg-muted rounded text-xs text-muted-foreground"
+                                      title="Duplicate block"
+                                    >
+                                      <Copy className="h-3 w-3" /> Duplicate
+                                    </button>
+                                    <button onClick={e => { e.stopPropagation(); removeBlock(block.id); }} className="p-1 hover:bg-red-50 text-destructive rounded text-xs" title="Delete"><Trash2 className="h-3 w-3" /></button>
+                                  </div>
+                                </div>
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
                         </div>
                       )}
-                      {block.type === "text" && (
-                        <p style={{ textAlign: block.align ?? "left", color: block.color || "#444", fontSize: FONT_SIZES[block.fontSize ?? "md"].px, lineHeight: 1.6 }} className="text-sm whitespace-pre-wrap">
-                          {block.content || <span className="text-muted-foreground">Text block</span>}
-                        </p>
-                      )}
-                      {block.type === "columns" && (
-                        <div className="grid gap-2" style={{ gridTemplateColumns: block.colRatio === "60-40" ? "3fr 2fr" : block.colRatio === "40-60" ? "2fr 3fr" : "1fr 1fr" }}>
-                          <div className="rounded border border-dashed border-muted-foreground/20 p-2 text-xs text-muted-foreground whitespace-pre-wrap bg-muted/20">{block.col1 || "Left column"}</div>
-                          <div className="rounded border border-dashed border-muted-foreground/20 p-2 text-xs text-muted-foreground whitespace-pre-wrap bg-muted/20">{block.col2 || "Right column"}</div>
-                        </div>
-                      )}
-                      {block.type === "image" && (
-                        block.imageUrl
-                          ? <img src={block.imageUrl} alt={block.imageAlt} className="max-w-full rounded" />
-                          : <div className="h-20 bg-muted rounded-lg border-2 border-dashed flex items-center justify-center text-muted-foreground text-sm"><Image className="h-5 w-5 mr-2" /> Add image URL in panel →</div>
-                      )}
-                      {block.type === "button" && (
-                        <div style={{ textAlign: block.align ?? "center" }}>
-                          <span className="inline-block px-5 py-2.5 text-sm font-semibold rounded-md text-white" style={{ background: block.buttonColor || "#6366f1" }}>
-                            {block.content || "Button"}
-                          </span>
-                        </div>
-                      )}
-                      {block.type === "divider" && <Separator />}
-                      {block.type === "spacer" && (
-                        <div className="flex items-center justify-center text-xs text-muted-foreground py-1">
-                          <Maximize2 className="h-3 w-3 mr-1" /> Spacer ({block.spacerHeight ?? "md"})
-                        </div>
-                      )}
-                      {block.type === "social" && (
-                        <div style={{ textAlign: block.align ?? "center" }} className="text-xs text-muted-foreground space-x-3">
-                          <span>LinkedIn</span><span>X / Twitter</span><span>Website</span>
-                        </div>
-                      )}
+                    </Droppable>
+                    <div className="rounded-lg border bg-muted/30 p-3 text-center text-xs text-muted-foreground mt-2">
+                      🔒 Unsubscribe footer — always included
                     </div>
-                  ))}
-                  <div className="rounded-lg border bg-muted/30 p-3 text-center text-xs text-muted-foreground">
-                    🔒 Unsubscribe footer — always included
                   </div>
-                </div>
+                </DragDropContext>
               )}
 
               {previewMode === "preview" && (
