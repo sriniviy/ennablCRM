@@ -137,6 +137,78 @@ Write the email now.`;
   }
 });
 
+// ─── AI Draft Sequence (all steps at once) ───────────────────────────────────
+
+router.post("/ai-draft-sequence", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { goal, numSteps, tone, context } = req.body as {
+      goal?: string;
+      numSteps?: number;
+      tone?: string;
+      context?: string;
+    };
+    if (!goal?.trim()) {
+      res.status(400).json({ error: "goal is required" });
+      return;
+    }
+    const count = Math.min(7, Math.max(2, Math.round(numSteps ?? 3)));
+    const toneLabel = tone ?? "Professional";
+
+    const systemPrompt = `You are an expert B2B sales email writer. Your job is to draft a complete multi-step outreach email sequence.
+Return ONLY a JSON array with exactly ${count} objects. Each object must have:
+- "subject": a short, compelling subject line
+- "body": the full email body (3-5 short paragraphs max, ending with a clear low-friction CTA)
+- "delayDays": number of days after the previous step to send this email (first step is 0, subsequent steps are 1-5)
+
+Guidelines:
+- Sound human and natural, not like a template
+- Tone should be: ${toneLabel}
+- Each email should reference or build on the previous without being repetitive
+- Never use phrases like "I hope this email finds you well"
+- Do not wrap in markdown, do not include any text outside the JSON array`;
+
+    const userPrompt = `Sequence goal: ${goal.trim()}${context?.trim() ? `\n\nAdditional context: ${context.trim()}` : ""}
+
+Draft all ${count} emails now.`;
+
+    const message = await anthropic.messages.create({
+      model: "claude-haiku-4-5",
+      max_tokens: 8192,
+      messages: [{ role: "user", content: userPrompt }],
+      system: systemPrompt,
+    });
+
+    const rawText = message.content
+      .filter((b) => b.type === "text")
+      .map((b) => (b as { type: "text"; text: string }).text)
+      .join("");
+
+    const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
+      res.status(500).json({ error: "AI returned unexpected format" });
+      return;
+    }
+    const parsed = JSON.parse(jsonMatch[0]) as unknown[];
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      res.status(500).json({ error: "AI response was not an array" });
+      return;
+    }
+    const steps = parsed.map((s, i) => {
+      const step = s as { subject?: string; body?: string; delayDays?: number };
+      if (!step.subject || !step.body) throw new Error(`Step ${i + 1} missing subject or body`);
+      return {
+        subject: step.subject,
+        body: step.body,
+        delayDays: typeof step.delayDays === "number" ? Math.max(0, step.delayDays) : (i === 0 ? 0 : 2),
+      };
+    });
+    res.json({ steps });
+  } catch (err) {
+    console.error("AI draft sequence error:", err);
+    res.status(500).json({ error: "Failed to generate sequence draft" });
+  }
+});
+
 // Returns the distinct contactIds that have at least one active TRIGGER enrollment.
 // Used by the contacts list and deal cards to show the auto-enrolled indicator.
 router.get("/trigger-enrolled-contacts", requireAuth, async (_req: Request, res: Response) => {

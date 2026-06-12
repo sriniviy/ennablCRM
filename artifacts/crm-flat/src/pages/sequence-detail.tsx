@@ -227,6 +227,18 @@ export function SequenceDetailPage() {
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiGeneratedFor, setAiGeneratedFor] = useState<"add" | "edit" | null>(null);
 
+  // AI draft sequence dialog state
+  const [aiDraftOpen, setAiDraftOpen] = useState(false);
+  const [aiDraftGoal, setAiDraftGoal] = useState("");
+  const [aiDraftNumSteps, setAiDraftNumSteps] = useState(3);
+  const [aiDraftTone, setAiDraftTone] = useState("Professional");
+  const [aiDraftContext, setAiDraftContext] = useState("");
+  const [aiDraftGenerating, setAiDraftGenerating] = useState(false);
+  const [aiDraftPreview, setAiDraftPreview] = useState<
+    { subject: string; body: string; delayDays: number }[] | null
+  >(null);
+  const [aiDraftSaving, setAiDraftSaving] = useState(false);
+
   // Refs for cursor-position-aware token insertion
   const addSubjectRef = useRef<HTMLInputElement>(null);
   const addBodyRef = useRef<HTMLTextAreaElement>(null);
@@ -314,6 +326,61 @@ export function SequenceDetailPage() {
         </DropdownMenuContent>
       </DropdownMenu>
     );
+  }
+
+  // Generates all steps at once from a single goal
+  async function generateAiDraftSequence() {
+    if (!aiDraftGoal.trim()) return;
+    setAiDraftGenerating(true);
+    setAiDraftPreview(null);
+    try {
+      const result = (await apiFetch("/sequences/ai-draft-sequence", {
+        method: "POST",
+        body: JSON.stringify({
+          goal: aiDraftGoal.trim(),
+          numSteps: aiDraftNumSteps,
+          tone: aiDraftTone,
+          context: aiDraftContext.trim() || undefined,
+        }),
+      })) as { steps: { subject: string; body: string; delayDays: number }[] };
+      setAiDraftPreview(result.steps);
+    } catch (err) {
+      toast({
+        title: "AI generation failed",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setAiDraftGenerating(false);
+    }
+  }
+
+  // Saves all preview steps in bulk via the existing single-step API
+  async function acceptAiDraftSequence() {
+    if (!aiDraftPreview) return;
+    setAiDraftSaving(true);
+    try {
+      for (const step of aiDraftPreview) {
+        await apiFetch(`/sequences/${id}/steps`, {
+          method: "POST",
+          body: JSON.stringify(step),
+        });
+      }
+      invalidate();
+      setAiDraftOpen(false);
+      setAiDraftPreview(null);
+      setAiDraftGoal("");
+      setAiDraftContext("");
+      toast({ title: `${aiDraftPreview.length} steps added` });
+    } catch (err) {
+      toast({
+        title: "Failed to save steps",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setAiDraftSaving(false);
+    }
   }
 
   // Calls the AI endpoint and populates the target form's subject/body.
@@ -687,9 +754,18 @@ export function SequenceDetailPage() {
           </CardHeader>
           <CardContent>
             {steps.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Mail className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                <p className="text-sm">No steps yet. Add one to get started.</p>
+              <div className="text-center py-10 space-y-4">
+                <div className="text-muted-foreground">
+                  <Mail className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                  <p className="text-sm">No steps yet. Draft the whole sequence with AI, or add steps one by one.</p>
+                </div>
+                <Button
+                  onClick={() => setAiDraftOpen(true)}
+                  className="gap-2"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  Draft sequence with AI
+                </Button>
               </div>
             ) : (
               <ol className="space-y-3">
@@ -1384,6 +1460,187 @@ export function SequenceDetailPage() {
           </Card>
         )}
       </div>
+
+      {/* AI draft sequence dialog */}
+      <Dialog
+        open={aiDraftOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAiDraftPreview(null);
+          }
+          setAiDraftOpen(open);
+        }}
+      >
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              Draft sequence with AI
+            </DialogTitle>
+          </DialogHeader>
+
+          {/* Form — hidden once preview is shown */}
+          {!aiDraftPreview && (
+            <div className="space-y-4 py-2">
+              <div>
+                <label className="text-sm font-medium">Sequence goal</label>
+                <p className="text-xs text-muted-foreground mb-1.5">What should this email sequence accomplish?</p>
+                <Textarea
+                  placeholder="e.g. Warm up cold leads who downloaded our e-book and book a 15-min discovery call"
+                  value={aiDraftGoal}
+                  onChange={(e) => setAiDraftGoal(e.target.value)}
+                  rows={3}
+                  className="text-sm resize-none"
+                  autoFocus
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium">Number of steps</label>
+                  <Select
+                    value={String(aiDraftNumSteps)}
+                    onValueChange={(v) => setAiDraftNumSteps(Number(v))}
+                  >
+                    <SelectTrigger className="mt-1.5">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[2, 3, 4, 5, 6, 7].map((n) => (
+                        <SelectItem key={n} value={String(n)}>
+                          {n} emails
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Tone</label>
+                  <Select value={aiDraftTone} onValueChange={setAiDraftTone}>
+                    <SelectTrigger className="mt-1.5">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["Friendly", "Professional", "Direct", "Urgent"].map((t) => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium">
+                  Context{" "}
+                  <span className="font-normal text-muted-foreground text-xs">(optional)</span>
+                </label>
+                <Textarea
+                  placeholder="e.g. Our audience is mid-market CFOs. We offer a spend analytics platform."
+                  value={aiDraftContext}
+                  onChange={(e) => setAiDraftContext(e.target.value)}
+                  rows={2}
+                  className="mt-1.5 text-sm resize-none"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Preview */}
+          {aiDraftPreview && (
+            <div className="space-y-3 py-2">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium flex-1">
+                  {aiDraftPreview.length} steps generated — review before saving
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5 text-xs"
+                  onClick={() => setAiDraftPreview(null)}
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  Edit inputs
+                </Button>
+              </div>
+              <ol className="space-y-3">
+                {aiDraftPreview.map((step, i) => (
+                  <li key={i} className="border rounded-lg p-4 space-y-2 bg-muted/30">
+                    <div className="flex items-center gap-2">
+                      <span className="bg-primary text-primary-foreground rounded-full h-6 w-6 flex items-center justify-center text-xs font-bold shrink-0">
+                        {i + 1}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {i === 0
+                          ? "Send immediately"
+                          : `Send ${step.delayDays} day${step.delayDays !== 1 ? "s" : ""} after step ${i}`}
+                      </span>
+                    </div>
+                    <p className="text-sm font-semibold">{step.subject}</p>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                      {step.body}
+                    </p>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            {!aiDraftPreview ? (
+              <>
+                <Button variant="outline" onClick={() => setAiDraftOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={generateAiDraftSequence}
+                  disabled={!aiDraftGoal.trim() || aiDraftGenerating}
+                  className="gap-2"
+                >
+                  {aiDraftGenerating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                  {aiDraftGenerating ? "Generating…" : "Generate draft"}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setAiDraftOpen(false)}
+                  disabled={aiDraftSaving}
+                >
+                  Dismiss
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={generateAiDraftSequence}
+                  disabled={aiDraftGenerating || aiDraftSaving}
+                  className="gap-1.5"
+                >
+                  {aiDraftGenerating ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  )}
+                  Regenerate
+                </Button>
+                <Button
+                  onClick={acceptAiDraftSequence}
+                  disabled={aiDraftSaving || aiDraftGenerating}
+                  className="gap-2"
+                >
+                  {aiDraftSaving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="h-4 w-4" />
+                  )}
+                  {aiDraftSaving ? "Saving…" : `Accept all ${aiDraftPreview.length} steps`}
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Enroll contacts dialog */}
       <Dialog open={enrollOpen} onOpenChange={setEnrollOpen}>
