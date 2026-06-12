@@ -123,6 +123,84 @@ function plainTextToHtml(text: string): string {
   );
 }
 
+// --- Word-level diff helpers ---
+type DiffSegment = { text: string; kind: "unchanged" | "removed" | "added" };
+
+function diffWords(
+  oldText: string,
+  newText: string,
+): { oldParts: DiffSegment[]; newParts: DiffSegment[] } {
+  const tok = (s: string) => s.split(/(\s+)/g).filter((x) => x.length > 0);
+  const a = tok(oldText);
+  const b = tok(newText);
+  const m = a.length;
+  const n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () =>
+    new Array(n + 1).fill(0),
+  );
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] =
+        a[i - 1] === b[j - 1]
+          ? dp[i - 1][j - 1] + 1
+          : Math.max(dp[i - 1][j], dp[i][j - 1]);
+  const ops: Array<[number, number]> = [];
+  let i = m,
+    j = n;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && a[i - 1] === b[j - 1]) {
+      ops.unshift([i - 1, j - 1]);
+      i--;
+      j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      ops.unshift([-1, j - 1]);
+      j--;
+    } else {
+      ops.unshift([i - 1, -1]);
+      i--;
+    }
+  }
+  const oldParts: DiffSegment[] = [];
+  const newParts: DiffSegment[] = [];
+  for (const [ai, bi] of ops) {
+    if (ai >= 0 && bi >= 0) {
+      oldParts.push({ text: a[ai], kind: "unchanged" });
+      newParts.push({ text: b[bi], kind: "unchanged" });
+    } else if (ai >= 0) {
+      oldParts.push({ text: a[ai], kind: "removed" });
+    } else {
+      newParts.push({ text: b[bi], kind: "added" });
+    }
+  }
+  return { oldParts, newParts };
+}
+
+function DiffText({ parts }: { parts: DiffSegment[] }) {
+  return (
+    <>
+      {parts.map((seg, idx) =>
+        seg.kind === "unchanged" ? (
+          <span key={idx}>{seg.text}</span>
+        ) : seg.kind === "removed" ? (
+          <span
+            key={idx}
+            className="bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 line-through"
+          >
+            {seg.text}
+          </span>
+        ) : (
+          <span
+            key={idx}
+            className="bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400"
+          >
+            {seg.text}
+          </span>
+        ),
+      )}
+    </>
+  );
+}
+
 interface Step {
   id: string;
   subject: string;
@@ -272,6 +350,9 @@ export function SequenceDetailPage() {
   const [aiProposed, setAiProposed] = useState<{ subject: string; body: string } | null>(null);
   const [aiOriginalSnapshot, setAiOriginalSnapshot] = useState<{ subject: string; body: string } | null>(null);
   const [aiCompareFor, setAiCompareFor] = useState<"add" | "edit" | null>(null);
+  // Tweak mode: lets the rep edit the proposed text before accepting
+  const [aiProposedEditing, setAiProposedEditing] = useState(false);
+  const [aiProposedEdits, setAiProposedEdits] = useState<{ subject: string; body: string } | null>(null);
 
   // Refs for subject token insertion (body uses the rich editor's built-in token picker)
   const addSubjectRef = useRef<HTMLInputElement>(null);
@@ -635,6 +716,8 @@ export function SequenceDetailPage() {
       setAiProposed(proposed);
       setAiCompareFor(targetForm);
       setAiGeneratedFor(targetForm);
+      setAiProposedEditing(false);
+      setAiProposedEdits(null);
       setAiPanelOpen(null); // collapse the prompt panel to give room for the diff
     } catch (err) {
       toast({
@@ -648,15 +731,19 @@ export function SequenceDetailPage() {
   }
 
   function acceptAiDraft() {
-    if (!aiProposed || !aiCompareFor) return;
+    if (!aiCompareFor) return;
+    const toApply = aiProposedEdits ?? aiProposed;
+    if (!toApply) return;
     if (aiCompareFor === "add") {
-      setStepForm((f) => ({ ...f, subject: aiProposed.subject, body: aiProposed.body }));
+      setStepForm((f) => ({ ...f, subject: toApply.subject, body: toApply.body }));
     } else {
-      setEditingStep((s) => (s ? { ...s, subject: aiProposed.subject, body: aiProposed.body } : null));
+      setEditingStep((s) => (s ? { ...s, subject: toApply.subject, body: toApply.body } : null));
     }
     setAiProposed(null);
     setAiOriginalSnapshot(null);
     setAiCompareFor(null);
+    setAiProposedEditing(false);
+    setAiProposedEdits(null);
   }
 
   function discardAiDraft() {
@@ -664,6 +751,8 @@ export function SequenceDetailPage() {
     setAiOriginalSnapshot(null);
     setAiCompareFor(null);
     setAiGeneratedFor(null);
+    setAiProposedEditing(false);
+    setAiProposedEdits(null);
   }
 
   const { data: sequence, isLoading } = useQuery<SequenceDetail>({
@@ -1129,63 +1218,125 @@ export function SequenceDetailPage() {
                           <AiWriterPanel panelKey="edit" stepNumber={i + 1} totalSteps={steps.length} />
                         )}
                         {/* AI Compare View — shows after generation, before accept/discard */}
-                        {aiCompareFor === "edit" && aiProposed && (
-                          <div className="border border-primary/30 rounded-lg overflow-hidden">
-                            <div className="bg-primary/5 border-b border-primary/20 px-3 py-2 flex items-center justify-between">
-                              <p className="text-xs font-semibold text-primary flex items-center gap-1.5">
-                                <Sparkles className="h-3.5 w-3.5" />
-                                Review AI rewrite — accept or discard
-                              </p>
-                              <div className="flex items-center gap-1.5">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-6 px-2 text-[11px] gap-1 border-destructive/40 text-destructive hover:bg-destructive/10"
-                                  type="button"
-                                  onClick={discardAiDraft}
-                                >
-                                  Discard
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  className="h-6 px-2 text-[11px] gap-1"
-                                  type="button"
-                                  onClick={acceptAiDraft}
-                                >
-                                  Accept rewrite
-                                </Button>
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 divide-x divide-border">
-                              <div className="p-3 space-y-2 min-w-0 overflow-hidden">
-                                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Original</p>
-                                <div className="space-y-1.5">
-                                  <p className="text-[11px] font-medium text-muted-foreground leading-snug line-clamp-1">
-                                    {aiOriginalSnapshot?.subject || <span className="italic opacity-50">No subject</span>}
-                                  </p>
-                                  <div className="text-[11px] text-muted-foreground/80 leading-relaxed line-clamp-6 [&_p]:mb-1 [&_ul]:pl-4 [&_ul]:list-disc [&_ol]:pl-4 [&_ol]:list-decimal"
-                                    dangerouslySetInnerHTML={{ __html: aiOriginalSnapshot?.body || "<em class='opacity-50'>No body</em>" }}
-                                  />
+                        {aiCompareFor === "edit" && aiProposed && (() => {
+                          // Strip HTML for plain-text diffing; body is stored as HTML in this branch
+                          const origSubjPlain = aiOriginalSnapshot?.subject ?? "";
+                          const origBodyPlain = stripHtml(aiOriginalSnapshot?.body ?? "");
+                          const propSubjPlain = aiProposed.subject;
+                          const propBodyPlain = stripHtml(aiProposed.body);
+                          const editSubj = diffWords(origSubjPlain, propSubjPlain);
+                          const editBody = diffWords(origBodyPlain, propBodyPlain);
+                          const current = aiProposedEdits ?? aiProposed;
+                          return (
+                            <div className="border border-primary/30 rounded-lg overflow-hidden">
+                              <div className="bg-primary/5 border-b border-primary/20 px-3 py-2 flex items-center justify-between gap-2 flex-wrap">
+                                <p className="text-xs font-semibold text-primary flex items-center gap-1.5">
+                                  <Sparkles className="h-3.5 w-3.5" />
+                                  Review AI rewrite — accept or discard
+                                </p>
+                                <div className="flex items-center gap-1.5 ml-auto">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className={cn(
+                                      "h-6 px-2 text-[11px] gap-1",
+                                      aiProposedEditing
+                                        ? "text-muted-foreground"
+                                        : "text-primary/70 hover:text-primary",
+                                    )}
+                                    type="button"
+                                    onClick={() => {
+                                      if (aiProposedEditing) {
+                                        setAiProposedEditing(false);
+                                        setAiProposedEdits(null);
+                                      } else {
+                                        setAiProposedEditing(true);
+                                        // Initialize edits with plain-text body for textarea editing
+                                        setAiProposedEdits({ subject: aiProposed.subject, body: stripHtml(aiProposed.body) });
+                                      }
+                                    }}
+                                  >
+                                    {aiProposedEditing ? "Cancel edits" : "Edit before applying"}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 px-2 text-[11px] gap-1 border-destructive/40 text-destructive hover:bg-destructive/10"
+                                    type="button"
+                                    onClick={discardAiDraft}
+                                  >
+                                    Discard
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    className="h-6 px-2 text-[11px] gap-1"
+                                    type="button"
+                                    onClick={acceptAiDraft}
+                                  >
+                                    Accept rewrite
+                                  </Button>
                                 </div>
                               </div>
-                              <div className="p-3 space-y-2 min-w-0 overflow-hidden bg-primary/[0.03]">
-                                <p className="text-[10px] font-semibold uppercase tracking-wide text-primary/70">AI Rewrite</p>
-                                <div className="space-y-1.5">
-                                  <p className="text-[11px] font-medium leading-snug line-clamp-1">{aiProposed.subject}</p>
-                                  <div className="text-[11px] text-foreground/80 leading-relaxed line-clamp-6 [&_p]:mb-1 [&_ul]:pl-4 [&_ul]:list-disc [&_ol]:pl-4 [&_ol]:list-decimal"
-                                    dangerouslySetInnerHTML={{ __html: aiProposed.body }}
-                                  />
+                              <div className="grid grid-cols-2 divide-x divide-border">
+                                <div className="p-3 space-y-2 min-w-0 overflow-hidden">
+                                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Original</p>
+                                  <div className="space-y-1.5">
+                                    <p className="text-[11px] font-medium text-muted-foreground leading-snug">
+                                      {aiOriginalSnapshot?.subject
+                                        ? <DiffText parts={editSubj.oldParts} />
+                                        : <span className="italic opacity-50">No subject</span>}
+                                    </p>
+                                    <div
+                                      className="text-[11px] text-muted-foreground/80 leading-relaxed max-h-48 overflow-y-auto [&_p]:mb-1 [&_ul]:pl-4 [&_ul]:list-disc [&_ol]:pl-4 [&_ol]:list-decimal"
+                                      dangerouslySetInnerHTML={{ __html: aiOriginalSnapshot?.body || "<em class='opacity-50'>No body</em>" }}
+                                    />
+                                  </div>
+                                </div>
+                                <div className="p-3 space-y-2 min-w-0 overflow-hidden bg-primary/[0.03]">
+                                  <p className="text-[10px] font-semibold uppercase tracking-wide text-primary/70">AI Rewrite</p>
+                                  {aiProposedEditing ? (
+                                    <div className="space-y-1.5">
+                                      <input
+                                        className="w-full text-[11px] font-medium leading-snug border rounded px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40"
+                                        value={current.subject}
+                                        onChange={(e) =>
+                                          setAiProposedEdits((prev) => prev ? { ...prev, subject: e.target.value } : { subject: e.target.value, body: stripHtml(aiProposed.body) })
+                                        }
+                                        placeholder="Subject"
+                                      />
+                                      <textarea
+                                        className="w-full text-[11px] text-foreground/80 leading-relaxed border rounded px-2 py-1 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-primary/40"
+                                        rows={6}
+                                        value={current.body}
+                                        onChange={(e) =>
+                                          setAiProposedEdits((prev) => prev ? { ...prev, body: e.target.value } : { subject: aiProposed.subject, body: e.target.value })
+                                        }
+                                        placeholder="Body"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="space-y-1.5">
+                                      <p className="text-[11px] font-medium leading-snug">
+                                        <DiffText parts={editSubj.newParts} />
+                                      </p>
+                                      <div className="text-[11px] text-foreground/80 leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto">
+                                        <DiffText parts={editBody.newParts} />
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
+                              <div className="bg-amber-50 dark:bg-amber-950/30 border-t border-amber-200/60 dark:border-amber-800/40 px-3 py-1.5">
+                                <p className="text-[11px] text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                                  <Sparkles className="h-3 w-3 shrink-0" />
+                                  {aiProposedEditing
+                                    ? "Editing AI rewrite — accept will apply your changes."
+                                    : "Highlighted words show what changed. Accept to apply, or edit first."}
+                                </p>
+                              </div>
                             </div>
-                            <div className="bg-amber-50 dark:bg-amber-950/30 border-t border-amber-200/60 dark:border-amber-800/40 px-3 py-1.5">
-                              <p className="text-[11px] text-amber-700 dark:text-amber-400 flex items-center gap-1">
-                                <Sparkles className="h-3 w-3 shrink-0" />
-                                AI-generated — review before saving. You can also edit manually after accepting.
-                              </p>
-                            </div>
-                          </div>
-                        )}
+                          );
+                        })()}
                         {aiGeneratedFor === "edit" && aiPanelOpen !== "edit" && !aiCompareFor && (
                           <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
                             <Sparkles className="h-3 w-3" />
@@ -1373,67 +1524,131 @@ export function SequenceDetailPage() {
                   <AiWriterPanel panelKey="add" stepNumber={steps.length + 1} totalSteps={steps.length + 1} />
                 )}
                 {/* AI Compare View — shows after generation, before accept/discard */}
-                {aiCompareFor === "add" && aiProposed && (
-                  <div className="border border-primary/30 rounded-lg overflow-hidden">
-                    <div className="bg-primary/5 border-b border-primary/20 px-3 py-2 flex items-center justify-between">
-                      <p className="text-xs font-semibold text-primary flex items-center gap-1.5">
-                        <Sparkles className="h-3.5 w-3.5" />
-                        Review AI draft — accept or discard
-                      </p>
-                      <div className="flex items-center gap-1.5">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-6 px-2 text-[11px] gap-1 border-destructive/40 text-destructive hover:bg-destructive/10"
-                          type="button"
-                          onClick={discardAiDraft}
-                        >
-                          Discard
-                        </Button>
-                        <Button
-                          size="sm"
-                          className="h-6 px-2 text-[11px] gap-1"
-                          type="button"
-                          onClick={acceptAiDraft}
-                        >
-                          Accept draft
-                        </Button>
+                {aiCompareFor === "add" && aiProposed && (() => {
+                  // Strip HTML for plain-text diffing; body is stored as HTML in this branch
+                  const addSubj = diffWords(aiOriginalSnapshot?.subject ?? "", aiProposed.subject);
+                  const addBody = diffWords(stripHtml(aiOriginalSnapshot?.body ?? ""), stripHtml(aiProposed.body));
+                  const current = aiProposedEdits ?? aiProposed;
+                  const hasOriginal = !!(aiOriginalSnapshot?.subject || aiOriginalSnapshot?.body);
+                  return (
+                    <div className="border border-primary/30 rounded-lg overflow-hidden">
+                      <div className="bg-primary/5 border-b border-primary/20 px-3 py-2 flex items-center justify-between gap-2 flex-wrap">
+                        <p className="text-xs font-semibold text-primary flex items-center gap-1.5">
+                          <Sparkles className="h-3.5 w-3.5" />
+                          Review AI draft — accept or discard
+                        </p>
+                        <div className="flex items-center gap-1.5 ml-auto">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className={cn(
+                              "h-6 px-2 text-[11px] gap-1",
+                              aiProposedEditing
+                                ? "text-muted-foreground"
+                                : "text-primary/70 hover:text-primary",
+                            )}
+                            type="button"
+                            onClick={() => {
+                              if (aiProposedEditing) {
+                                setAiProposedEditing(false);
+                                setAiProposedEdits(null);
+                              } else {
+                                setAiProposedEditing(true);
+                                // Initialize edits with plain-text body for textarea editing
+                                setAiProposedEdits({ subject: aiProposed.subject, body: stripHtml(aiProposed.body) });
+                              }
+                            }}
+                          >
+                            {aiProposedEditing ? "Cancel edits" : "Edit before applying"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 px-2 text-[11px] gap-1 border-destructive/40 text-destructive hover:bg-destructive/10"
+                            type="button"
+                            onClick={discardAiDraft}
+                          >
+                            Discard
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="h-6 px-2 text-[11px] gap-1"
+                            type="button"
+                            onClick={acceptAiDraft}
+                          >
+                            Accept draft
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                    <div className="grid grid-cols-2 divide-x divide-border">
-                      <div className="p-3 space-y-2 min-w-0">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Your draft</p>
-                        <div className="space-y-1.5">
-                          {aiOriginalSnapshot?.subject || aiOriginalSnapshot?.body ? (
-                            <>
-                              <p className="text-[11px] font-medium text-muted-foreground leading-snug line-clamp-1">
-                                {aiOriginalSnapshot.subject || <span className="italic opacity-50">No subject</span>}
-                              </p>
-                              <p className="text-[11px] text-muted-foreground/80 leading-relaxed whitespace-pre-wrap line-clamp-6">
-                                {aiOriginalSnapshot.body || <span className="italic opacity-50">No body</span>}
-                              </p>
-                            </>
+                      <div className="grid grid-cols-2 divide-x divide-border">
+                        <div className="p-3 space-y-2 min-w-0">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Your draft</p>
+                          <div className="space-y-1.5">
+                            {hasOriginal ? (
+                              <>
+                                <p className="text-[11px] font-medium text-muted-foreground leading-snug">
+                                  {aiOriginalSnapshot!.subject
+                                    ? <DiffText parts={addSubj.oldParts} />
+                                    : <span className="italic opacity-50">No subject</span>}
+                                </p>
+                                <div className="text-[11px] text-muted-foreground/80 leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto">
+                                  {aiOriginalSnapshot!.body
+                                    ? <DiffText parts={addBody.oldParts} />
+                                    : <span className="italic opacity-50">No body</span>}
+                                </div>
+                              </>
+                            ) : (
+                              <p className="text-[11px] text-muted-foreground/50 italic">Empty — no existing draft</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="p-3 space-y-2 min-w-0 bg-primary/[0.03]">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-primary/70">AI Draft</p>
+                          {aiProposedEditing ? (
+                            <div className="space-y-1.5">
+                              <input
+                                className="w-full text-[11px] font-medium leading-snug border rounded px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40"
+                                value={current.subject}
+                                onChange={(e) =>
+                                  setAiProposedEdits((prev) => prev ? { ...prev, subject: e.target.value } : { subject: e.target.value, body: aiProposed.body })
+                                }
+                                placeholder="Subject"
+                              />
+                              <textarea
+                                className="w-full text-[11px] text-foreground/80 leading-relaxed border rounded px-2 py-1 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-primary/40"
+                                rows={6}
+                                value={current.body}
+                                onChange={(e) =>
+                                  setAiProposedEdits((prev) => prev ? { ...prev, body: e.target.value } : { subject: aiProposed.subject, body: e.target.value })
+                                }
+                                placeholder="Body"
+                              />
+                            </div>
                           ) : (
-                            <p className="text-[11px] text-muted-foreground/50 italic">Empty — no existing draft</p>
+                            <div className="space-y-1.5">
+                              <p className="text-[11px] font-medium leading-snug">
+                                <DiffText parts={addSubj.newParts} />
+                              </p>
+                              <div className="text-[11px] text-foreground/80 leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto">
+                                <DiffText parts={addBody.newParts} />
+                              </div>
+                            </div>
                           )}
                         </div>
                       </div>
-                      <div className="p-3 space-y-2 min-w-0 bg-primary/[0.03]">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-primary/70">AI Draft</p>
-                        <div className="space-y-1.5">
-                          <p className="text-[11px] font-medium leading-snug line-clamp-1">{aiProposed.subject}</p>
-                          <p className="text-[11px] text-foreground/80 leading-relaxed whitespace-pre-wrap line-clamp-6">{aiProposed.body}</p>
-                        </div>
+                      <div className="bg-amber-50 dark:bg-amber-950/30 border-t border-amber-200/60 dark:border-amber-800/40 px-3 py-1.5">
+                        <p className="text-[11px] text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                          <Sparkles className="h-3 w-3 shrink-0" />
+                          {aiProposedEditing
+                            ? "Editing AI draft — accept will apply your changes."
+                            : hasOriginal
+                              ? "Highlighted words show what changed. Accept to apply, or edit first."
+                              : "AI-generated — review before saving. You can also edit first."}
+                        </p>
                       </div>
                     </div>
-                    <div className="bg-amber-50 dark:bg-amber-950/30 border-t border-amber-200/60 dark:border-amber-800/40 px-3 py-1.5">
-                      <p className="text-[11px] text-amber-700 dark:text-amber-400 flex items-center gap-1">
-                        <Sparkles className="h-3 w-3 shrink-0" />
-                        AI-generated — review before saving. You can also edit manually after accepting.
-                      </p>
-                    </div>
-                  </div>
-                )}
+                  );
+                })()}
                 {aiGeneratedFor === "add" && aiPanelOpen !== "add" && !aiCompareFor && (
                   <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
                     <Sparkles className="h-3 w-3" />
