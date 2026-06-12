@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { db, campaignContactsTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { logActivity } from "../lib/activity";
 
 const router = Router();
@@ -16,7 +16,10 @@ router.get("/open/:campaignId", async (req: Request, res: Response) => {
 
   if (contactId) {
     db.update(campaignContactsTable)
-      .set({ status: "OPENED", openedAt: new Date() })
+      .set({
+        openedAt: sql`COALESCE(${campaignContactsTable.openedAt}, NOW())`,
+        status: sql`CASE WHEN ${campaignContactsTable.status} = 'CLICKED' THEN ${campaignContactsTable.status} ELSE 'OPENED' END`,
+      })
       .where(
         and(
           eq(campaignContactsTable.campaignId, campaignId),
@@ -46,7 +49,11 @@ router.get("/click/:campaignId", async (req: Request, res: Response) => {
 
   if (contactId) {
     db.update(campaignContactsTable)
-      .set({ status: "CLICKED", clickedAt: new Date() })
+      .set({
+        status: "CLICKED",
+        clickedAt: sql`COALESCE(${campaignContactsTable.clickedAt}, NOW())`,
+        openedAt: sql`COALESCE(${campaignContactsTable.openedAt}, NOW())`,
+      })
       .where(
         and(
           eq(campaignContactsTable.campaignId, campaignId),

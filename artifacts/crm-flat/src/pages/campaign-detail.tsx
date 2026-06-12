@@ -6,9 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Users, Mail, MailOpen, MousePointerClick, UserMinus, Search, XCircle } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
+import { ArrowLeft, Users, Mail, MailOpen, MousePointerClick, UserMinus, Search, XCircle, RefreshCw } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { authClient } from "@/lib/auth-client";
+
+const LIVE_STATUSES = new Set(["SENT", "SENDING"]);
 
 interface Recipient {
   contactId: string;
@@ -78,28 +80,57 @@ function getStatusColor(status: string) {
 
 export function CampaignDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { data: campaign, isLoading } = useGetCampaign(id);
+  const { data: campaign, isLoading, refetch: refetchCampaign } = useGetCampaign(id);
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [recipientsLoading, setRecipientsLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [cancelling, setCancelling] = useState(false);
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const getHeaders = useCallback(async () => {
     const { data } = await authClient.getSession();
     return { "Authorization": `Bearer ${data?.session?.token ?? ""}` };
   }, []);
 
-  useEffect(() => {
+  const fetchRecipients = useCallback(async (showLoadingSpinner = false) => {
     if (!id) return;
-    setRecipientsLoading(true);
-    getHeaders().then(headers =>
-      fetch(`/api/campaigns/${id}/recipients`, { headers })
-        .then(r => r.ok ? r.json() : [])
-        .then(setRecipients)
-        .catch(() => {})
-        .finally(() => setRecipientsLoading(false))
-    );
+    if (showLoadingSpinner) setRecipientsLoading(true);
+    try {
+      const headers = await getHeaders();
+      const res = await fetch(`/api/campaigns/${id}/recipients`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setRecipients(data);
+        setLastRefreshed(new Date());
+      }
+    } catch {
+    } finally {
+      if (showLoadingSpinner) setRecipientsLoading(false);
+    }
   }, [id, getHeaders]);
+
+  useEffect(() => {
+    fetchRecipients(true);
+  }, [fetchRecipients]);
+
+  useEffect(() => {
+    if (!campaign) return;
+    if (LIVE_STATUSES.has(campaign.status)) {
+      pollTimerRef.current = setInterval(() => {
+        fetchRecipients(false);
+        refetchCampaign();
+      }, 15_000);
+    }
+    return () => {
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+    };
+  }, [campaign?.status, fetchRecipients, refetchCampaign]);
+
+  const handleManualRefresh = useCallback(() => {
+    fetchRecipients(false);
+    refetchCampaign();
+  }, [fetchRecipients, refetchCampaign]);
 
   const handleCancelSchedule = async () => {
     if (!id || !window.confirm("Cancel this scheduled campaign? It will revert to Draft.")) return;
@@ -192,13 +223,32 @@ export function CampaignDetailPage() {
             {recipients.length > 0 && (
               <Card>
                 <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
                     <CardTitle className="text-base flex items-center gap-2">
                       <Users className="h-4 w-4" /> Recipients
+                      {campaign && LIVE_STATUSES.has(campaign.status) && (
+                        <span className="flex items-center gap-1 text-xs font-normal text-green-600 dark:text-green-400">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+                          </span>
+                          Live
+                        </span>
+                      )}
                     </CardTitle>
-                    <div className="relative w-48">
-                      <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                      <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" className="h-8 pl-8 text-sm" />
+                    <div className="flex items-center gap-2">
+                      {lastRefreshed && (
+                        <span className="text-xs text-muted-foreground hidden sm:block">
+                          Updated {lastRefreshed.toLocaleTimeString()}
+                        </span>
+                      )}
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleManualRefresh} title="Refresh now">
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      </Button>
+                      <div className="relative w-44">
+                        <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                        <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" className="h-8 pl-8 text-sm" />
+                      </div>
                     </div>
                   </div>
                 </CardHeader>
@@ -208,8 +258,8 @@ export function CampaignDetailPage() {
                       <thead><tr className="bg-muted/40 border-b">
                         <th className="text-left px-4 py-2 font-medium text-muted-foreground text-xs">Contact</th>
                         <th className="text-left px-4 py-2 font-medium text-muted-foreground text-xs">Status</th>
-                        <th className="text-left px-4 py-2 font-medium text-muted-foreground text-xs">Sent</th>
                         <th className="text-left px-4 py-2 font-medium text-muted-foreground text-xs">Opened</th>
+                        <th className="text-left px-4 py-2 font-medium text-muted-foreground text-xs">Clicked</th>
                       </tr></thead>
                       <tbody>
                         {recipientsLoading
@@ -228,10 +278,10 @@ export function CampaignDetailPage() {
                                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${st.color}`}>{st.label}</span>
                                   </td>
                                   <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                                    {r.sentAt ? new Date(r.sentAt).toLocaleString() : "—"}
+                                    {r.openedAt ? new Date(r.openedAt).toLocaleString() : "—"}
                                   </td>
                                   <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                                    {r.openedAt ? new Date(r.openedAt).toLocaleString() : "—"}
+                                    {r.clickedAt ? new Date(r.clickedAt).toLocaleString() : "—"}
                                   </td>
                                 </tr>
                               );
