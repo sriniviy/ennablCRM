@@ -294,6 +294,60 @@ router.get("/for-contact/:contactId", requireAuth, async (req: Request, res: Res
   }
 });
 
+router.post("/contact-subscription/:contactId", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { contactId } = req.params as { contactId: string };
+    const { action } = req.body as { action?: string };
+
+    const { dbUser } = req as AuthRequest;
+    if (dbUser.role !== "ADMIN" && dbUser.role !== "MEMBER") {
+      res.status(403).json({ error: "Insufficient permissions to change subscription status" });
+      return;
+    }
+
+    if (action !== "unsubscribe" && action !== "resubscribe") {
+      res.status(400).json({ error: "action must be 'unsubscribe' or 'resubscribe'" });
+      return;
+    }
+
+    if (action === "unsubscribe") {
+      await db
+        .update(contactsTable)
+        .set({ emailMarketingContact: false, updatedAt: new Date() })
+        .where(eq(contactsTable.id, contactId));
+
+      await db
+        .update(campaignContactsTable)
+        .set({ status: "UNSUBSCRIBED", unsubscribedAt: new Date() })
+        .where(
+          and(
+            eq(campaignContactsTable.contactId, contactId),
+            sql`${campaignContactsTable.status} != 'UNSUBSCRIBED'`,
+          ),
+        );
+    } else {
+      await db
+        .update(contactsTable)
+        .set({ emailMarketingContact: true, updatedAt: new Date() })
+        .where(eq(contactsTable.id, contactId));
+
+      await db
+        .update(campaignContactsTable)
+        .set({ status: "SENT", unsubscribedAt: null })
+        .where(
+          and(
+            eq(campaignContactsTable.contactId, contactId),
+            eq(campaignContactsTable.status, "UNSUBSCRIBED"),
+          ),
+        );
+    }
+
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to update subscription status" });
+  }
+});
+
 router.post("/", requireAuth, async (req: Request, res: Response) => {
   try {
     const body = req.body;

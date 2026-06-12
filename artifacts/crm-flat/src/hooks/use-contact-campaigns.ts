@@ -1,5 +1,5 @@
 import { useSessionToken } from "@/hooks/use-session-token";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 export interface ContactCampaignRow {
   campaignId: string;
@@ -29,5 +29,32 @@ export function useContactCampaigns(contactId: string) {
     },
     enabled: !!contactId,
     staleTime: 30_000,
+  });
+}
+
+export function useSetContactSubscription(contactId: string) {
+  const getToken = useSessionToken();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (action: "unsubscribe" | "resubscribe") => {
+      const token = await getToken();
+      const res = await fetch(`/api/campaigns/contact-subscription/${contactId}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ action }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "Failed to update subscription status");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["contact-campaigns", contactId] });
+    },
   });
 }

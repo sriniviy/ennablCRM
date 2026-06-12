@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Mail, Phone, Building2, Calendar, MessageSquare, Linkedin, CheckSquare, Pencil, CopyCheck, Send, Eye, MousePointerClick, BellOff } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Building2, Calendar, MessageSquare, Linkedin, CheckSquare, Pencil, CopyCheck, Send, Eye, MousePointerClick, BellOff, RefreshCw } from "lucide-react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { NotesFeed } from "@/components/notes/notes-feed";
@@ -28,7 +28,7 @@ import { useSaveCustomFieldValuesForRecord } from "@/hooks/use-custom-fields";
 import { AiSuggestions } from "@/components/ai/ai-suggestions";
 import { ActivitySummary } from "@/components/ai/activity-summary";
 import { AttachmentsPanel } from "@/components/attachments/attachments-panel";
-import { useContactCampaigns } from "@/hooks/use-contact-campaigns";
+import { useContactCampaigns, useSetContactSubscription } from "@/hooks/use-contact-campaigns";
 
 function NotesTabLabel({ entityType, entityId }: { entityType: string; entityId: string }) {
   const { data } = useNotesCount(entityType, entityId);
@@ -186,8 +186,28 @@ function CampaignEngagementChart({ data }: { data: CampaignRow[] }) {
   );
 }
 
-function ContactCampaignsTab({ contactId }: { contactId: string }) {
+function ContactCampaignsTab({ contactId, canEdit }: { contactId: string; canEdit: boolean }) {
   const { data, isLoading } = useContactCampaigns(contactId);
+  const setSubscription = useSetContactSubscription(contactId);
+  const { toast } = useToast();
+
+  const handleSubscriptionToggle = async (action: "unsubscribe" | "resubscribe") => {
+    try {
+      await setSubscription.mutateAsync(action);
+      toast({
+        title: action === "unsubscribe" ? "Contact unsubscribed" : "Contact re-subscribed",
+        description: action === "unsubscribe"
+          ? "This contact will no longer receive campaign emails."
+          : "This contact will now receive campaign emails.",
+      });
+    } catch (e: unknown) {
+      toast({
+        title: "Error",
+        description: e instanceof Error ? e.message : "Could not update subscription status",
+        variant: "destructive",
+      });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -210,11 +230,40 @@ function ContactCampaignsTab({ contactId }: { contactId: string }) {
 
   return (
     <div className="space-y-3">
-      {isUnsubscribed && (
-        <div className="flex items-center gap-2 px-4 py-3 rounded-lg border border-destructive/40 bg-destructive/10 text-destructive text-sm font-medium">
-          <BellOff className="h-4 w-4 flex-shrink-0" />
-          This contact is unsubscribed and will not receive future campaigns.
+      {isUnsubscribed ? (
+        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg border border-destructive/40 bg-destructive/10">
+          <span className="flex items-center gap-2 text-destructive text-sm font-medium">
+            <BellOff className="h-4 w-4 flex-shrink-0" />
+            This contact is unsubscribed and will not receive future campaigns.
+          </span>
+          {canEdit && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="flex-shrink-0 border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+              disabled={setSubscription.isPending}
+              onClick={() => handleSubscriptionToggle("resubscribe")}
+            >
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+              Re-subscribe
+            </Button>
+          )}
         </div>
+      ) : (
+        canEdit && (
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-muted-foreground hover:text-destructive hover:border-destructive/50"
+              disabled={setSubscription.isPending}
+              onClick={() => handleSubscriptionToggle("unsubscribe")}
+            >
+              <BellOff className="h-3.5 w-3.5 mr-1.5" />
+              Unsubscribe
+            </Button>
+          </div>
+        )
       )}
       <div className="grid grid-cols-3 gap-3">
         <div className="flex flex-col gap-1 rounded-lg border bg-card p-4">
@@ -668,7 +717,7 @@ export function ContactDetailPage() {
               </TabsContent>
 
               <TabsContent value="campaigns" className="pt-6">
-                <ContactCampaignsTab contactId={id} />
+                <ContactCampaignsTab contactId={id} canEdit={me?.role === "ADMIN" || me?.role === "MEMBER"} />
               </TabsContent>
 
               <TabsContent value="files" className="pt-6">
