@@ -25,6 +25,7 @@ import { SequencesPage } from "./pages/sequences";
 import { SequenceDetailPage } from "./pages/sequence-detail";
 import { AuditLogPage } from "./pages/audit-log";
 import { NeedsReviewPage } from "./pages/needs-review";
+import { SegmentsPage } from "./pages/segments";
 import { SignInPage } from "./pages/sign-in";
 import { SignUpPage } from "./pages/sign-up";
 import { MigratePage } from "./pages/migrate";
@@ -135,6 +136,7 @@ function AppRoutes() {
           <Route path="/settings/team" component={() => <ProtectedRoute component={SettingsTeamPage} />} />
           <Route path="/sequences" component={() => <ProtectedRoute component={SequencesPage} />} />
           <Route path="/sequences/:id" component={() => <ProtectedRoute component={SequenceDetailPage} />} />
+          <Route path="/segments" component={() => <ProtectedRoute component={SegmentsPage} />} />
           <Route path="/admin/audit-log" component={() => <ProtectedRoute component={AuditLogPage} />} />
           <Route path="/admin/migrate" component={() => <ProtectedRoute component={MigratePage} />} />
         </Switch>

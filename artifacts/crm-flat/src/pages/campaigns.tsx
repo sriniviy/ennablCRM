@@ -52,6 +52,9 @@ export function CampaignsPage() {
             <Button variant="outline" asChild>
               <Link href="/sequences">Sequences</Link>
             </Button>
+            <Button variant="outline" asChild>
+              <Link href="/segments">Segments</Link>
+            </Button>
             <Button asChild data-testid="btn-new-campaign">
               <Link href="/campaigns/new">
                 <Plus className="mr-2 h-4 w-4" /> Create Campaign

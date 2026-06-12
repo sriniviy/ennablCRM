@@ -20,6 +20,7 @@ import {
   Moon,
   ClipboardCheck,
   ArrowDownToLine,
+  Filter,
 } from "lucide-react";
 import { GlobalSearch } from "@/components/global-search";
 import { Button } from "@/components/ui/button";
@@ -76,6 +77,7 @@ const navGroups: NavGroup[] = [
     label: "ENGAGE",
     items: [
       { name: "Campaigns", href: "/campaigns", icon: Mail },
+      { name: "Segments", href: "/segments", icon: Filter },
     ],
   },
   {

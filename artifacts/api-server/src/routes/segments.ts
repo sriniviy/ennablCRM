@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { db, segmentsTable, contactsTable } from "@workspace/db";
+import { db, segmentsTable, contactsTable, companiesTable } from "@workspace/db";
 import { eq, desc, and, inArray, or, ilike, sql } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 
@@ -94,6 +94,43 @@ router.get("/:id", requireAuth, async (req: Request, res: Response) => {
     res.json(segment);
   } catch {
     res.status(500).json({ error: "Failed to get segment" });
+  }
+});
+
+router.get("/:id/contacts", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const [segment] = await db
+      .select()
+      .from(segmentsTable)
+      .where(eq(segmentsTable.id, req.params.id as string))
+      .limit(1);
+    if (!segment) { res.status(404).json({ error: "Segment not found" }); return; }
+
+    const filter: SegmentFilter = JSON.parse(segment.filterJson || "{}");
+    const ids = await evaluateSegmentFilter(filter);
+
+    if (ids.length === 0) { res.json({ data: [], total: 0 }); return; }
+
+    const contacts = await db
+      .select({
+        id: contactsTable.id,
+        firstName: contactsTable.firstName,
+        lastName: contactsTable.lastName,
+        email: contactsTable.email,
+        status: contactsTable.status,
+        title: contactsTable.title,
+        companyId: contactsTable.companyId,
+        companyName: companiesTable.name,
+      })
+      .from(contactsTable)
+      .leftJoin(companiesTable, eq(contactsTable.companyId, companiesTable.id))
+      .where(inArray(contactsTable.id, ids))
+      .orderBy(contactsTable.firstName, contactsTable.lastName)
+      .limit(100);
+
+    res.json({ data: contacts, total: ids.length });
+  } catch {
+    res.status(500).json({ error: "Failed to list segment contacts" });
   }
 });
 

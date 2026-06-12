@@ -1,12 +1,13 @@
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useState, useCallback, useEffect } from "react";
 import { useCreateCampaign, useListContacts, useListCompanies } from "@workspace/api-client-react";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { authClient } from "@/lib/auth-client";
@@ -14,6 +15,7 @@ import {
   ArrowLeft, ArrowRight, Check, Trash2, Type, AlignLeft, MousePointer,
   Minus, Image, Share2, Maximize2, Users, Calendar, Send, Save,
   ChevronLeft, ChevronRight, Clock, Tag, User, Smile, Columns, Monitor, Smartphone, Code,
+  Mail, Building2, UserCheck, ExternalLink,
 } from "lucide-react";
 
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -49,6 +51,18 @@ interface SegmentFilter {
 }
 
 interface SavedSegment { id: string; name: string; filterJson: string; }
+
+function filterSummaryChips(filterJson: string): { label: string; icon: React.ReactNode }[] {
+  let filter: SegmentFilter = {};
+  try { filter = JSON.parse(filterJson); } catch { /* empty */ }
+  const chips: { label: string; icon: React.ReactNode }[] = [];
+  if (filter.status) chips.push({ label: filter.status, icon: <UserCheck className="h-3 w-3" /> });
+  if (filter.tags?.length) chips.push({ label: filter.tags.join(", "), icon: <Tag className="h-3 w-3" /> });
+  if (filter.companyId) chips.push({ label: "Specific company", icon: <Building2 className="h-3 w-3" /> });
+  if (filter.emailMarketingContact) chips.push({ label: "Email marketing", icon: <Mail className="h-3 w-3" /> });
+  if (filter.ennablUser) chips.push({ label: "Ennabl users", icon: <Users className="h-3 w-3" /> });
+  return chips;
+}
 
 const FONT_SIZES: Record<FontSize, { label: string; px: number }> = {
   sm: { label: "S", px: 14 },
@@ -245,6 +259,7 @@ export function CampaignNewPage() {
 
   const [audienceMode, setAudienceMode] = useState<"segment" | "filter" | "individual">("filter");
   const [savedSegments, setSavedSegments] = useState<SavedSegment[]>([]);
+  const [segmentCounts, setSegmentCounts] = useState<Record<string, number>>({});
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
   const [segmentFilter, setSegmentFilter] = useState<SegmentFilter>({ emailMarketingContact: true });
   const [filterCount, setFilterCount] = useState<number | null>(null);
@@ -268,12 +283,20 @@ export function CampaignNewPage() {
   }, []);
 
   useEffect(() => {
-    getHeaders().then(headers =>
-      fetch("/api/segments", { headers })
-        .then(r => r.ok ? r.json() : [])
-        .then(setSavedSegments)
-        .catch(() => {})
-    );
+    getHeaders().then(async (headers) => {
+      const res = await fetch("/api/segments", { headers }).catch(() => null);
+      if (!res?.ok) return;
+      const segs: SavedSegment[] = await res.json();
+      setSavedSegments(segs);
+      const entries = await Promise.all(
+        segs.map(async (seg) => {
+          const r = await fetch(`/api/segments/${seg.id}/count`, { headers }).catch(() => null);
+          if (r?.ok) { const { count } = await r.json(); return [seg.id, count] as const; }
+          return [seg.id, 0] as const;
+        })
+      );
+      setSegmentCounts(Object.fromEntries(entries));
+    });
   }, [getHeaders]);
 
   useEffect(() => {
@@ -892,17 +915,56 @@ export function CampaignNewPage() {
 
                 {audienceMode === "segment" && (
                   <div className="space-y-2">
-                    {savedSegments.length === 0
-                      ? <p className="text-sm text-muted-foreground p-4 text-center bg-muted/30 rounded-lg">No saved segments yet. Switch to "Build a filter" to create one.</p>
-                      : savedSegments.map(seg => (
-                          <button key={seg.id} onClick={() => setSelectedSegmentId(seg.id)} className={`w-full text-left p-3 rounded-lg border transition-colors ${selectedSegmentId === seg.id ? "border-primary bg-primary/5" : "hover:bg-muted"}`}>
-                            <div className="flex items-center justify-between">
-                              <span className="font-medium text-sm">{seg.name}</span>
-                              {selectedSegmentId === seg.id && <Check className="h-4 w-4 text-primary" />}
-                            </div>
-                          </button>
-                        ))
-                    }
+                    {savedSegments.length === 0 ? (
+                      <div className="text-sm text-muted-foreground p-4 text-center bg-muted/30 rounded-lg space-y-2">
+                        <p>No saved segments yet. Switch to "Build a filter" to create one.</p>
+                        <Link href="/segments" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                          <ExternalLink className="h-3 w-3" /> Manage segments
+                        </Link>
+                      </div>
+                    ) : (
+                      <>
+                        {savedSegments.map(seg => {
+                          const chips = filterSummaryChips(seg.filterJson);
+                          const count = segmentCounts[seg.id];
+                          return (
+                            <button
+                              key={seg.id}
+                              onClick={() => setSelectedSegmentId(seg.id)}
+                              className={`w-full text-left p-3 rounded-lg border transition-colors ${selectedSegmentId === seg.id ? "border-primary bg-primary/5" : "hover:bg-muted"}`}
+                            >
+                              <div className="flex items-center justify-between mb-1.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-sm">{seg.name}</span>
+                                  {count !== undefined && (
+                                    <Badge variant="outline" className="text-xs font-normal py-0">
+                                      {count.toLocaleString()}
+                                    </Badge>
+                                  )}
+                                </div>
+                                {selectedSegmentId === seg.id && <Check className="h-4 w-4 text-primary shrink-0" />}
+                              </div>
+                              {chips.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {chips.map((c, i) => (
+                                    <Badge key={i} variant="secondary" className="text-xs font-normal gap-1 py-0">
+                                      {c.icon} {c.label}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground italic">No filters — all contacts</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                        <div className="pt-1 flex justify-end">
+                          <Link href="/segments" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline">
+                            <ExternalLink className="h-3 w-3" /> Manage segments
+                          </Link>
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
 
