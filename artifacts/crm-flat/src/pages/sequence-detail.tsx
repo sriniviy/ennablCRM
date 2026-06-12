@@ -1598,7 +1598,7 @@ export function SequenceDetailPage() {
               </div>
               <ol className="space-y-3">
                 {aiDraftPreview.map((step, i) => (
-                  <li key={i} className="border rounded-lg p-4 space-y-2 bg-muted/30">
+                  <li key={i} className="border rounded-lg p-4 space-y-3 bg-muted/30">
                     <div className="flex items-center gap-2">
                       <span className="bg-primary text-primary-foreground rounded-full h-6 w-6 flex items-center justify-center text-xs font-bold shrink-0">
                         {i + 1}
@@ -1609,10 +1609,39 @@ export function SequenceDetailPage() {
                           : `Send ${step.delayDays} day${step.delayDays !== 1 ? "s" : ""} after step ${i}`}
                       </span>
                     </div>
-                    <p className="text-sm font-semibold">{step.subject}</p>
-                    <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
-                      {step.body}
-                    </p>
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">Subject</label>
+                      <Input
+                        value={step.subject}
+                        onChange={(e) =>
+                          setAiDraftPreview((prev) =>
+                            prev
+                              ? prev.map((s, j) =>
+                                  j === i ? { ...s, subject: e.target.value } : s,
+                                )
+                              : prev,
+                          )
+                        }
+                        className="text-sm font-medium"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">Body</label>
+                      <Textarea
+                        value={step.body}
+                        rows={4}
+                        onChange={(e) =>
+                          setAiDraftPreview((prev) =>
+                            prev
+                              ? prev.map((s, j) =>
+                                  j === i ? { ...s, body: e.target.value } : s,
+                                )
+                              : prev,
+                          )
+                        }
+                        className="text-sm resize-none"
+                      />
+                    </div>
                   </li>
                 ))}
               </ol>
