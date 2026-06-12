@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, index } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 
 export const aiPresetsTable = pgTable(
@@ -15,7 +15,7 @@ export const aiPresetsTable = pgTable(
     goal: text("goal").notNull(),
     tone: text("tone").notNull().default("Professional"),
     improveFields: text("improve_fields").notNull().default("both"),
-    scope: text("scope").notNull().default("personal"),
+    shared: boolean("shared").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

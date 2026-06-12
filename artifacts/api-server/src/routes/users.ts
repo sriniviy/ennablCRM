@@ -22,7 +22,7 @@ router.get("/me/ai-presets", requireAuth, async (req: Request, res: Response) =>
       .where(
         or(
           eq(aiPresetsTable.userId, userId),
-          eq(aiPresetsTable.scope, "team"),
+          eq(aiPresetsTable.shared, true),
         ),
       )
       .orderBy(
@@ -36,25 +36,18 @@ router.get("/me/ai-presets", requireAuth, async (req: Request, res: Response) =>
 });
 
 router.post("/me/ai-presets", requireAuth, async (req: Request, res: Response) => {
-  const { userId, dbUser } = req as AuthRequest;
-  const { name, category, goal, tone, improveFields, scope } = req.body as {
+  const { userId } = req as AuthRequest;
+  const { name, category, goal, tone, improveFields, shared } = req.body as {
     name: string;
     category?: string;
     goal: string;
     tone: string;
     improveFields: string;
-    scope?: string;
+    shared?: boolean;
   };
 
   if (!name?.trim() || !goal?.trim()) {
     res.status(400).json({ error: "name and goal are required" });
-    return;
-  }
-
-  const resolvedScope = scope === "team" ? "team" : "personal";
-
-  if (resolvedScope === "team" && dbUser.role !== "ADMIN") {
-    res.status(403).json({ error: "Only admins can create team presets" });
     return;
   }
 
@@ -68,7 +61,7 @@ router.post("/me/ai-presets", requireAuth, async (req: Request, res: Response) =
         goal: goal.trim(),
         tone: tone ?? "Professional",
         improveFields: improveFields ?? "both",
-        scope: resolvedScope,
+        shared: shared === true,
       })
       .returning();
     res.status(201).json(preset);
@@ -77,26 +70,69 @@ router.post("/me/ai-presets", requireAuth, async (req: Request, res: Response) =
   }
 });
 
-router.delete("/me/ai-presets/:presetId", requireAuth, async (req: Request, res: Response) => {
+router.patch("/me/ai-presets/:presetId", requireAuth, async (req: Request, res: Response) => {
   const { userId, dbUser } = req as AuthRequest;
   const { presetId } = req.params;
-  const isAdmin = dbUser.role === "ADMIN";
+  const { shared } = req.body as { shared: boolean };
 
   try {
-    // Admins can delete any preset; members can only delete their own
-    const condition = isAdmin
-      ? eq(aiPresetsTable.id, presetId)
-      : and(eq(aiPresetsTable.id, presetId), eq(aiPresetsTable.userId, userId));
+    const [preset] = await db
+      .select()
+      .from(aiPresetsTable)
+      .where(eq(aiPresetsTable.id, presetId))
+      .limit(1);
 
-    const deleted = await db
-      .delete(aiPresetsTable)
-      .where(condition)
-      .returning();
-
-    if (deleted.length === 0) {
+    if (!preset) {
       res.status(404).json({ error: "Preset not found" });
       return;
     }
+
+    const isOwner = preset.userId === userId;
+    const isAdmin = dbUser.role === "ADMIN";
+    if (!isOwner && !isAdmin) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    const [updated] = await db
+      .update(aiPresetsTable)
+      .set({ shared: shared === true })
+      .where(eq(aiPresetsTable.id, presetId))
+      .returning();
+
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update preset" });
+  }
+});
+
+router.delete("/me/ai-presets/:presetId", requireAuth, async (req: Request, res: Response) => {
+  const { userId, dbUser } = req as AuthRequest;
+  const { presetId } = req.params;
+
+  try {
+    const [preset] = await db
+      .select()
+      .from(aiPresetsTable)
+      .where(eq(aiPresetsTable.id, presetId))
+      .limit(1);
+
+    if (!preset) {
+      res.status(404).json({ error: "Preset not found" });
+      return;
+    }
+
+    const isOwner = preset.userId === userId;
+    const isAdmin = dbUser.role === "ADMIN";
+    if (!isOwner && !isAdmin) {
+      res.status(403).json({ error: "Only the creator or an admin can delete this preset" });
+      return;
+    }
+
+    await db
+      .delete(aiPresetsTable)
+      .where(eq(aiPresetsTable.id, presetId));
+
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "Failed to delete preset" });

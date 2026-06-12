@@ -60,7 +60,7 @@ import {
   X,
   PlusCircle,
   GripVertical,
-  Shield,
+  Globe,
 } from "lucide-react";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import {
@@ -338,6 +338,7 @@ export function SequenceDetailPage() {
   const [aiPresetNaming, setAiPresetNaming] = useState(false);
   const [aiPresetName, setAiPresetName] = useState("");
   const [aiPresetCategory, setAiPresetCategory] = useState("");
+  const [aiPresetShared, setAiPresetShared] = useState(false);
   const [aiPresetSearch, setAiPresetSearch] = useState("");
   const [aiPresetScope, setAiPresetScope] = useState<"personal" | "team">("personal");
 
@@ -544,42 +545,63 @@ export function SequenceDetailPage() {
                             {filteredPersonal.length > 0 && <div className="my-1 border-t" />}
                           </>
                         )}
-                        {filteredPersonal.length > 0 && (
-                          <>
-                            {filteredTeam.length > 0 && (
-                              <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
-                                My presets
+                        {sortedKeys.map((cat) => (
+                          <div key={cat}>
+                            {cat && (
+                              <div className="px-2 pt-2 pb-0.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                {cat}
                               </div>
                             )}
-                            {sortedKeys.map((cat) => (
-                              <div key={cat}>
-                                {cat && (
-                                  <div className="px-2 pt-2 pb-0.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                                    {cat}
-                                  </div>
-                                )}
-                                {groups[cat].map((preset) => (
-                                  <div key={preset.id} className="flex items-center group">
-                                    <SelectItem value={preset.id} className="flex-1">
+                            {groups[cat].map((preset) => {
+                              const isOwner = preset.userId === me?.id;
+                              const canDelete = isOwner || isAdmin;
+                              const canToggleShare = isOwner || isAdmin;
+                              return (
+                                <div key={preset.id} className="flex items-center group">
+                                  <SelectItem value={preset.id} className="flex-1">
+                                    <span className="flex items-center gap-1.5">
+                                      {preset.shared && (
+                                        <Globe className="h-3 w-3 text-blue-500 shrink-0" />
+                                      )}
                                       {preset.name}
-                                    </SelectItem>
-                                    <button
-                                      type="button"
-                                      className="mr-2 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        deletePresetMutation.mutate(preset.id);
-                                      }}
-                                      title="Delete preset"
-                                    >
-                                      <X className="h-3 w-3" />
-                                    </button>
+                                    </span>
+                                  </SelectItem>
+                                  <div className="mr-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    {canToggleShare && (
+                                      <button
+                                        type="button"
+                                        className={cn(
+                                          "text-muted-foreground hover:text-blue-500 transition-colors",
+                                          preset.shared && "text-blue-500",
+                                        )}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          toggleSharePresetMutation.mutate({ presetId: preset.id, shared: !preset.shared });
+                                        }}
+                                        title={preset.shared ? "Unshare preset" : "Share with team"}
+                                      >
+                                        <Globe className="h-3 w-3" />
+                                      </button>
+                                    )}
+                                    {canDelete && (
+                                      <button
+                                        type="button"
+                                        className="text-muted-foreground hover:text-destructive transition-colors"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          deletePresetMutation.mutate(preset.id);
+                                        }}
+                                        title="Delete preset"
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </button>
+                                    )}
                                   </div>
-                                ))}
-                              </div>
-                            ))}
-                          </>
-                        )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ))}
                       </>
                     );
                   })()}
@@ -685,9 +707,9 @@ export function SequenceDetailPage() {
                     className="h-7 text-xs flex-1"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && aiPresetName.trim()) {
-                        savePresetMutation.mutate({ name: aiPresetName.trim(), category: aiPresetCategory.trim() || undefined, goal: aiGoal.trim(), tone: aiTone, improveFields: aiImproveFields, scope: aiPresetScope });
+                        savePresetMutation.mutate({ name: aiPresetName.trim(), category: aiPresetCategory.trim() || undefined, goal: aiGoal.trim(), tone: aiTone, improveFields: aiImproveFields, shared: aiPresetShared });
                       }
-                      if (e.key === "Escape") { setAiPresetNaming(false); setAiPresetName(""); setAiPresetCategory(""); setAiPresetScope("personal"); }
+                      if (e.key === "Escape") { setAiPresetNaming(false); setAiPresetName(""); setAiPresetCategory(""); setAiPresetShared(false); }
                     }}
                     autoFocus
                   />
@@ -697,7 +719,7 @@ export function SequenceDetailPage() {
                     variant="default"
                     className="h-7 px-2 text-xs"
                     disabled={!aiPresetName.trim() || savePresetMutation.isPending}
-                    onClick={() => savePresetMutation.mutate({ name: aiPresetName.trim(), category: aiPresetCategory.trim() || undefined, goal: aiGoal.trim(), tone: aiTone, improveFields: aiImproveFields, scope: aiPresetScope })}
+                    onClick={() => savePresetMutation.mutate({ name: aiPresetName.trim(), category: aiPresetCategory.trim() || undefined, goal: aiGoal.trim(), tone: aiTone, improveFields: aiImproveFields, shared: aiPresetShared })}
                   >
                     {savePresetMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
                   </Button>
@@ -706,7 +728,7 @@ export function SequenceDetailPage() {
                     type="button"
                     variant="ghost"
                     className="h-7 px-2 text-xs"
-                    onClick={() => { setAiPresetNaming(false); setAiPresetName(""); setAiPresetCategory(""); setAiPresetScope("personal"); }}
+                    onClick={() => { setAiPresetNaming(false); setAiPresetName(""); setAiPresetCategory(""); setAiPresetShared(false); }}
                   >
                     <X className="h-3 w-3" />
                   </Button>
@@ -717,22 +739,20 @@ export function SequenceDetailPage() {
                   onChange={(e) => setAiPresetCategory(e.target.value)}
                   className="h-7 text-xs"
                   onKeyDown={(e) => {
-                    if (e.key === "Escape") { setAiPresetNaming(false); setAiPresetName(""); setAiPresetCategory(""); setAiPresetScope("personal"); }
+                    if (e.key === "Escape") { setAiPresetNaming(false); setAiPresetName(""); setAiPresetCategory(""); setAiPresetShared(false); }
                   }}
                 />
-                {isAdmin && (
-                  <label className="flex items-center gap-2 cursor-pointer select-none">
-                    <Switch
-                      checked={aiPresetScope === "team"}
-                      onCheckedChange={(checked) => setAiPresetScope(checked ? "team" : "personal")}
-                      className="scale-75 origin-left"
-                    />
-                    <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                      <Shield className="h-3 w-3" />
-                      Share with whole team
-                    </span>
-                  </label>
-                )}
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <Switch
+                    checked={aiPresetShared}
+                    onCheckedChange={setAiPresetShared}
+                    className="scale-75 origin-left"
+                  />
+                  <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                    <Globe className="h-3 w-3" />
+                    Share with team
+                  </span>
+                </label>
               </div>
             ) : (
               <button
@@ -892,18 +912,22 @@ export function SequenceDetailPage() {
     staleTime: 30_000,
   });
 
-  type AiPreset = { id: string; userId: string; name: string; category: string | null; goal: string; tone: string; improveFields: string; scope: string };
-  const { data: me } = useGetMe();
+  type AiPreset = { id: string; userId: string; name: string; category: string | null; goal: string; tone: string; improveFields: string; shared: boolean };
+  const { data: me } = useQuery<{ id: string; role: string }>({
+    queryKey: ["me"],
+    queryFn: () => apiFetch("/users/me"),
+    staleTime: 60_000,
+  });
   const isAdmin = me?.role === "ADMIN";
   const { data: aiPresets = [] } = useQuery<AiPreset[]>({
     queryKey: ["ai-presets"],
     queryFn: () => apiFetch("/users/me/ai-presets"),
   });
-  const teamPresets = aiPresets.filter((p) => p.scope === "team");
-  const personalPresets = aiPresets.filter((p) => p.scope === "personal");
+  const teamPresets = aiPresets.filter((p) => p.shared);
+  const personalPresets = aiPresets.filter((p) => !p.shared);
 
   const savePresetMutation = useMutation({
-    mutationFn: (payload: { name: string; category?: string; goal: string; tone: string; improveFields: string; scope: string }) =>
+    mutationFn: (payload: { name: string; category?: string; goal: string; tone: string; improveFields: string; shared?: boolean }) =>
       apiFetch("/users/me/ai-presets", {
         method: "POST",
         body: JSON.stringify(payload),
@@ -913,11 +937,24 @@ export function SequenceDetailPage() {
       setAiPresetNaming(false);
       setAiPresetName("");
       setAiPresetCategory("");
-      setAiPresetScope("personal");
+      setAiPresetShared(false);
       toast({ title: "Preset saved" });
     },
     onError: (err: Error) =>
       toast({ title: "Failed to save preset", description: err.message, variant: "destructive" }),
+  });
+
+  const toggleSharePresetMutation = useMutation({
+    mutationFn: ({ presetId, shared }: { presetId: string; shared: boolean }) =>
+      apiFetch(`/users/me/ai-presets/${presetId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ shared }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ai-presets"] });
+    },
+    onError: (err: Error) =>
+      toast({ title: "Failed to update preset", description: err.message, variant: "destructive" }),
   });
 
   const deletePresetMutation = useMutation({
