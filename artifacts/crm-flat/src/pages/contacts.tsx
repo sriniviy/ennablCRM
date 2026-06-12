@@ -50,6 +50,7 @@ const CONTACT_COLUMNS: ColumnDef[] = [
   { key: "notes", label: "Notes" },
   { key: "linkedIn", label: "LinkedIn" },
   { key: "createdAt", label: "Created At" },
+  { key: "campaignEngagement", label: "Campaign Engagement" },
 ];
 
 const dash = (v: unknown) => (v === null || v === undefined || v === "" ? "—" : String(v));

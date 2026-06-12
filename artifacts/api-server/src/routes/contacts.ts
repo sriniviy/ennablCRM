@@ -241,6 +241,11 @@ router.get("/export", requireAuth, async (req: Request, res: Response) => {
       .select({
         contact: contactsTable,
         companyName: companiesTable.name,
+        campaignEngagementCount: sql<number>`(
+          SELECT COUNT(*)::int FROM campaign_contacts
+          WHERE campaign_contacts.contact_id = ${contactsTable.id}
+            AND (campaign_contacts.opened_at IS NOT NULL OR campaign_contacts.clicked_at IS NOT NULL)
+        )`,
       })
       .from(contactsTable)
       .leftJoin(companiesTable, eq(contactsTable.companyId, companiesTable.id))
@@ -249,7 +254,7 @@ router.get("/export", requireAuth, async (req: Request, res: Response) => {
 
     const escape = (v: string | null | undefined) => `"${String(v ?? "").replace(/"/g, '""')}"`;
 
-    type ContactColKey = "firstName" | "lastName" | "email" | "phone" | "title" | "status" | "company" | "tags" | "notes" | "linkedIn" | "createdAt";
+    type ContactColKey = "firstName" | "lastName" | "email" | "phone" | "title" | "status" | "company" | "tags" | "notes" | "linkedIn" | "createdAt" | "campaignEngagement";
     const ALL_COLS: { key: ContactColKey; header: string }[] = [
       { key: "firstName", header: "First Name" },
       { key: "lastName", header: "Last Name" },
@@ -262,6 +267,7 @@ router.get("/export", requireAuth, async (req: Request, res: Response) => {
       { key: "notes", header: "Notes" },
       { key: "linkedIn", header: "LinkedIn" },
       { key: "createdAt", header: "Created At" },
+      { key: "campaignEngagement", header: "Campaign Engagement" },
     ];
 
     const selectedKeys = fields
@@ -269,7 +275,7 @@ router.get("/export", requireAuth, async (req: Request, res: Response) => {
       : new Set(ALL_COLS.map((c) => c.key));
     const cols = ALL_COLS.filter((c) => selectedKeys.has(c.key));
 
-    const getValue = (key: ContactColKey, contact: typeof rows[number]["contact"], companyName: string | null) => {
+    const getValue = (key: ContactColKey, contact: typeof rows[number]["contact"], companyName: string | null, campaignEngagementCount: number) => {
       switch (key) {
         case "firstName": return contact.firstName;
         case "lastName": return contact.lastName;
@@ -282,6 +288,7 @@ router.get("/export", requireAuth, async (req: Request, res: Response) => {
         case "notes": return contact.notes;
         case "linkedIn": return contact.linkedIn;
         case "createdAt": return contact.createdAt ? new Date(contact.createdAt).toISOString() : "";
+        case "campaignEngagement": return String(campaignEngagementCount ?? 0);
       }
     };
 
@@ -308,10 +315,10 @@ router.get("/export", requireAuth, async (req: Request, res: Response) => {
       ...cols.map((c) => c.header),
       ...cfDefs.map((d) => d.label),
     ];
-    const csvRows = rows.map(({ contact, companyName }) => {
+    const csvRows = rows.map(({ contact, companyName, campaignEngagementCount }) => {
       const cfRow = cfValueMap.get(contact.id) ?? new Map<string, string | null>();
       return [
-        ...cols.map((c) => escape(getValue(c.key, contact, companyName ?? null))),
+        ...cols.map((c) => escape(getValue(c.key, contact, companyName ?? null, campaignEngagementCount ?? 0))),
         ...cfDefs.map((d) => escape(cfRow.get(d.id) ?? null)),
       ].join(",");
     });
