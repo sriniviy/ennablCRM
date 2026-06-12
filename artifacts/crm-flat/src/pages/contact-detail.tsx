@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Mail, Phone, Building2, Calendar, MessageSquare, Linkedin, CheckSquare, Pencil, CopyCheck, Send, Eye, MousePointerClick, BellOff } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { NotesFeed } from "@/components/notes/notes-feed";
 import { useNotesCount } from "@/hooks/use-notes-count";
@@ -45,9 +45,9 @@ function NotesTabLabel({ entityType, entityId }: { entityType: string; entityId:
   );
 }
 
-function CampaignEngagementChart({ data }: { data: import("@/hooks/use-contact-campaigns").ContactCampaignRow[] }) {
-  if (data.length < 2) return null;
+type CampaignRow = import("@/hooks/use-contact-campaigns").ContactCampaignRow;
 
+function PerCampaignChart({ data }: { data: CampaignRow[] }) {
   const chartData = data.map(row => ({
     name: row.campaignName.length > 18 ? row.campaignName.slice(0, 17) + "…" : row.campaignName,
     Opened: row.openedAt ? 1 : 0,
@@ -55,40 +55,133 @@ function CampaignEngagementChart({ data }: { data: import("@/hooks/use-contact-c
   }));
 
   return (
+    <ResponsiveContainer width="100%" height={160}>
+      <BarChart data={chartData} barCategoryGap="30%" barGap={4}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+        <XAxis
+          dataKey="name"
+          tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+          axisLine={false}
+          tickLine={false}
+        />
+        <YAxis hide domain={[0, 1]} />
+        <Tooltip
+          cursor={{ fill: "hsl(var(--muted))" }}
+          formatter={(value: number, name: string) => [value === 1 ? "Yes" : "No", name]}
+          contentStyle={{
+            fontSize: 12,
+            borderRadius: 8,
+            border: "1px solid hsl(var(--border))",
+            background: "hsl(var(--card))",
+            color: "hsl(var(--foreground))",
+          }}
+        />
+        <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+        <Bar dataKey="Opened" fill="#3b82f6" radius={[3, 3, 0, 0]} maxBarSize={32} />
+        <Bar dataKey="Clicked" fill="#22c55e" radius={[3, 3, 0, 0]} maxBarSize={32} />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+function OverTimeChart({ data }: { data: CampaignRow[] }) {
+  const byDate: Record<string, { date: string; Sent: number; Opened: number; Clicked: number }> = {};
+
+  const bucket = (iso: string | null) => iso ? iso.slice(0, 10) : null;
+
+  data.forEach(row => {
+    const sentDate = bucket(row.sentAt);
+    const openDate = bucket(row.openedAt);
+    const clickDate = bucket(row.clickedAt);
+
+    const allDates = [...new Set([sentDate, openDate, clickDate].filter(Boolean))] as string[];
+    allDates.forEach(d => {
+      if (!byDate[d]) byDate[d] = { date: d, Sent: 0, Opened: 0, Clicked: 0 };
+    });
+
+    if (sentDate) byDate[sentDate].Sent += 1;
+    if (openDate) byDate[openDate].Opened += 1;
+    if (clickDate) byDate[clickDate].Clicked += 1;
+  });
+
+  const chartData = Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date)).map(d => ({
+    ...d,
+    label: new Date(d.date + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+  }));
+
+  if (chartData.length === 0) {
+    return <p className="text-sm text-muted-foreground text-center py-8">No dated events to display.</p>;
+  }
+
+  return (
+    <ResponsiveContainer width="100%" height={160}>
+      <LineChart data={chartData}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+        <XAxis
+          dataKey="label"
+          tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+          axisLine={false}
+          tickLine={false}
+        />
+        <YAxis
+          allowDecimals={false}
+          tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+          axisLine={false}
+          tickLine={false}
+          width={24}
+        />
+        <Tooltip
+          contentStyle={{
+            fontSize: 12,
+            borderRadius: 8,
+            border: "1px solid hsl(var(--border))",
+            background: "hsl(var(--card))",
+            color: "hsl(var(--foreground))",
+          }}
+        />
+        <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+        <Line type="monotone" dataKey="Sent" stroke="#94a3b8" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+        <Line type="monotone" dataKey="Opened" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+        <Line type="monotone" dataKey="Clicked" stroke="#22c55e" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
+function CampaignEngagementChart({ data }: { data: CampaignRow[] }) {
+  const [view, setView] = useState<"per-campaign" | "over-time">("per-campaign");
+  if (data.length < 2) return null;
+
+  return (
     <div className="rounded-lg border bg-card p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-3">
-        Engagement per Campaign
-      </p>
-      <ResponsiveContainer width="100%" height={160}>
-        <BarChart data={chartData} barCategoryGap="30%" barGap={4}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-          <XAxis
-            dataKey="name"
-            tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <YAxis hide domain={[0, 1]} />
-          <Tooltip
-            cursor={{ fill: "hsl(var(--muted))" }}
-            formatter={(value: number, name: string) => [value === 1 ? "Yes" : "No", name]}
-            contentStyle={{
-              fontSize: 12,
-              borderRadius: 8,
-              border: "1px solid hsl(var(--border))",
-              background: "hsl(var(--card))",
-              color: "hsl(var(--foreground))",
-            }}
-          />
-          <Legend
-            iconType="circle"
-            iconSize={8}
-            wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
-          />
-          <Bar dataKey="Opened" fill="#3b82f6" radius={[3, 3, 0, 0]} maxBarSize={32} />
-          <Bar dataKey="Clicked" fill="#22c55e" radius={[3, 3, 0, 0]} maxBarSize={32} />
-        </BarChart>
-      </ResponsiveContainer>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {view === "per-campaign" ? "Engagement per Campaign" : "Engagement Over Time"}
+        </p>
+        <div className="flex items-center gap-1 rounded-md border bg-muted p-0.5">
+          <button
+            onClick={() => setView("per-campaign")}
+            className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${
+              view === "per-campaign"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Per Campaign
+          </button>
+          <button
+            onClick={() => setView("over-time")}
+            className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${
+              view === "over-time"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Over Time
+          </button>
+        </div>
+      </div>
+      {view === "per-campaign" ? <PerCampaignChart data={data} /> : <OverTimeChart data={data} />}
     </div>
   );
 }
