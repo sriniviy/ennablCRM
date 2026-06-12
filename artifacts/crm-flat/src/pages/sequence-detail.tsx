@@ -38,7 +38,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { useListContacts } from "@workspace/api-client-react";
+import { useListContacts, useGetMe } from "@workspace/api-client-react";
 import {
   Plus,
   Trash2,
@@ -60,6 +60,7 @@ import {
   X,
   PlusCircle,
   GripVertical,
+  Shield,
 } from "lucide-react";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import {
@@ -338,6 +339,7 @@ export function SequenceDetailPage() {
   const [aiPresetName, setAiPresetName] = useState("");
   const [aiPresetCategory, setAiPresetCategory] = useState("");
   const [aiPresetSearch, setAiPresetSearch] = useState("");
+  const [aiPresetScope, setAiPresetScope] = useState<"personal" | "team">("personal");
 
   // AI draft sequence dialog state
   const [aiDraftOpen, setAiDraftOpen] = useState(false);
@@ -475,22 +477,29 @@ export function SequenceDetailPage() {
                       onClick={(e) => e.stopPropagation()}
                     />
                   </div>
-                  {/* Grouped preset list */}
+                  {/* Team presets section */}
                   {(() => {
                     const q = aiPresetSearch.toLowerCase();
-                    const filtered = aiPresets.filter(
+                    const filteredTeam = teamPresets.filter(
                       (p) =>
                         !q ||
                         p.name.toLowerCase().includes(q) ||
                         (p.category ?? "").toLowerCase().includes(q),
                     );
-                    if (filtered.length === 0) {
+                    const filteredPersonal = personalPresets.filter(
+                      (p) =>
+                        !q ||
+                        p.name.toLowerCase().includes(q) ||
+                        (p.category ?? "").toLowerCase().includes(q),
+                    );
+                    if (filteredTeam.length === 0 && filteredPersonal.length === 0) {
                       return (
                         <div className="px-2 py-2 text-xs text-muted-foreground">No presets match.</div>
                       );
                     }
-                    const groups: Record<string, typeof filtered> = {};
-                    for (const preset of filtered) {
+                    // Group personal presets by category
+                    const groups: Record<string, typeof filteredPersonal> = {};
+                    for (const preset of filteredPersonal) {
                       const key = preset.category ?? "";
                       if (!groups[key]) groups[key] = [];
                       groups[key].push(preset);
@@ -500,33 +509,78 @@ export function SequenceDetailPage() {
                       if (b === "") return -1;
                       return a.localeCompare(b);
                     });
-                    return sortedKeys.map((cat) => (
-                      <div key={cat}>
-                        {cat && (
-                          <div className="px-2 pt-2 pb-0.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                            {cat}
-                          </div>
+                    return (
+                      <>
+                        {filteredTeam.length > 0 && (
+                          <>
+                            <div className="px-2 py-1 flex items-center gap-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                              <Shield className="h-3 w-3" />
+                              Team presets
+                            </div>
+                            {filteredTeam.map((preset) => (
+                              <div key={preset.id} className="flex items-center group">
+                                <SelectItem value={preset.id} className="flex-1">
+                                  <span className="flex items-center gap-1.5">
+                                    <Shield className="h-3 w-3 text-primary shrink-0" />
+                                    {preset.name}
+                                  </span>
+                                </SelectItem>
+                                {isAdmin && (
+                                  <button
+                                    type="button"
+                                    className="mr-2 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      deletePresetMutation.mutate(preset.id);
+                                    }}
+                                    title="Delete team preset"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                            {filteredPersonal.length > 0 && <div className="my-1 border-t" />}
+                          </>
                         )}
-                        {groups[cat].map((preset) => (
-                          <div key={preset.id} className="flex items-center group">
-                            <SelectItem value={preset.id} className="flex-1">
-                              {preset.name}
-                            </SelectItem>
-                            <button
-                              type="button"
-                              className="mr-2 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deletePresetMutation.mutate(preset.id);
-                              }}
-                              title="Delete preset"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    ));
+                        {filteredPersonal.length > 0 && (
+                          <>
+                            {filteredTeam.length > 0 && (
+                              <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                                My presets
+                              </div>
+                            )}
+                            {sortedKeys.map((cat) => (
+                              <div key={cat}>
+                                {cat && (
+                                  <div className="px-2 pt-2 pb-0.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                    {cat}
+                                  </div>
+                                )}
+                                {groups[cat].map((preset) => (
+                                  <div key={preset.id} className="flex items-center group">
+                                    <SelectItem value={preset.id} className="flex-1">
+                                      {preset.name}
+                                    </SelectItem>
+                                    <button
+                                      type="button"
+                                      className="mr-2 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        deletePresetMutation.mutate(preset.id);
+                                      }}
+                                      title="Delete preset"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            ))}
+                          </>
+                        )}
+                      </>
+                    );
                   })()}
                 </SelectContent>
               </Select>
@@ -630,9 +684,9 @@ export function SequenceDetailPage() {
                     className="h-7 text-xs flex-1"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && aiPresetName.trim()) {
-                        savePresetMutation.mutate({ name: aiPresetName.trim(), category: aiPresetCategory.trim() || undefined, goal: aiGoal.trim(), tone: aiTone, improveFields: aiImproveFields });
+                        savePresetMutation.mutate({ name: aiPresetName.trim(), category: aiPresetCategory.trim() || undefined, goal: aiGoal.trim(), tone: aiTone, improveFields: aiImproveFields, scope: aiPresetScope });
                       }
-                      if (e.key === "Escape") { setAiPresetNaming(false); setAiPresetName(""); setAiPresetCategory(""); }
+                      if (e.key === "Escape") { setAiPresetNaming(false); setAiPresetName(""); setAiPresetCategory(""); setAiPresetScope("personal"); }
                     }}
                     autoFocus
                   />
@@ -642,7 +696,7 @@ export function SequenceDetailPage() {
                     variant="default"
                     className="h-7 px-2 text-xs"
                     disabled={!aiPresetName.trim() || savePresetMutation.isPending}
-                    onClick={() => savePresetMutation.mutate({ name: aiPresetName.trim(), category: aiPresetCategory.trim() || undefined, goal: aiGoal.trim(), tone: aiTone, improveFields: aiImproveFields })}
+                    onClick={() => savePresetMutation.mutate({ name: aiPresetName.trim(), category: aiPresetCategory.trim() || undefined, goal: aiGoal.trim(), tone: aiTone, improveFields: aiImproveFields, scope: aiPresetScope })}
                   >
                     {savePresetMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
                   </Button>
@@ -651,7 +705,7 @@ export function SequenceDetailPage() {
                     type="button"
                     variant="ghost"
                     className="h-7 px-2 text-xs"
-                    onClick={() => { setAiPresetNaming(false); setAiPresetName(""); setAiPresetCategory(""); }}
+                    onClick={() => { setAiPresetNaming(false); setAiPresetName(""); setAiPresetCategory(""); setAiPresetScope("personal"); }}
                   >
                     <X className="h-3 w-3" />
                   </Button>
@@ -662,9 +716,22 @@ export function SequenceDetailPage() {
                   onChange={(e) => setAiPresetCategory(e.target.value)}
                   className="h-7 text-xs"
                   onKeyDown={(e) => {
-                    if (e.key === "Escape") { setAiPresetNaming(false); setAiPresetName(""); setAiPresetCategory(""); }
+                    if (e.key === "Escape") { setAiPresetNaming(false); setAiPresetName(""); setAiPresetCategory(""); setAiPresetScope("personal"); }
                   }}
                 />
+                {isAdmin && (
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <Switch
+                      checked={aiPresetScope === "team"}
+                      onCheckedChange={(checked) => setAiPresetScope(checked ? "team" : "personal")}
+                      className="scale-75 origin-left"
+                    />
+                    <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                      <Shield className="h-3 w-3" />
+                      Share with whole team
+                    </span>
+                  </label>
+                )}
               </div>
             ) : (
               <button
@@ -824,14 +891,18 @@ export function SequenceDetailPage() {
     staleTime: 30_000,
   });
 
-  type AiPreset = { id: string; name: string; category: string | null; goal: string; tone: string; improveFields: string };
+  type AiPreset = { id: string; userId: string; name: string; category: string | null; goal: string; tone: string; improveFields: string; scope: string };
+  const { data: me } = useGetMe();
+  const isAdmin = me?.role === "ADMIN";
   const { data: aiPresets = [] } = useQuery<AiPreset[]>({
     queryKey: ["ai-presets"],
     queryFn: () => apiFetch("/users/me/ai-presets"),
   });
+  const teamPresets = aiPresets.filter((p) => p.scope === "team");
+  const personalPresets = aiPresets.filter((p) => p.scope === "personal");
 
   const savePresetMutation = useMutation({
-    mutationFn: (payload: { name: string; category?: string; goal: string; tone: string; improveFields: string }) =>
+    mutationFn: (payload: { name: string; category?: string; goal: string; tone: string; improveFields: string; scope: string }) =>
       apiFetch("/users/me/ai-presets", {
         method: "POST",
         body: JSON.stringify(payload),
@@ -841,6 +912,7 @@ export function SequenceDetailPage() {
       setAiPresetNaming(false);
       setAiPresetName("");
       setAiPresetCategory("");
+      setAiPresetScope("personal");
       toast({ title: "Preset saved" });
     },
     onError: (err: Error) =>
