@@ -59,7 +59,9 @@ import {
   BookmarkPlus,
   X,
   PlusCircle,
+  GripVertical,
 } from "lucide-react";
+import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import {
   Select,
   SelectContent,
@@ -2076,131 +2078,137 @@ export function SequenceDetailPage() {
                   Edit inputs
                 </Button>
               </div>
-              <ol className="space-y-3">
-                {aiDraftPreview.map((step, i) => (
-                  <li key={i} className="border rounded-lg p-4 space-y-3 bg-muted/30">
-                    <div className="flex items-center gap-2">
-                      <span className="bg-primary text-primary-foreground rounded-full h-6 w-6 flex items-center justify-center text-xs font-bold shrink-0">
-                        {i + 1}
-                      </span>
-                      <div className="flex-1">
-                        {i === 0 ? (
-                          <span className="text-xs text-muted-foreground">Send immediately</span>
-                        ) : (
-                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <span>Send</span>
-                            <Input
-                              type="number"
-                              min={1}
-                              value={step.delayDays}
-                              onChange={(e) => {
-                                const val = Math.max(1, parseInt(e.target.value) || 1);
-                                setAiDraftPreview((prev) =>
-                                  prev
-                                    ? prev.map((s, j) =>
-                                        j === i ? { ...s, delayDays: val } : s,
-                                      )
-                                    : prev,
-                                );
-                              }}
-                              className="h-6 w-14 text-xs text-center px-1 py-0"
-                            />
-                            <span>day{step.delayDays !== 1 ? "s" : ""} after step {i}</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-0.5">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                          disabled={i === 0}
-                          onClick={() =>
-                            setAiDraftPreview((prev) => {
-                              if (!prev) return prev;
-                              const next = [...prev];
-                              [next[i - 1], next[i]] = [next[i], next[i - 1]];
-                              return next;
-                            })
-                          }
-                          title="Move up"
-                          type="button"
-                        >
-                          <ChevronUp className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                          disabled={i === aiDraftPreview.length - 1}
-                          onClick={() =>
-                            setAiDraftPreview((prev) => {
-                              if (!prev) return prev;
-                              const next = [...prev];
-                              [next[i], next[i + 1]] = [next[i + 1], next[i]];
-                              return next;
-                            })
-                          }
-                          title="Move down"
-                          type="button"
-                        >
-                          <ChevronDown className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
-                          onClick={() =>
-                            setAiDraftPreview((prev) => {
-                              if (!prev) return prev;
-                              const next = prev.filter((_, j) => j !== i);
-                              return next.length === 0 ? null : next;
-                            })
-                          }
-                          title="Remove step"
-                          type="button"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          <span className="sr-only">Remove step {i + 1}</span>
-                        </Button>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-xs text-muted-foreground mb-1 block">Subject</label>
-                      <Input
-                        value={step.subject}
-                        onChange={(e) =>
-                          setAiDraftPreview((prev) =>
-                            prev
-                              ? prev.map((s, j) =>
-                                  j === i ? { ...s, subject: e.target.value } : s,
-                                )
-                              : prev,
-                          )
-                        }
-                        className="text-sm font-medium"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-muted-foreground mb-1 block">Body</label>
-                      <RichEmailEditor
-                        value={step.body}
-                        onChange={(html) =>
-                          setAiDraftPreview((prev) =>
-                            prev
-                              ? prev.map((s, j) =>
-                                  j === i ? { ...s, body: html } : s,
-                                )
-                              : prev,
-                          )
-                        }
-                        tokens={TOKENS}
-                        minHeight="120px"
-                      />
-                    </div>
-                  </li>
-                ))}
-              </ol>
+              <DragDropContext
+                onDragEnd={(result: DropResult) => {
+                  if (!result.destination) return;
+                  const from = result.source.index;
+                  const to = result.destination.index;
+                  if (from === to) return;
+                  setAiDraftPreview((prev) => {
+                    if (!prev) return prev;
+                    const next = [...prev];
+                    const [moved] = next.splice(from, 1);
+                    next.splice(to, 0, moved);
+                    return next;
+                  });
+                }}
+              >
+                <Droppable droppableId="ai-draft-steps">
+                  {(provided) => (
+                    <ol
+                      className="space-y-3"
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                    >
+                      {aiDraftPreview.map((step, i) => (
+                        <Draggable key={String(i)} draggableId={String(i)} index={i}>
+                          {(draggable, snapshot) => (
+                            <li
+                              ref={draggable.innerRef}
+                              {...draggable.draggableProps}
+                              className={cn(
+                                "border rounded-lg p-4 space-y-3 bg-muted/30",
+                                snapshot.isDragging && "shadow-lg ring-2 ring-primary/30",
+                              )}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span
+                                  {...draggable.dragHandleProps}
+                                  className="text-muted-foreground/50 hover:text-muted-foreground cursor-grab active:cursor-grabbing shrink-0 touch-none"
+                                  title="Drag to reorder"
+                                >
+                                  <GripVertical className="h-4 w-4" />
+                                </span>
+                                <span className="bg-primary text-primary-foreground rounded-full h-6 w-6 flex items-center justify-center text-xs font-bold shrink-0">
+                                  {i + 1}
+                                </span>
+                                <div className="flex-1">
+                                  {i === 0 ? (
+                                    <span className="text-xs text-muted-foreground">Send immediately</span>
+                                  ) : (
+                                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                      <span>Send</span>
+                                      <Input
+                                        type="number"
+                                        min={1}
+                                        value={step.delayDays}
+                                        onChange={(e) => {
+                                          const val = Math.max(1, parseInt(e.target.value) || 1);
+                                          setAiDraftPreview((prev) =>
+                                            prev
+                                              ? prev.map((s, j) =>
+                                                  j === i ? { ...s, delayDays: val } : s,
+                                                )
+                                              : prev,
+                                          );
+                                        }}
+                                        className="h-6 w-14 text-xs text-center px-1 py-0"
+                                      />
+                                      <span>day{step.delayDays !== 1 ? "s" : ""} after step {i}</span>
+                                    </div>
+                                  )}
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
+                                  onClick={() =>
+                                    setAiDraftPreview((prev) => {
+                                      if (!prev) return prev;
+                                      const next = prev.filter((_, j) => j !== i);
+                                      return next.length === 0 ? null : next;
+                                    })
+                                  }
+                                  disabled={aiDraftPreview.length <= 1}
+                                  title="Remove step"
+                                  type="button"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                  <span className="sr-only">Remove step {i + 1}</span>
+                                </Button>
+                              </div>
+                              <div>
+                                <label className="text-xs text-muted-foreground mb-1 block">Subject</label>
+                                <Input
+                                  value={step.subject}
+                                  onChange={(e) =>
+                                    setAiDraftPreview((prev) =>
+                                      prev
+                                        ? prev.map((s, j) =>
+                                            j === i ? { ...s, subject: e.target.value } : s,
+                                          )
+                                        : prev,
+                                    )
+                                  }
+                                  className="text-sm font-medium"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-xs text-muted-foreground mb-1 block">Body</label>
+                                <RichEmailEditor
+                                  value={step.body}
+                                  onChange={(html) =>
+                                    setAiDraftPreview((prev) =>
+                                      prev
+                                        ? prev.map((s, j) =>
+                                            j === i ? { ...s, body: html } : s,
+                                          )
+                                        : prev,
+                                    )
+                                  }
+                                  tokens={TOKENS}
+                                  minHeight="120px"
+                                />
+                              </div>
+                            </li>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </ol>
+                  )}
+                </Droppable>
+              </DragDropContext>
               <Button
                 variant="outline"
                 size="sm"
