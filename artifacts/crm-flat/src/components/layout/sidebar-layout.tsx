@@ -19,6 +19,11 @@ import {
   Moon,
   ClipboardCheck,
   Filter,
+  SlidersHorizontal,
+  CalendarClock,
+  Sparkles,
+  ScrollText,
+  ArrowDownToLine,
 } from "lucide-react";
 import { GlobalSearch } from "@/components/global-search";
 import { Button } from "@/components/ui/button";
@@ -46,6 +51,8 @@ type NavItem = {
   href: string;
   icon: React.ElementType;
   adminOnly?: boolean;
+  indent?: boolean;
+  exact?: boolean;
 };
 
 type NavGroup = {
@@ -87,7 +94,13 @@ const navGroups: NavGroup[] = [
   {
     label: "SETTINGS",
     items: [
-      { name: "Settings", href: "/settings", icon: Settings },
+      { name: "Settings", href: "/settings", icon: Settings, exact: true },
+      { name: "Team", href: "/settings/team", icon: Users, indent: true },
+      { name: "Custom Fields", href: "/settings/custom-fields", icon: SlidersHorizontal, indent: true, adminOnly: true },
+      { name: "Exports", href: "/settings/exports", icon: CalendarClock, indent: true, adminOnly: true },
+      { name: "AI Presets", href: "/settings/ai-presets", icon: Sparkles, indent: true, adminOnly: true },
+      { name: "Audit Log", href: "/settings/audit-log", icon: ScrollText, indent: true, adminOnly: true },
+      { name: "Import", href: "/settings/import", icon: ArrowDownToLine, indent: true, adminOnly: true },
     ],
   },
 ];
@@ -154,10 +167,13 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
             {collapsed && <div className="mb-1 border-t border-sidebar-border mx-1" />}
             <div className="space-y-0.5">
               {visible.map((item) => {
-                const isActive = location.startsWith(item.href);
+                const isActive = item.exact
+                  ? location === item.href
+                  : location.startsWith(item.href);
                 const badge = getBadge(item.href);
 
                 if (collapsed) {
+                  if (item.indent) return null;
                   return (
                     <Tooltip key={item.name} delayDuration={0}>
                       <TooltipTrigger asChild>
@@ -182,6 +198,25 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                       </TooltipTrigger>
                       <TooltipContent side="right">{item.name}</TooltipContent>
                     </Tooltip>
+                  );
+                }
+
+                if (item.indent) {
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      onClick={onNavigate}
+                      data-testid={`nav-${item.name.toLowerCase().replace(/\s+/g, "-")}`}
+                      className={`flex items-center gap-2 rounded py-1 pl-7 pr-3 text-xs font-medium transition-colors ${
+                        isActive
+                          ? "text-primary bg-primary/8"
+                          : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      }`}
+                    >
+                      <item.icon className="h-3 w-3 shrink-0" />
+                      {item.name}
+                    </Link>
                   );
                 }
 
