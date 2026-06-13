@@ -15,6 +15,7 @@ export const aiPresetsTable = pgTable(
     goal: text("goal").notNull(),
     tone: text("tone").notNull().default("Professional"),
     improveFields: text("improve_fields").notNull().default("both"),
+    context: text("context").array(),
     shared: boolean("shared").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

@@ -712,7 +712,7 @@ export function SequenceDetailPage() {
                     className="h-7 text-xs flex-1"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && aiPresetName.trim()) {
-                        savePresetMutation.mutate({ name: aiPresetName.trim(), category: aiPresetCategory.trim() || undefined, goal: aiGoal.trim(), tone: aiTone, improveFields: aiImproveFields, shared: aiPresetShared });
+                        savePresetMutation.mutate({ name: aiPresetName.trim(), category: aiPresetCategory.trim() || undefined, goal: aiGoal.trim(), tone: aiTone, improveFields: aiImproveFields, context: ["email"], shared: aiPresetShared });
                       }
                       if (e.key === "Escape") { setAiPresetNaming(false); setAiPresetName(""); setAiPresetCategory(""); setAiPresetShared(false); }
                     }}
@@ -724,7 +724,7 @@ export function SequenceDetailPage() {
                     variant="default"
                     className="h-7 px-2 text-xs"
                     disabled={!aiPresetName.trim() || savePresetMutation.isPending}
-                    onClick={() => savePresetMutation.mutate({ name: aiPresetName.trim(), category: aiPresetCategory.trim() || undefined, goal: aiGoal.trim(), tone: aiTone, improveFields: aiImproveFields, shared: aiPresetShared })}
+                    onClick={() => savePresetMutation.mutate({ name: aiPresetName.trim(), category: aiPresetCategory.trim() || undefined, goal: aiGoal.trim(), tone: aiTone, improveFields: aiImproveFields, context: ["email"], shared: aiPresetShared })}
                   >
                     {savePresetMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
                   </Button>
@@ -932,7 +932,7 @@ export function SequenceDetailPage() {
   const personalPresets = aiPresets.filter((p) => !p.shared);
 
   const savePresetMutation = useMutation({
-    mutationFn: (payload: { name: string; category?: string; goal: string; tone: string; improveFields: string; shared?: boolean }) =>
+    mutationFn: (payload: { name: string; category?: string; goal: string; tone: string; improveFields: string; context?: string[]; shared?: boolean }) =>
       apiFetch("/users/me/ai-presets", {
         method: "POST",
         body: JSON.stringify(payload),
