@@ -20,7 +20,11 @@ import { CampaignNewPage } from "./pages/campaign-new";
 import { CampaignDetailPage } from "./pages/campaign-detail";
 import { LandingPage } from "./pages/landing";
 import { ReportsPage } from "./pages/reports";
+import { SettingsIndexPage } from "./pages/settings-index";
 import { SettingsTeamPage } from "./pages/settings-team";
+import { SettingsExportsPage } from "./pages/settings-exports";
+import { SettingsAiPresetsPage } from "./pages/settings-ai-presets";
+import { SettingsCustomFieldsPage } from "./pages/settings-custom-fields";
 import { SequencesPage } from "./pages/sequences";
 import { SequenceDetailPage } from "./pages/sequence-detail";
 import { AuditLogPage } from "./pages/audit-log";
@@ -133,7 +137,13 @@ function AppRoutes() {
           <Route path="/campaigns/new" component={() => <ProtectedRoute component={CampaignNewPage} />} />
           <Route path="/campaigns/:id" component={() => <ProtectedRoute component={CampaignDetailPage} />} />
           <Route path="/reports" component={() => <ProtectedRoute component={ReportsPage} />} />
+          <Route path="/settings" component={() => <ProtectedRoute component={SettingsIndexPage} />} />
           <Route path="/settings/team" component={() => <ProtectedRoute component={SettingsTeamPage} />} />
+          <Route path="/settings/exports" component={() => <ProtectedRoute component={SettingsExportsPage} />} />
+          <Route path="/settings/ai-presets" component={() => <ProtectedRoute component={SettingsAiPresetsPage} />} />
+          <Route path="/settings/custom-fields" component={() => <ProtectedRoute component={SettingsCustomFieldsPage} />} />
+          <Route path="/settings/audit-log" component={() => <ProtectedRoute component={AuditLogPage} />} />
+          <Route path="/settings/import" component={() => <ProtectedRoute component={MigratePage} />} />
           <Route path="/sequences" component={() => <ProtectedRoute component={SequencesPage} />} />
           <Route path="/sequences/:id" component={() => <ProtectedRoute component={SequenceDetailPage} />} />
           <Route path="/segments" component={() => <ProtectedRoute component={SegmentsPage} />} />

@@ -11,7 +11,6 @@ import {
   Mail,
   BarChart2,
   Settings,
-  ScrollText,
   LogOut,
   Menu,
   ChevronLeft,
@@ -19,7 +18,6 @@ import {
   Sun,
   Moon,
   ClipboardCheck,
-  ArrowDownToLine,
   Filter,
 } from "lucide-react";
 import { GlobalSearch } from "@/components/global-search";
@@ -87,11 +85,9 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    label: "ADMIN",
+    label: "SETTINGS",
     items: [
-      { name: "HubSpot Import", href: "/admin/migrate", icon: ArrowDownToLine, adminOnly: true },
-      { name: "Audit Log", href: "/admin/audit-log", icon: ScrollText, adminOnly: true },
-      { name: "Settings", href: "/settings/team", icon: Settings },
+      { name: "Settings", href: "/settings", icon: Settings },
     ],
   },
 ];
