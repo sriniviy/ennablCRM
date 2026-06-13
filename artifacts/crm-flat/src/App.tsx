@@ -20,7 +20,6 @@ import { CampaignNewPage } from "./pages/campaign-new";
 import { CampaignDetailPage } from "./pages/campaign-detail";
 import { LandingPage } from "./pages/landing";
 import { ReportsPage } from "./pages/reports";
-import { SettingsIndexPage } from "./pages/settings-index";
 import { SettingsTeamPage } from "./pages/settings-team";
 import { SettingsExportsPage } from "./pages/settings-exports";
 import { SettingsAiPresetsPage } from "./pages/settings-ai-presets";
@@ -137,7 +136,6 @@ function AppRoutes() {
           <Route path="/campaigns/new" component={() => <ProtectedRoute component={CampaignNewPage} />} />
           <Route path="/campaigns/:id" component={() => <ProtectedRoute component={CampaignDetailPage} />} />
           <Route path="/reports" component={() => <ProtectedRoute component={ReportsPage} />} />
-          <Route path="/settings" component={() => <ProtectedRoute component={SettingsIndexPage} />} />
           <Route path="/settings/team" component={() => <ProtectedRoute component={SettingsTeamPage} />} />
           <Route path="/settings/exports" component={() => <ProtectedRoute component={SettingsExportsPage} />} />
           <Route path="/settings/ai-presets" component={() => <ProtectedRoute component={SettingsAiPresetsPage} />} />

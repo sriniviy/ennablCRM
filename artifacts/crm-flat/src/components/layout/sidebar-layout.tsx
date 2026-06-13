@@ -10,7 +10,6 @@ import {
   CheckSquare,
   Mail,
   BarChart2,
-  Settings,
   LogOut,
   Menu,
   ChevronLeft,
@@ -94,13 +93,12 @@ const navGroups: NavGroup[] = [
   {
     label: "SETTINGS",
     items: [
-      { name: "Settings", href: "/settings", icon: Settings, exact: true },
-      { name: "Team", href: "/settings/team", icon: Users, indent: true },
-      { name: "Custom Fields", href: "/settings/custom-fields", icon: SlidersHorizontal, indent: true, adminOnly: true },
-      { name: "Exports", href: "/settings/exports", icon: CalendarClock, indent: true, adminOnly: true },
-      { name: "AI Presets", href: "/settings/ai-presets", icon: Sparkles, indent: true, adminOnly: true },
-      { name: "Audit Log", href: "/settings/audit-log", icon: ScrollText, indent: true, adminOnly: true },
-      { name: "Import", href: "/settings/import", icon: ArrowDownToLine, indent: true, adminOnly: true },
+      { name: "Team", href: "/settings/team", icon: Users },
+      { name: "Custom Fields", href: "/settings/custom-fields", icon: SlidersHorizontal, adminOnly: true },
+      { name: "Exports", href: "/settings/exports", icon: CalendarClock, adminOnly: true },
+      { name: "AI Presets", href: "/settings/ai-presets", icon: Sparkles, adminOnly: true },
+      { name: "Audit Log", href: "/settings/audit-log", icon: ScrollText, adminOnly: true },
+      { name: "Import", href: "/settings/import", icon: ArrowDownToLine, adminOnly: true },
     ],
   },
 ];

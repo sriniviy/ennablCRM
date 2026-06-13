@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
-import { Link } from "wouter";
-import { ChevronLeft, Sparkles, Pencil, Check, X, Globe, Lock, Trash2 } from "lucide-react";
+import { Sparkles, Pencil, Check, X, Globe, Lock, Trash2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -86,12 +85,6 @@ export function SettingsAiPresetsPage() {
   return (
     <SidebarLayout>
       <div className="space-y-6 max-w-3xl">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" asChild className="-ml-2 text-muted-foreground">
-            <Link href="/settings"><ChevronLeft className="h-4 w-4 mr-1" /> Settings</Link>
-          </Button>
-        </div>
-
         <div>
           <h1 className="text-2xl font-bold tracking-tight">AI Presets</h1>
           <p className="text-sm text-muted-foreground">Shared AI writing presets available to all team members.</p>

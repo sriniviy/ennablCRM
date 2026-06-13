@@ -1,6 +1,5 @@
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
-import { Link } from "wouter";
-import { ChevronLeft, CalendarClock, Pause, Play, Trash2 } from "lucide-react";
+import { CalendarClock, Pause, Play, Trash2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -68,12 +67,6 @@ export function SettingsExportsPage() {
   return (
     <SidebarLayout>
       <div className="space-y-6 max-w-3xl">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" asChild className="-ml-2 text-muted-foreground">
-            <Link href="/settings"><ChevronLeft className="h-4 w-4 mr-1" /> Settings</Link>
-          </Button>
-        </div>
-
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Scheduled Exports</h1>
           <p className="text-sm text-muted-foreground">Automated CSV exports delivered to your inbox.</p>
