@@ -32,6 +32,7 @@ import { SegmentsPage } from "./pages/segments";
 import { SignInPage } from "./pages/sign-in";
 import { SignUpPage } from "./pages/sign-up";
 import { MigratePage } from "./pages/migrate";
+import { SetPasswordPage } from "./pages/set-password";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -123,6 +124,7 @@ function AppRoutes() {
           <Route path="/" component={HomeRedirect} />
           <Route path="/sign-in" component={SignInPage} />
           <Route path="/sign-up" component={SignUpPage} />
+          <Route path="/set-password" component={SetPasswordPage} />
           <Route path="/dashboard" component={() => <ProtectedRoute component={DashboardPage} />} />
           <Route path="/contacts" component={() => <ProtectedRoute component={ContactsPage} />} />
           <Route path="/contacts/:id" component={() => <ProtectedRoute component={ContactDetailPage} />} />

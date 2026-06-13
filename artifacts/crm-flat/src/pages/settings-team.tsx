@@ -27,7 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useGetMe } from "@workspace/api-client-react";
 import {
   Users, UserPlus, Search, MoreHorizontal, Pencil, Trash2, Shield,
-  ShieldOff, Archive, UserCheck, X, Lock,
+  ShieldOff, Archive, UserCheck, X, Lock, Copy, CheckCircle2, Link2,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -80,7 +80,6 @@ interface TeamData {
 interface MemberForm {
   name: string;
   email: string;
-  password: string;
   title: string;
   phone: string;
   role: "ADMIN" | "MEMBER";
@@ -88,8 +87,14 @@ interface MemberForm {
   insuranceGroups: string[];
 }
 
+interface InviteResult {
+  url: string;
+  email: string;
+  name: string;
+}
+
 const EMPTY_FORM: MemberForm = {
-  name: "", email: "", password: "", title: "", phone: "",
+  name: "", email: "", title: "", phone: "",
   role: "MEMBER", tags: [], insuranceGroups: [],
 };
 
@@ -245,6 +250,8 @@ export function SettingsTeamPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<TeamMember | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<TeamMember | null>(null);
+  const [inviteResult, setInviteResult] = useState<InviteResult | null>(null);
+  const [copied, setCopied] = useState(false);
   const [form, setForm] = useState<MemberForm>(EMPTY_FORM);
 
   const authFetch = async (path: string, opts: RequestInit = {}) => {
@@ -277,16 +284,20 @@ export function SettingsTeamPage() {
       authFetch("/add-user", {
         method: "POST",
         body: JSON.stringify({
-          email: f.email, name: f.name, password: f.password,
+          email: f.email, name: f.name,
           title: f.title, phone: f.phone,
           tags: f.tags, insuranceGroups: f.insuranceGroups,
         }),
-      }),
-    onSuccess: (_, f) => {
+      }) as Promise<{ inviteUrl?: string; email: string; name: string | null }>,
+    onSuccess: (data, f) => {
       qc.invalidateQueries({ queryKey: ["team"] });
       setDialogOpen(false);
       setForm(EMPTY_FORM);
-      toast({ title: "Team member added", description: `Account created for ${f.email}` });
+      if (data.inviteUrl) {
+        setInviteResult({ url: data.inviteUrl, email: f.email, name: f.name });
+      } else {
+        toast({ title: "Team member added", description: `Account created for ${f.email}` });
+      }
     },
     onError: (err: Error) => toast({ title: "Failed to add member", description: err.message, variant: "destructive" }),
   });
@@ -696,20 +707,13 @@ export function SettingsTeamPage() {
               </div>
             </div>
 
-            {/* Password (add only) */}
+            {/* Invite notice (add only) */}
             {!editTarget && (
-              <div className="space-y-1.5">
-                <Label htmlFor="tm-pw">Temporary password <span className="text-destructive">*</span></Label>
-                <Input
-                  id="tm-pw"
-                  type="text"
-                  placeholder="Min. 8 characters — share securely"
-                  value={form.password}
-                  onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-                  required
-                  minLength={8}
-                  disabled={isBusy}
-                />
+              <div className="flex items-start gap-2 rounded-md border bg-muted/40 px-3 py-2.5 text-xs text-muted-foreground">
+                <Link2 className="h-3.5 w-3.5 shrink-0 mt-0.5 text-primary" />
+                <span>
+                  An invite link will be generated for you to share. The new member will set their own password when they open it.
+                </span>
               </div>
             )}
 
@@ -789,9 +793,9 @@ export function SettingsTeamPage() {
               </Button>
               <Button
                 type="submit"
-                disabled={isBusy || (!editTarget && (!form.email.trim() || !form.password.trim()))}
+                disabled={isBusy || !form.email.trim()}
               >
-                {isBusy ? (editTarget ? "Saving…" : "Adding…") : (editTarget ? "Save changes" : "Add team member")}
+                {isBusy ? (editTarget ? "Saving…" : "Creating invite…") : (editTarget ? "Save changes" : "Add & get invite link")}
               </Button>
             </DialogFooter>
           </form>
@@ -821,6 +825,67 @@ export function SettingsTeamPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Invite Link Dialog ── */}
+      <Dialog open={!!inviteResult} onOpenChange={(o) => { if (!o) { setInviteResult(null); setCopied(false); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+              Team member added!
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-1">
+            <p className="text-sm text-muted-foreground">
+              Share this link with{" "}
+              <span className="font-medium text-foreground">
+                {inviteResult?.name || inviteResult?.email}
+              </span>
+              . They'll set their own password when they open it.
+            </p>
+
+            {/* Link box */}
+            <div className="rounded-md border bg-muted/40 p-3">
+              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+                Invite link · expires in 7 days
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 text-xs break-all text-foreground font-mono leading-relaxed">
+                  {inviteResult?.url}
+                </code>
+                <Button
+                  size="sm"
+                  variant={copied ? "secondary" : "default"}
+                  className="shrink-0"
+                  onClick={() => {
+                    if (inviteResult?.url) {
+                      navigator.clipboard.writeText(inviteResult.url).then(() => {
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2500);
+                      });
+                    }
+                  }}
+                >
+                  {copied ? (
+                    <><CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />Copied!</>
+                  ) : (
+                    <><Copy className="h-3.5 w-3.5 mr-1.5" />Copy</>
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-muted-foreground">
+              Once email is configured, this will be sent automatically — no manual sharing needed.
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button onClick={() => { setInviteResult(null); setCopied(false); }}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </SidebarLayout>
   );
 }
