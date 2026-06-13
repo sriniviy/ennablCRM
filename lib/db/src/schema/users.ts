@@ -1,7 +1,8 @@
 import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
-import { userRoleEnum } from "./enums";
+import { userRoleEnum, userStatusEnum } from "./enums";
 
 export const usersTable = pgTable("users", {
   id: text("id")
@@ -13,6 +14,11 @@ export const usersTable = pgTable("users", {
   name: text("name"),
   avatarUrl: text("avatar_url"),
   role: userRoleEnum("role").notNull().default("MEMBER"),
+  status: userStatusEnum("status").notNull().default("ACTIVE"),
+  tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
+  insuranceGroups: text("insurance_groups").array().notNull().default(sql`'{}'::text[]`),
+  title: text("title"),
+  phone: text("phone"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

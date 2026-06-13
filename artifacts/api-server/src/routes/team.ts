@@ -34,10 +34,14 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 router.post("/add-user", requireAuth, async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
 
-  const { email, name, password } = req.body as {
+  const { email, name, password, title, phone, tags, insuranceGroups } = req.body as {
     email?: string;
     name?: string;
     password?: string;
+    title?: string;
+    phone?: string;
+    tags?: string[];
+    insuranceGroups?: string[];
   };
 
   if (!email || !EMAIL_RE.test(email.trim())) {
@@ -66,12 +70,20 @@ router.post("/add-user", requireAuth, async (req: Request, res: Response) => {
         authId: baUserId,
         email: email.trim(),
         name: name?.trim() ?? null,
+        title: title?.trim() ?? null,
+        phone: phone?.trim() ?? null,
+        tags: tags ?? [],
+        insuranceGroups: insuranceGroups ?? [],
       })
       .onConflictDoUpdate({
         target: usersTable.email,
         set: {
           authId: baUserId,
           name: name?.trim() ?? null,
+          title: title?.trim() ?? null,
+          phone: phone?.trim() ?? null,
+          tags: tags ?? [],
+          insuranceGroups: insuranceGroups ?? [],
           updatedAt: new Date(),
         },
       })
@@ -108,6 +120,110 @@ router.patch(
       const [updated] = await db
         .update(usersTable)
         .set({ role: role as "ADMIN" | "MEMBER", updatedAt: new Date() })
+        .where(eq(usersTable.id, userId))
+        .returning();
+
+      if (!updated) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
+      res.json(updated);
+    } catch (err) {
+      const e = err as Error;
+      res.status(500).json({ error: e.message });
+    }
+  },
+);
+
+router.patch(
+  "/:userId/status",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    if (!requireAdmin(req, res)) return;
+
+    const { dbUser } = req as AuthRequest;
+    const userId = req.params.userId as string;
+    const { status } = req.body as { status?: string };
+
+    if (status !== "ACTIVE" && status !== "INACTIVE" && status !== "ARCHIVED") {
+      res.status(400).json({ error: "status must be ACTIVE, INACTIVE, or ARCHIVED" });
+      return;
+    }
+
+    if (dbUser.id === userId && status !== "ACTIVE") {
+      res.status(400).json({ error: "You cannot deactivate or archive yourself" });
+      return;
+    }
+
+    try {
+      const [target] = await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.id, userId))
+        .limit(1);
+
+      if (!target) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
+
+      if (target.authId) {
+        if (status === "INACTIVE" || status === "ARCHIVED") {
+          await db
+            .update(baUserTable)
+            .set({ banned: true, banReason: status === "ARCHIVED" ? "archived" : "deactivated" })
+            .where(eq(baUserTable.id, target.authId));
+          await db
+            .delete(baSessionTable)
+            .where(eq(baSessionTable.userId, target.authId));
+        } else {
+          await db
+            .update(baUserTable)
+            .set({ banned: false, banReason: null })
+            .where(eq(baUserTable.id, target.authId));
+        }
+      }
+
+      const [updated] = await db
+        .update(usersTable)
+        .set({ status: status as "ACTIVE" | "INACTIVE" | "ARCHIVED", updatedAt: new Date() })
+        .where(eq(usersTable.id, userId))
+        .returning();
+
+      res.json(updated);
+    } catch (err) {
+      const e = err as Error;
+      res.status(500).json({ error: e.message });
+    }
+  },
+);
+
+router.patch(
+  "/:userId/profile",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    if (!requireAdmin(req, res)) return;
+
+    const userId = req.params.userId as string;
+    const { name, title, phone, tags, insuranceGroups } = req.body as {
+      name?: string;
+      title?: string;
+      phone?: string;
+      tags?: string[];
+      insuranceGroups?: string[];
+    };
+
+    try {
+      const [updated] = await db
+        .update(usersTable)
+        .set({
+          ...(name !== undefined && { name: name.trim() || null }),
+          ...(title !== undefined && { title: title.trim() || null }),
+          ...(phone !== undefined && { phone: phone.trim() || null }),
+          ...(tags !== undefined && { tags }),
+          ...(insuranceGroups !== undefined && { insuranceGroups }),
+          updatedAt: new Date(),
+        })
         .where(eq(usersTable.id, userId))
         .returning();
 

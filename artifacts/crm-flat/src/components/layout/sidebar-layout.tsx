@@ -93,7 +93,7 @@ const navGroups: NavGroup[] = [
   {
     label: "SETTINGS",
     items: [
-      { name: "Team", href: "/settings/team", icon: Users },
+      { name: "Team", href: "/settings/team", icon: Users, adminOnly: true },
       { name: "Custom Fields", href: "/settings/custom-fields", icon: SlidersHorizontal, adminOnly: true },
       { name: "Exports", href: "/settings/exports", icon: CalendarClock, adminOnly: true },
       { name: "AI Presets", href: "/settings/ai-presets", icon: Sparkles, adminOnly: true },

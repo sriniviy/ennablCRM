@@ -87,3 +87,9 @@ export const auditActionEnum = pgEnum("audit_action", [
   "DELETE",
   "MERGE",
 ]);
+
+export const userStatusEnum = pgEnum("user_status", [
+  "ACTIVE",
+  "INACTIVE",
+  "ARCHIVED",
+]);
