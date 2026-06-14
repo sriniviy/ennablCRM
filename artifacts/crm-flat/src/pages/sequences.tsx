@@ -27,7 +27,9 @@ import {
   Sparkles,
   CheckCircle2,
   RefreshCw,
+  Share2,
 } from "lucide-react";
+import { ShareDialog } from "@/components/contacts/share-dialog";
 import {
   Dialog,
   DialogContent,
@@ -85,6 +87,9 @@ export function SequencesPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [, navigate] = useLocation();
+
+  const [shareSeq, setShareSeq] = useState<{ id: string; name: string } | null>(null);
+  const [shareSeqOpen, setShareSeqOpen] = useState(false);
 
   // ── Standard create dialog ────────────────────────────────────────────────
   const [showCreate, setShowCreate] = useState(false);
@@ -274,12 +279,20 @@ export function SequencesPage() {
         ) : sequences && sequences.length > 0 ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {sequences.map((seq) => (
-              <Link key={seq.id} href={`/sequences/${seq.id}`}>
-                <Card className="hover:border-primary/50 transition-colors cursor-pointer h-full">
+              <Card key={seq.id} className="hover:border-primary/50 transition-colors cursor-pointer h-full" onClick={() => navigate(`/sequences/${seq.id}`)}>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base flex items-center justify-between">
-                      {seq.name}
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      <span className="truncate">{seq.name}</span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          title="Share sequence"
+                          className="inline-flex items-center justify-center rounded h-6 w-6 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                          onClick={e => { e.stopPropagation(); setShareSeq(seq); setShareSeqOpen(true); }}
+                        >
+                          <Share2 className="h-3.5 w-3.5" />
+                        </button>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      </div>
                     </CardTitle>
                     <CardDescription className="flex items-center gap-4 mt-1">
                       <span className="flex items-center gap-1">
@@ -298,8 +311,7 @@ export function SequencesPage() {
                       {seq.totalEnrollments !== 1 ? "s" : ""}
                     </p>
                   </CardContent>
-                </Card>
-              </Link>
+              </Card>
             ))}
           </div>
         ) : (
@@ -658,6 +670,11 @@ export function SequencesPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+      <ShareDialog
+        record={shareSeq ? { id: shareSeq.id, name: shareSeq.name, type: "sequence" } : null}
+        open={shareSeqOpen}
+        onOpenChange={setShareSeqOpen}
+      />
       </div>
     </SidebarLayout>
   );

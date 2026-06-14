@@ -2,8 +2,9 @@ import { useState } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import {
   Sparkles, Pencil, Globe, Lock, Trash2, Plus, Mail, FileText,
-  BarChart2, Check, X, ChevronDown,
+  BarChart2, Check, X, ChevronDown, Share2,
 } from "lucide-react";
+import { ShareDialog } from "@/components/contacts/share-dialog";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -281,6 +282,8 @@ export function SettingsAiPresetsPage() {
   const [contextFilter, setContextFilter] = useState<string>("all");
   const [addOpen, setAddOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<AiPreset | null>(null);
+  const [sharePreset, setSharePreset] = useState<AiPreset | null>(null);
+  const [sharePresetOpen, setSharePresetOpen] = useState(false);
 
   const authFetch = async (path: string, opts: RequestInit = {}) => {
     const token = await getToken();
@@ -385,6 +388,19 @@ export function SettingsAiPresetsPage() {
               </Button>
             </TooltipTrigger>
             <TooltipContent>{preset.shared ? "Unshare (make private)" : "Share with team"}</TooltipContent>
+          </Tooltip>
+
+          {/* Share to teammate */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary"
+                onClick={() => { setSharePreset(preset); setSharePresetOpen(true); }}
+              >
+                <Share2 className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Share with teammate</TooltipContent>
           </Tooltip>
 
           {/* Edit */}
@@ -541,6 +557,13 @@ export function SettingsAiPresetsPage() {
         title="New AI Preset"
         isPending={createMutation.isPending}
         onSubmit={(f) => createMutation.mutate(f)}
+      />
+
+      {/* Share dialog */}
+      <ShareDialog
+        record={sharePreset ? { id: sharePreset.id, name: sharePreset.name, subtitle: sharePreset.category ?? undefined, type: "ai_preset" } : null}
+        open={sharePresetOpen}
+        onOpenChange={setSharePresetOpen}
       />
 
       {/* Edit dialog */}

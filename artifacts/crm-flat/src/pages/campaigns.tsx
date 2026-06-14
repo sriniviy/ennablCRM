@@ -8,9 +8,11 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Mail, Calendar, Pencil, Trash2, Loader2 } from "lucide-react";
+import { Plus, Mail, Calendar, Pencil, Trash2, Loader2, Share2 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { useToast } from "@/hooks/use-toast";
+import { ShareDialog } from "@/components/contacts/share-dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 function StatusBadge({ status, scheduledAt }: { status: string; scheduledAt?: string | null }) {
   if (status === "SCHEDULED" && scheduledAt) {
@@ -44,6 +46,8 @@ export function CampaignsPage() {
   const { data, isLoading, refetch } = useListCampaigns({ page: 1, pageSize: 50 });
   const { toast } = useToast();
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [shareCampaign, setShareCampaign] = useState<{ id: string; name: string; subject: string } | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const getHeaders = useCallback(async () => {
     const { data: s } = await authClient.getSession();
@@ -150,27 +154,37 @@ export function CampaignsPage() {
                         ) : "—"}
                       </TableCell>
                       <TableCell>
-                        {isDraft && (
-                          <div className="flex items-center gap-1 justify-end">
-                            <Button variant="ghost" size="icon" className="h-7 w-7" asChild title="Continue editing">
-                              <Link href={`/campaigns/new?id=${campaign.id}`}>
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Link>
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive hover:text-destructive"
-                              title="Delete draft"
-                              disabled={deletingId === campaign.id}
-                              onClick={() => handleDelete(campaign.id, campaign.name)}
-                            >
-                              {deletingId === campaign.id
-                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                : <Trash2 className="h-3.5 w-3.5" />}
-                            </Button>
-                          </div>
-                        )}
+                        <div className="flex items-center gap-1 justify-end">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                  onClick={() => { setShareCampaign(campaign); setShareOpen(true); }}
+                                >
+                                  <Share2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Share campaign</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          {isDraft && (
+                            <>
+                              <Button variant="ghost" size="icon" className="h-7 w-7" asChild title="Continue editing">
+                                <Link href={`/campaigns/new?id=${campaign.id}`}>
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Link>
+                              </Button>
+                              <Button
+                                variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
+                                title="Delete draft" disabled={deletingId === campaign.id}
+                                onClick={() => handleDelete(campaign.id, campaign.name)}
+                              >
+                                {deletingId === campaign.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -192,6 +206,11 @@ export function CampaignsPage() {
           </Table>
         </div>
       </div>
+      <ShareDialog
+        record={shareCampaign ? { id: shareCampaign.id, name: shareCampaign.name, subtitle: shareCampaign.subject, type: "campaign" } : null}
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+      />
     </SidebarLayout>
   );
 }

@@ -6,27 +6,68 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Inbox, User, Building2, X, CheckCheck, ExternalLink } from "lucide-react";
+import { Inbox, User, Building2, Mail, Zap, Sparkles, X, CheckCheck, ExternalLink } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+
+type RecordType = "contact" | "company" | "campaign" | "sequence" | "ai_preset";
 
 interface InboxMessage {
   id: string;
   fromUserId: string;
   type: string;
+  recordType: RecordType | null;
+  recordId: string | null;
   note: string | null;
   read: boolean;
   createdAt: string;
   sender: { id: string; name: string | null; email: string; avatarUrl: string | null } | null;
-  contact: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string | null;
-    phone: string | null;
-    title: string | null;
-    status: string;
-  } | null;
-  company: { id: string; name: string; website: string | null } | null;
+  record: Record<string, unknown> | null;
+}
+
+const RECORD_ICON: Record<RecordType, React.ElementType> = {
+  contact:  User,
+  company:  Building2,
+  campaign: Mail,
+  sequence: Zap,
+  ai_preset: Sparkles,
+};
+
+const RECORD_LABEL: Record<RecordType, string> = {
+  contact:  "contact",
+  company:  "company",
+  campaign: "campaign",
+  sequence: "sequence",
+  ai_preset: "AI preset",
+};
+
+function getRecordHref(rt: RecordType, id: string): string | null {
+  switch (rt) {
+    case "contact":  return `/contacts/${id}`;
+    case "company":  return `/companies/${id}`;
+    case "campaign": return `/campaigns/${id}`;
+    case "sequence": return `/sequences/${id}`;
+    case "ai_preset": return `/settings/ai-presets`;
+    default: return null;
+  }
+}
+
+function getRecordName(rt: RecordType, rec: Record<string, unknown>): string {
+  if (rt === "contact") {
+    return [`${rec.firstName ?? ""} ${rec.lastName ?? ""}`.trim(), rec.email as string]
+      .filter(Boolean)[0] ?? "Contact";
+  }
+  return (rec.name as string) || "Unknown";
+}
+
+function getRecordSubtitle(rt: RecordType, rec: Record<string, unknown>): string | null {
+  switch (rt) {
+    case "contact":  return [rec.email, rec.phone, rec.title].filter(Boolean).join(" · ") || null;
+    case "company":  return rec.website as string | null;
+    case "campaign": return rec.subject as string | null;
+    case "sequence": return null;
+    case "ai_preset": return rec.category as string | null;
+    default: return null;
+  }
 }
 
 export function InboxPage() {
@@ -88,7 +129,7 @@ export function InboxPage() {
                 </Badge>
               )}
             </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Contact cards shared with you by teammates.</p>
+            <p className="text-sm text-muted-foreground mt-0.5">Records shared with you by teammates.</p>
           </div>
           {unreadCount > 0 && (
             <Button
@@ -117,29 +158,23 @@ export function InboxPage() {
             <Inbox className="h-10 w-10 text-muted-foreground/30" />
             <div>
               <p className="font-medium">Nothing here yet</p>
-              <p className="text-sm text-muted-foreground">When a teammate shares a contact with you, it'll show up here.</p>
+              <p className="text-sm text-muted-foreground">When a teammate shares something with you, it'll show up here.</p>
             </div>
           </div>
         ) : (
           <div className="space-y-2">
             {messages.map((msg) => {
+              const rt = msg.recordType;
+              const rec = msg.record;
               const senderName = msg.sender?.name ?? msg.sender?.email ?? "A teammate";
               const senderInitial = (msg.sender?.name?.[0] ?? msg.sender?.email?.[0] ?? "?").toUpperCase();
-              const isCompany = msg.type === "company_share";
-              const contactName = msg.contact
-                ? `${msg.contact.firstName} ${msg.contact.lastName}`.trim() || msg.contact.email || "Contact"
-                : null;
-              const recordName = isCompany
-                ? (msg.company?.name ?? "Deleted company")
-                : (contactName ?? "Deleted contact");
-              const recordHref = isCompany
-                ? (msg.company ? `/companies/${msg.company.id}` : null)
-                : (msg.contact ? `/contacts/${msg.contact.id}` : null);
-              const recordSubtitle = isCompany
-                ? msg.company?.website
-                : (msg.contact ? [msg.contact.email, msg.contact.phone, msg.contact.title].filter(Boolean).join(" · ") : null);
-              const RecordIcon = isCompany ? Building2 : User;
-              const recordDeleted = isCompany ? !msg.company : !msg.contact;
+
+              const typeLabel = rt ? RECORD_LABEL[rt] : "record";
+              const RecordIcon = rt ? RECORD_ICON[rt] : User;
+              const recordDeleted = !rec;
+              const recordName = rt && rec ? getRecordName(rt, rec) : "Deleted record";
+              const recordSubtitle = rt && rec ? getRecordSubtitle(rt, rec) : null;
+              const recordHref = rt && msg.recordId ? getRecordHref(rt, msg.recordId) : null;
 
               return (
                 <div
@@ -162,7 +197,7 @@ export function InboxPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm">
                         <span className="font-semibold">{senderName}</span>
-                        <span className="text-muted-foreground"> shared a {isCompany ? "company" : "contact"} with you</span>
+                        <span className="text-muted-foreground"> shared a {typeLabel} with you</span>
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true })}
@@ -189,7 +224,7 @@ export function InboxPage() {
                           )}
                         </div>
                       ) : (
-                        <p className="mt-2 text-xs text-muted-foreground italic">{isCompany ? "Company" : "Contact"} no longer exists.</p>
+                        <p className="mt-2 text-xs text-muted-foreground italic">{typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)} no longer exists.</p>
                       )}
 
                       {/* Note */}

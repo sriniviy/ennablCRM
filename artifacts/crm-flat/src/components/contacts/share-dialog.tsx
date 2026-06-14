@@ -5,17 +5,19 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Share2, CheckCircle2, User, Building2 } from "lucide-react";
+import { Share2, CheckCircle2, User, Building2, Mail, Zap, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useSessionToken } from "@/hooks/use-session-token";
 import { useTeamMembers } from "@/hooks/use-team-members";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+export type ShareRecordType = "contact" | "company" | "campaign" | "sequence" | "ai_preset";
+
 export interface ShareRecord {
   id: string;
   name: string;
   subtitle?: string;
-  type: "contact" | "company";
+  type: ShareRecordType;
 }
 
 interface ShareDialogProps {
@@ -23,6 +25,22 @@ interface ShareDialogProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }
+
+const RECORD_ICON: Record<ShareRecordType, React.ElementType> = {
+  contact: User,
+  company: Building2,
+  campaign: Mail,
+  sequence: Zap,
+  ai_preset: Sparkles,
+};
+
+const RECORD_LABEL: Record<ShareRecordType, string> = {
+  contact: "contact",
+  company: "company",
+  campaign: "campaign",
+  sequence: "sequence",
+  ai_preset: "AI preset",
+};
 
 export function ShareDialog({ record, open, onOpenChange }: ShareDialogProps) {
   const { toast } = useToast();
@@ -45,14 +63,15 @@ export function ShareDialog({ record, open, onOpenChange }: ShareDialogProps) {
   const shareMutation = useMutation({
     mutationFn: async () => {
       const token = await getToken();
-      const body =
-        record!.type === "contact"
-          ? { contactId: record!.id, toUserIds: [...selectedIds], note: note.trim() || undefined }
-          : { companyId: record!.id, toUserIds: [...selectedIds], note: note.trim() || undefined };
       const res = await fetch("/api/messages/share-contact", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          recordType: record!.type,
+          recordId: record!.id,
+          toUserIds: [...selectedIds],
+          note: note.trim() || undefined,
+        }),
       });
       if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error((b as { error?: string }).error ?? "Failed to share"); }
       return res.json();
@@ -69,8 +88,8 @@ export function ShareDialog({ record, open, onOpenChange }: ShareDialogProps) {
 
   if (!record) return null;
 
-  const Icon = record.type === "company" ? Building2 : User;
-  const label = record.type === "company" ? "company" : "contact";
+  const Icon = RECORD_ICON[record.type];
+  const label = RECORD_LABEL[record.type];
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); onOpenChange(v); }}>
