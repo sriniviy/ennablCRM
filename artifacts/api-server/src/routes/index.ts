@@ -26,6 +26,7 @@ import attachmentsRouter from "./attachments";
 import migrateRouter from "./migrate";
 import segmentsRouter from "./segments";
 import messagesRouter from "./messages";
+import integrationsRouter from "./integrations";
 
 const router: IRouter = Router();
 
@@ -56,5 +57,6 @@ router.use(storageRouter);
 router.use("/attachments", attachmentsRouter);
 router.use("/migrate", migrateRouter);
 router.use("/messages", messagesRouter);
+router.use("/integrations", integrationsRouter);
 
 export default router;

@@ -23,6 +23,7 @@ import {
   Sparkles,
   ScrollText,
   ArrowDownToLine,
+  Plug2,
 } from "lucide-react";
 import { GlobalSearch } from "@/components/global-search";
 import { Button } from "@/components/ui/button";
@@ -99,6 +100,7 @@ const navGroups: NavGroup[] = [
       { name: "AI Presets", href: "/settings/ai-presets", icon: Sparkles, adminOnly: true },
       { name: "Audit Log", href: "/settings/audit-log", icon: ScrollText, adminOnly: true },
       { name: "Import", href: "/settings/import", icon: ArrowDownToLine, adminOnly: true },
+      { name: "Integrations", href: "/settings/integrations", icon: Plug2, adminOnly: true },
     ],
   },
 ];

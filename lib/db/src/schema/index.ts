@@ -18,3 +18,4 @@ export * from "./custom_fields";
 export * from "./attachments";
 export * from "./segments";
 export * from "./ai_presets";
+export * from "./workspace_settings";

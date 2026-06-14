@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
-import { ChevronRight, Users, SlidersHorizontal, CalendarClock, Sparkles, ScrollText, ArrowDownToLine, Settings } from "lucide-react";
+import { ChevronRight, Users, SlidersHorizontal, CalendarClock, Sparkles, ScrollText, ArrowDownToLine, Settings, Plug2 } from "lucide-react";
 
 const categories = [
   {
@@ -43,6 +43,13 @@ const categories = [
     title: "Import",
     description: "Import contacts and companies from HubSpot or CSV.",
     href: "/settings/import",
+    adminOnly: true,
+  },
+  {
+    icon: Plug2,
+    title: "Integrations",
+    description: "Enable Apollo enrichment, Gmail, AI model selection, and Ennabl Growth.",
+    href: "/settings/integrations",
     adminOnly: true,
   },
 ];

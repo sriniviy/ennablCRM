@@ -33,6 +33,7 @@ import { SignInPage } from "./pages/sign-in";
 import { SignUpPage } from "./pages/sign-up";
 import { MigratePage } from "./pages/migrate";
 import { SetPasswordPage } from "./pages/set-password";
+import { SettingsIntegrationsPage } from "./pages/settings-integrations";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -144,6 +145,7 @@ function AppRoutes() {
           <Route path="/settings/custom-fields" component={() => <ProtectedRoute component={SettingsCustomFieldsPage} />} />
           <Route path="/settings/audit-log" component={() => <ProtectedRoute component={AuditLogPage} />} />
           <Route path="/settings/import" component={() => <ProtectedRoute component={MigratePage} />} />
+          <Route path="/settings/integrations" component={() => <ProtectedRoute component={SettingsIntegrationsPage} />} />
           <Route path="/sequences" component={() => <ProtectedRoute component={SequencesPage} />} />
           <Route path="/sequences/:id" component={() => <ProtectedRoute component={SequenceDetailPage} />} />
           <Route path="/segments" component={() => <ProtectedRoute component={SegmentsPage} />} />
