@@ -25,7 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ExportColumnsDialog, type ColumnDef } from "@/components/export-columns-dialog";
 import { ViewToggle, type ViewMode } from "@/components/view-toggle";
 import { RecordCardGrid, type CardField } from "@/components/record-card-grid";
-import { ShareContactDialog } from "@/components/contacts/share-contact-dialog";
+import { ShareDialog } from "@/components/contacts/share-dialog";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -420,7 +420,16 @@ export function ContactsPage() {
       </div>
 
       <ContactDialog open={dialogOpen} onOpenChange={setDialogOpen} contact={editContact} />
-      <ShareContactDialog contact={shareContact} open={shareOpen} onOpenChange={setShareOpen} />
+      <ShareDialog
+        record={shareContact ? {
+          id: shareContact.id,
+          name: `${shareContact.firstName} ${shareContact.lastName}`.trim() || shareContact.email || "Contact",
+          subtitle: shareContact.email ?? undefined,
+          type: "contact",
+        } : null}
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+      />
       <ContactDuplicatesDialog open={duplicatesOpen} onOpenChange={setDuplicatesOpen} />
       <CsvImportDialog open={importOpen} onOpenChange={setImportOpen} />
       <ExportColumnsDialog

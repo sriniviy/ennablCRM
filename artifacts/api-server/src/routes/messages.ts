@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { db, usersTable, contactsTable } from "@workspace/db";
+import { db, usersTable, contactsTable, companiesTable } from "@workspace/db";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 import { pgTable, text, boolean, timestamp, index } from "drizzle-orm/pg-core";
@@ -14,6 +14,7 @@ export const internalMessagesTable = pgTable(
     toUserId: text("to_user_id").notNull(),
     type: text("type").notNull().default("contact_share"),
     contactId: text("contact_id"),
+    companyId: text("company_id"),
     note: text("note"),
     read: boolean("read").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -56,8 +57,9 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
 
     const senderIds = [...new Set(msgs.map((m) => m.fromUserId))];
     const contactIds = [...new Set(msgs.map((m) => m.contactId).filter(Boolean) as string[])];
+    const companyIds = [...new Set(msgs.map((m) => m.companyId).filter(Boolean) as string[])];
 
-    const [senders, contacts] = await Promise.all([
+    const [senders, contacts, companies] = await Promise.all([
       db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, avatarUrl: usersTable.avatarUrl })
         .from(usersTable).where(inArray(usersTable.id, senderIds)),
       contactIds.length > 0
@@ -71,15 +73,21 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
             status: contactsTable.status,
           }).from(contactsTable).where(inArray(contactsTable.id, contactIds))
         : [],
+      companyIds.length > 0
+        ? db.select({ id: companiesTable.id, name: companiesTable.name, website: companiesTable.website })
+            .from(companiesTable).where(inArray(companiesTable.id, companyIds))
+        : [],
     ]);
 
     const senderMap = new Map(senders.map((s) => [s.id, s]));
     const contactMap = new Map(contacts.map((c) => [c.id, c]));
+    const companyMap = new Map(companies.map((c) => [c.id, c]));
 
     const enriched = msgs.map((m) => ({
       ...m,
       sender: senderMap.get(m.fromUserId) ?? null,
       contact: m.contactId ? (contactMap.get(m.contactId) ?? null) : null,
+      company: m.companyId ? (companyMap.get(m.companyId) ?? null) : null,
     }));
 
     res.json(enriched);
@@ -92,14 +100,15 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
 
 router.post("/share-contact", requireAuth, async (req: Request, res: Response) => {
   const { userId } = req as AuthRequest;
-  const { contactId, toUserIds, note } = req.body as {
-    contactId: string;
+  const { contactId, companyId, toUserIds, note } = req.body as {
+    contactId?: string;
+    companyId?: string;
     toUserIds: string[];
     note?: string;
   };
 
-  if (!contactId || !Array.isArray(toUserIds) || toUserIds.length === 0) {
-    res.status(400).json({ error: "contactId and toUserIds[] are required" });
+  if ((!contactId && !companyId) || !Array.isArray(toUserIds) || toUserIds.length === 0) {
+    res.status(400).json({ error: "contactId or companyId, plus toUserIds[] are required" });
     return;
   }
 
@@ -110,12 +119,14 @@ router.post("/share-contact", requireAuth, async (req: Request, res: Response) =
   }
 
   try {
+    const type = companyId ? "company_share" : "contact_share";
     const rows = me.map((toId) => ({
       id: crypto.randomUUID(),
       fromUserId: userId,
       toUserId: toId,
-      type: "contact_share" as const,
-      contactId,
+      type,
+      contactId: contactId ?? null,
+      companyId: companyId ?? null,
       note: note?.trim() || null,
     }));
 

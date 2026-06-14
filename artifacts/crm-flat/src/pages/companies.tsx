@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Plus, Globe, Building2, Download, CopyCheck } from "lucide-react";
+import { Search, Plus, Globe, Building2, Download, CopyCheck, Share2 } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useUrlFilters } from "@/hooks/use-url-filters";
 import { CompanyDialog } from "@/components/companies/company-dialog";
@@ -23,6 +23,8 @@ import { useToast } from "@/hooks/use-toast";
 import { ExportColumnsDialog, type ColumnDef } from "@/components/export-columns-dialog";
 import { ViewToggle, type ViewMode } from "@/components/view-toggle";
 import { RecordCardGrid, type CardField } from "@/components/record-card-grid";
+import { ShareDialog } from "@/components/contacts/share-dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -158,6 +160,8 @@ export function CompaniesPage() {
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [duplicatesOpen, setDuplicatesOpen] = useState(false);
+  const [shareCompany, setShareCompany] = useState<Company | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
     set({
@@ -294,13 +298,13 @@ export function CompaniesPage() {
               </colgroup>
               <TableHeader>
                 <TableRow>
-                  {(["Name", "Website", "Account Owner", "Member Of", "Open Deals", "Deal Value"] as const).map((label, i) => (
+                  {(["Name", "Website", "Account Owner", "Member Of", "Open Deals", "Deal Value", ""] as const).map((label, i) => (
                     <TableHead
                       key={label}
                       className="relative select-none overflow-hidden"
                     >
                       <span className="block truncate">{label}</span>
-                      {i < 5 && (
+                      {i < 6 && label !== "" && (
                         <span
                           onMouseDown={e => startResize(i, e)}
                           className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors z-10"
@@ -368,12 +372,27 @@ export function CompaniesPage() {
                             <span className="text-muted-foreground">—</span>
                           )}
                         </TableCell>
+                        <TableCell className="w-10">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  className="inline-flex items-center justify-center rounded h-6 w-6 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                                  onClick={e => { e.stopPropagation(); setShareCompany(company); setShareOpen(true); }}
+                                >
+                                  <Share2 className="h-3.5 w-3.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="left">Share company</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </TableCell>
                       </TableRow>
                     );
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                       No companies found.
                     </TableCell>
                   </TableRow>
@@ -385,6 +404,11 @@ export function CompaniesPage() {
       </div>
 
       <CompanyDialog open={dialogOpen} onOpenChange={setDialogOpen} company={editCompany} />
+      <ShareDialog
+        record={shareCompany ? { id: shareCompany.id, name: shareCompany.name, subtitle: shareCompany.website ?? undefined, type: "company" } : null}
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+      />
       <CompanyDuplicatesDialog open={duplicatesOpen} onOpenChange={setDuplicatesOpen} />
       <ExportColumnsDialog
         open={exportOpen}

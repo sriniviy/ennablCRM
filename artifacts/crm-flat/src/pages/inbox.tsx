@@ -6,12 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Inbox, User, X, CheckCheck, ExternalLink } from "lucide-react";
+import { Inbox, User, Building2, X, CheckCheck, ExternalLink } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 interface InboxMessage {
   id: string;
   fromUserId: string;
+  type: string;
   note: string | null;
   read: boolean;
   createdAt: string;
@@ -25,6 +26,7 @@ interface InboxMessage {
     title: string | null;
     status: string;
   } | null;
+  company: { id: string; name: string; website: string | null } | null;
 }
 
 export function InboxPage() {
@@ -123,9 +125,21 @@ export function InboxPage() {
             {messages.map((msg) => {
               const senderName = msg.sender?.name ?? msg.sender?.email ?? "A teammate";
               const senderInitial = (msg.sender?.name?.[0] ?? msg.sender?.email?.[0] ?? "?").toUpperCase();
+              const isCompany = msg.type === "company_share";
               const contactName = msg.contact
                 ? `${msg.contact.firstName} ${msg.contact.lastName}`.trim() || msg.contact.email || "Contact"
-                : "Deleted contact";
+                : null;
+              const recordName = isCompany
+                ? (msg.company?.name ?? "Deleted company")
+                : (contactName ?? "Deleted contact");
+              const recordHref = isCompany
+                ? (msg.company ? `/companies/${msg.company.id}` : null)
+                : (msg.contact ? `/contacts/${msg.contact.id}` : null);
+              const recordSubtitle = isCompany
+                ? msg.company?.website
+                : (msg.contact ? [msg.contact.email, msg.contact.phone, msg.contact.title].filter(Boolean).join(" · ") : null);
+              const RecordIcon = isCompany ? Building2 : User;
+              const recordDeleted = isCompany ? !msg.company : !msg.contact;
 
               return (
                 <div
@@ -148,35 +162,34 @@ export function InboxPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm">
                         <span className="font-semibold">{senderName}</span>
-                        <span className="text-muted-foreground"> shared a contact with you</span>
+                        <span className="text-muted-foreground"> shared a {isCompany ? "company" : "contact"} with you</span>
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true })}
                       </p>
 
-                      {/* Contact card */}
-                      {msg.contact ? (
+                      {/* Record card */}
+                      {!recordDeleted ? (
                         <div className="mt-2.5 rounded-md border bg-background px-3 py-2.5 flex items-center gap-2.5">
                           <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0">
-                            <User className="h-4 w-4 text-muted-foreground" />
+                            <RecordIcon className="h-4 w-4 text-muted-foreground" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium leading-tight">{contactName}</p>
-                            <p className="text-xs text-muted-foreground truncate">
-                              {[msg.contact.email, msg.contact.phone, msg.contact.title].filter(Boolean).join(" · ")}
-                            </p>
+                            <p className="text-sm font-medium leading-tight">{recordName}</p>
+                            {recordSubtitle && (
+                              <p className="text-xs text-muted-foreground truncate">{recordSubtitle}</p>
+                            )}
                           </div>
-                          <Link
-                            href={`/contacts/${msg.contact.id}`}
-                            onClick={() => { if (!msg.read) markRead.mutate(msg.id); }}
-                          >
-                            <Button variant="outline" size="sm" className="h-7 gap-1 text-xs shrink-0">
-                              View <ExternalLink className="h-3 w-3" />
-                            </Button>
-                          </Link>
+                          {recordHref && (
+                            <Link href={recordHref} onClick={() => { if (!msg.read) markRead.mutate(msg.id); }}>
+                              <Button variant="outline" size="sm" className="h-7 gap-1 text-xs shrink-0">
+                                View <ExternalLink className="h-3 w-3" />
+                              </Button>
+                            </Link>
+                          )}
                         </div>
                       ) : (
-                        <p className="mt-2 text-xs text-muted-foreground italic">Contact no longer exists.</p>
+                        <p className="mt-2 text-xs text-muted-foreground italic">{isCompany ? "Company" : "Contact"} no longer exists.</p>
                       )}
 
                       {/* Note */}
