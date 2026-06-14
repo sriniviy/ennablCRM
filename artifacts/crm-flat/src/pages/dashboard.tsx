@@ -82,14 +82,14 @@ const INSURANCE_EVENTS = [
   },
   {
     id: 4,
-    name: "Benefits Leadership Conference",
-    org: "HRO Today",
-    location: "Austin, TX",
-    date: new Date("2026-06-23"),
-    endDate: new Date("2026-06-25"),
+    name: "NABIP Annual Convention",
+    org: "National Association of Benefits & Insurance Professionals",
+    location: "Nashville, TN",
+    date: new Date("2026-06-20"),
+    endDate: new Date("2026-06-23"),
     type: "Benefits",
-    url: "#",
-    hot: false,
+    url: "https://www.nabip.org",
+    hot: true,
   },
   {
     id: 5,
@@ -185,9 +185,9 @@ const MARKET_INTEL = [
   },
   {
     id: 4,
-    headline: "Embedded insurance channels pressure traditional brokers",
+    headline: "Embedded P&C pressures SMB broker distribution",
     summary:
-      "Fintechs and B2B SaaS platforms are bundling embedded insurance products, capturing SMB market share historically owned by independent brokers. Key defense: advisory depth and claims advocacy that digital-only can't match.",
+      "Fintechs and B2B SaaS platforms are bundling commercial P&C and group benefits products directly into payroll and HR software, capturing SMB accounts historically owned by independent brokers. Key defence: consultative advisory, complex risk placement, and claims advocacy that digital-only channels cannot replicate.",
     tag: "Competitive",
     tagClass: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
     date: "Mar 2026",

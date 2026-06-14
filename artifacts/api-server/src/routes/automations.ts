@@ -87,7 +87,7 @@ router.post("/jobs", requireAuth, async (req: Request, res: Response) => {
 
       if (!goal) throw new Error("goal is required for ai_sequence_draft");
 
-      const systemPrompt = `You are an expert B2B sales email writer for insurance and benefits brokers. Draft a complete multi-step outreach email sequence.
+      const systemPrompt = `You are an expert B2B sales email writer for P&C (property & casualty) and group benefits brokers. You focus exclusively on commercial P&C lines and employer-sponsored group benefits (health, dental, vision, disability, workers' comp). Do not reference life insurance products. Draft a complete multi-step outreach email sequence.
 Return ONLY a JSON object with:
 - "name": a short sequence name (max 60 chars)
 - "steps": an array of exactly ${numSteps} objects, each with "subject" (subject line), "body" (full email body, 3-5 short paragraphs, clear low-friction CTA), and "delayDays" (0 for first step, 1-5 for subsequent)
