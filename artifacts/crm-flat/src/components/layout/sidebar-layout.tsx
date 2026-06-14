@@ -24,6 +24,7 @@ import {
   ScrollText,
   ArrowDownToLine,
   Plug2,
+  Bot,
 } from "lucide-react";
 import { GlobalSearch } from "@/components/global-search";
 import { Button } from "@/components/ui/button";
@@ -89,6 +90,12 @@ const navGroups: NavGroup[] = [
     label: "INSIGHTS",
     items: [
       { name: "Reports", href: "/reports", icon: BarChart2 },
+    ],
+  },
+  {
+    label: "AUTOMATE",
+    items: [
+      { name: "Automations", href: "/automations", icon: Bot, adminOnly: true },
     ],
   },
   {
