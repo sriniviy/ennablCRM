@@ -25,6 +25,7 @@ import storageRouter from "./storage";
 import attachmentsRouter from "./attachments";
 import migrateRouter from "./migrate";
 import segmentsRouter from "./segments";
+import messagesRouter from "./messages";
 
 const router: IRouter = Router();
 
@@ -54,5 +55,6 @@ router.use("/ai/suggestions", aiSuggestionsRouter);
 router.use(storageRouter);
 router.use("/attachments", attachmentsRouter);
 router.use("/migrate", migrateRouter);
+router.use("/messages", messagesRouter);
 
 export default router;

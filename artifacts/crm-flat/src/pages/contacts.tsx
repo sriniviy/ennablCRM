@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Plus, Upload, Download, CopyCheck, Mail, Zap } from "lucide-react";
+import { Search, Plus, Upload, Download, CopyCheck, Mail, Zap, Share2 } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useUrlFilters } from "@/hooks/use-url-filters";
 import { useTeamMembers } from "@/hooks/use-team-members";
@@ -25,6 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ExportColumnsDialog, type ColumnDef } from "@/components/export-columns-dialog";
 import { ViewToggle, type ViewMode } from "@/components/view-toggle";
 import { RecordCardGrid, type CardField } from "@/components/record-card-grid";
+import { ShareContactDialog } from "@/components/contacts/share-contact-dialog";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -130,6 +131,8 @@ export function ContactsPage() {
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [duplicatesOpen, setDuplicatesOpen] = useState(false);
+  const [shareContact, setShareContact] = useState<ContactWithRelations | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
     set({
@@ -358,6 +361,19 @@ export function ContactsPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  className="inline-flex items-center justify-center rounded h-6 w-6 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                                  onClick={e => { e.stopPropagation(); setShareContact(contact); setShareOpen(true); }}
+                                >
+                                  <Share2 className="h-3.5 w-3.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="left">Share contact</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                           {(contact.campaignEngagementCount ?? 0) > 0 && (
                             <TooltipProvider>
                               <Tooltip>
@@ -404,6 +420,7 @@ export function ContactsPage() {
       </div>
 
       <ContactDialog open={dialogOpen} onOpenChange={setDialogOpen} contact={editContact} />
+      <ShareContactDialog contact={shareContact} open={shareOpen} onOpenChange={setShareOpen} />
       <ContactDuplicatesDialog open={duplicatesOpen} onOpenChange={setDuplicatesOpen} />
       <CsvImportDialog open={importOpen} onOpenChange={setImportOpen} />
       <ExportColumnsDialog

@@ -1,6 +1,8 @@
 import { Link, useLocation } from "wouter";
 import { useGetMe, useListContacts, ReviewStatus } from "@workspace/api-client-react";
 import { authClient } from "@/lib/auth-client";
+import { useQuery } from "@tanstack/react-query";
+import { useSessionToken } from "@/hooks/use-session-token";
 import {
   LayoutDashboard,
   Users,
@@ -23,6 +25,7 @@ import {
   Sparkles,
   ScrollText,
   ArrowDownToLine,
+  Inbox,
 } from "lucide-react";
 import { GlobalSearch } from "@/components/global-search";
 import { Button } from "@/components/ui/button";
@@ -75,6 +78,7 @@ const navGroups: NavGroup[] = [
       { name: "Companies", href: "/companies", icon: Building2 },
       { name: "Tasks", href: "/tasks", icon: CheckSquare },
       { name: "Activities", href: "/activities", icon: Activity },
+      { name: "Inbox", href: "/inbox", icon: Inbox },
     ],
   },
   {
@@ -111,6 +115,24 @@ function getInitialCollapsed(): boolean {
   }
 }
 
+function useInboxUnread() {
+  const getToken = useSessionToken();
+  const { data } = useQuery<{ count: number }>({
+    queryKey: ["inbox-unread"],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch("/api/messages/unread-count", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return { count: 0 };
+      return res.json();
+    },
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+  return data?.count ?? 0;
+}
+
 export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const { data: user } = useGetMe();
@@ -124,6 +146,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const { data: assignmentData } = useMyAssignments();
   const myDealCount = assignmentData?.deals ?? 0;
   const myTaskCount = assignmentData?.tasks ?? 0;
+  const inboxUnread = useInboxUnread();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(getInitialCollapsed);
 
@@ -147,6 +170,8 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       return { count: myDealCount, cls: "bg-primary text-primary-foreground" };
     if (href === "/tasks" && myTaskCount > 0)
       return { count: myTaskCount, cls: "bg-primary text-primary-foreground" };
+    if (href === "/inbox" && inboxUnread > 0)
+      return { count: inboxUnread, cls: "bg-primary text-primary-foreground" };
     return null;
   };
 
