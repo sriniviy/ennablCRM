@@ -15,6 +15,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Search, Plus, Upload, Download, CopyCheck, Mail, Zap, Share2 } from "lucide-react";
+import { useSharedTags } from "@/hooks/use-shared-tags";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useUrlFilters } from "@/hooks/use-url-filters";
 import { useTeamMembers } from "@/hooks/use-team-members";
@@ -114,6 +115,7 @@ export function ContactsPage() {
   const { toast } = useToast();
   const { get, set } = useUrlFilters();
   const { data: members } = useTeamMembers();
+  const sharedTags = useSharedTags();
 
   const [search, setSearch] = useState(() => get("search"));
   const [statusFilter, setStatusFilter] = useState(() => get("status") || "ALL");
@@ -330,6 +332,11 @@ export function ContactsPage() {
                         >
                           {contact.firstName} {contact.lastName}
                         </Link>
+                        {sharedTags.contact?.[contact.id] && (
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            Shared by {sharedTags.contact[contact.id]}
+                          </p>
+                        )}
                       </TableCell>
                       <TableCell className="text-muted-foreground">{contact.email ?? "—"}</TableCell>
                       <TableCell>

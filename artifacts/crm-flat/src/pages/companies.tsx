@@ -15,6 +15,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Search, Plus, Globe, Building2, Download, CopyCheck, Share2 } from "lucide-react";
+import { useSharedTags } from "@/hooks/use-shared-tags";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useUrlFilters } from "@/hooks/use-url-filters";
 import { CompanyDialog } from "@/components/companies/company-dialog";
@@ -140,6 +141,7 @@ export function CompaniesPage() {
   const { toast } = useToast();
   const { get, set } = useUrlFilters();
   const { data: members } = useTeamMembers();
+  const sharedTags = useSharedTags();
 
   const cardFields = useMemo(() => {
     const ownerName = (id: string | null | undefined) =>
@@ -341,6 +343,11 @@ export function CompaniesPage() {
                               {company.name}
                             </Link>
                           </div>
+                          {sharedTags.company?.[company.id] && (
+                            <p className="text-[10px] text-muted-foreground mt-0.5 pl-6">
+                              Shared by {sharedTags.company[company.id]}
+                            </p>
+                          )}
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {company.website ? (

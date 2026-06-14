@@ -31,6 +31,41 @@ type RecordType = "contact" | "company" | "campaign" | "sequence" | "ai_preset";
 
 const router = Router();
 
+/* ── GET /messages/shared-tags ────────────────────────────────── */
+
+router.get("/shared-tags", requireAuth, async (req: Request, res: Response) => {
+  const { userId } = req as AuthRequest;
+  try {
+    const msgs = await db
+      .select({
+        recordType: internalMessagesTable.recordType,
+        recordId: internalMessagesTable.recordId,
+        fromUserId: internalMessagesTable.fromUserId,
+      })
+      .from(internalMessagesTable)
+      .where(eq(internalMessagesTable.toUserId, userId));
+
+    if (msgs.length === 0) { res.json({}); return; }
+
+    const senderIds = [...new Set(msgs.map((m) => m.fromUserId))];
+    const senders = await db
+      .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email })
+      .from(usersTable)
+      .where(inArray(usersTable.id, senderIds));
+    const senderMap = new Map(senders.map((s) => [s.id, s.name ?? s.email]));
+
+    const result: Record<string, Record<string, string>> = {};
+    for (const msg of msgs) {
+      if (!msg.recordType || !msg.recordId) continue;
+      result[msg.recordType] ??= {};
+      result[msg.recordType][msg.recordId] = senderMap.get(msg.fromUserId) ?? "A teammate";
+    }
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
 /* ── GET /messages/unread-count ───────────────────────────────── */
 
 router.get("/unread-count", requireAuth, async (req: Request, res: Response) => {
