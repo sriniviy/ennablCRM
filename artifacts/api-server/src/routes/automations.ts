@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { db, backgroundJobsTable, usersTable } from "@workspace/db";
+import { db, backgroundJobsTable, usersTable, workspaceSettingsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
@@ -138,6 +138,58 @@ Tone: ${tone}. Sound human, not templated. Never use "I hope this email finds yo
       .where(eq(backgroundJobsTable.id, job.id))
       .returning();
     res.status(500).json({ ...failed, creatorName: dbUser.name, error: (err as Error).message });
+  }
+});
+
+// ── Email analysis config ─────────────────────────────────────────────────────
+const EMAIL_ANALYSIS_CONFIG_KEY = "email_analysis_config";
+const EMAIL_ANALYSIS_DEFAULTS = {
+  enabled: true,
+  analysisDepth: "mid" as "short" | "mid" | "deep",
+  focusTopics: ["renewal risk", "budget", "decision makers"],
+  insightTypes: ["key_themes", "sentiment", "action_items", "next_steps"],
+};
+
+/* GET /api/automations/email-analysis-config */
+router.get("/email-analysis-config", requireAuth, async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const row = await db
+      .select()
+      .from(workspaceSettingsTable)
+      .where(eq(workspaceSettingsTable.key, EMAIL_ANALYSIS_CONFIG_KEY))
+      .then((r) => r[0]);
+    const stored = (row?.value ?? {}) as Record<string, unknown>;
+    res.json({ ...EMAIL_ANALYSIS_DEFAULTS, ...stored });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/* PATCH /api/automations/email-analysis-config */
+router.patch("/email-analysis-config", requireAuth, async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const body = req.body as Partial<typeof EMAIL_ANALYSIS_DEFAULTS>;
+    const row = await db
+      .select()
+      .from(workspaceSettingsTable)
+      .where(eq(workspaceSettingsTable.key, EMAIL_ANALYSIS_CONFIG_KEY))
+      .then((r) => r[0]);
+
+    const current = (row?.value ?? EMAIL_ANALYSIS_DEFAULTS) as Record<string, unknown>;
+    const updated = { ...current, ...body };
+
+    await db
+      .insert(workspaceSettingsTable)
+      .values({ key: EMAIL_ANALYSIS_CONFIG_KEY, value: updated })
+      .onConflictDoUpdate({
+        target: workspaceSettingsTable.key,
+        set: { value: updated, updatedAt: new Date() },
+      });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
   }
 });
 
