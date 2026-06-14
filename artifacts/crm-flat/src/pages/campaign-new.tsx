@@ -7,7 +7,8 @@ import {
   getListSegmentsQueryKey,
 } from "@workspace/api-client-react";
 import type { SegmentFilter } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
+import { useSessionToken } from "@/hooks/use-session-token";
 import { useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +26,7 @@ import {
   Minus, Image, Share2, Maximize2, Users, Calendar, Send, Save,
   ChevronLeft, ChevronRight, Clock, Tag, User, Smile, Columns, Monitor, Smartphone, Code,
   Mail, Building2, UserCheck, ExternalLink, Sparkles, Loader2, GripVertical, Copy, Expand,
+  BookmarkPlus, Globe, X,
 } from "lucide-react";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 
@@ -291,6 +293,12 @@ export function CampaignNewPage() {
   const [aiContext, setAiContext] = useState("");
   const [aiGenerating, setAiGenerating] = useState(false);
 
+  // AI preset state
+  const [aiPresetNaming, setAiPresetNaming] = useState(false);
+  const [aiPresetName, setAiPresetName] = useState("");
+  const [aiPresetCategory, setAiPresetCategory] = useState("");
+  const [aiPresetShared, setAiPresetShared] = useState(false);
+
   const [audienceMode, setAudienceMode] = useState<"segment" | "filter" | "individual">("filter");
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
   const [segmentFilter, setSegmentFilter] = useState<SegmentFilter>({ emailMarketingContact: true });
@@ -300,6 +308,43 @@ export function CampaignNewPage() {
   const [savingSegment, setSavingSegment] = useState(false);
 
   const queryClient = useQueryClient();
+  const getToken = useSessionToken();
+
+  type AiPreset = { id: string; name: string; category: string | null; goal: string; tone: string; improveFields: string; shared: boolean };
+  const { data: aiPresets = [] } = useQuery<AiPreset[]>({
+    queryKey: ["ai-presets"],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch("/api/users/me/ai-presets", { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    staleTime: 60_000,
+  });
+  const teamPresets = aiPresets.filter((p) => p.shared);
+  const personalPresets = aiPresets.filter((p) => !p.shared);
+
+  const savePresetMutation = useMutation({
+    mutationFn: async (payload: { name: string; category?: string; goal: string; tone: string; shared: boolean }) => {
+      const token = await getToken();
+      const res = await fetch("/api/users/me/ai-presets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ...payload, improveFields: "both", context: ["email"] }),
+      });
+      if (!res.ok) throw new Error("Failed to save preset");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ai-presets"] });
+      setAiPresetNaming(false);
+      setAiPresetName("");
+      setAiPresetCategory("");
+      setAiPresetShared(false);
+      toast({ title: "Preset saved" });
+    },
+    onError: (err: Error) => toast({ title: "Failed to save preset", description: err.message, variant: "destructive" }),
+  });
   const { data: segmentsData } = useListSegments();
   const savedSegments = segmentsData ?? [];
   const createSegmentMutation = useCreateSegment();
@@ -644,6 +689,29 @@ export function CampaignNewPage() {
                   <p className="text-sm font-semibold text-primary">Generate with AI</p>
                 </div>
 
+                {/* Load preset */}
+                {aiPresets.length > 0 && (
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Load from preset</label>
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        const preset = aiPresets.find((p) => p.id === e.target.value);
+                        if (!preset) return;
+                        setAiGoal(preset.goal);
+                        setAiTone(preset.tone);
+                      }}
+                      className="w-full h-9 rounded-md border bg-background px-3 text-sm"
+                    >
+                      <option value="">Select a saved preset…</option>
+                      {teamPresets.length > 0 && <option disabled>── Team presets ──</option>}
+                      {teamPresets.map((p) => <option key={p.id} value={p.id}>{p.name}{p.category ? ` · ${p.category}` : ""}</option>)}
+                      {personalPresets.length > 0 && <option disabled>── My presets ──</option>}
+                      {personalPresets.map((p) => <option key={p.id} value={p.id}>{p.name}{p.category ? ` · ${p.category}` : ""}</option>)}
+                    </select>
+                  </div>
+                )}
+
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="md:col-span-2">
                     <label className="text-xs text-muted-foreground mb-1 block">
@@ -703,6 +771,73 @@ export function CampaignNewPage() {
                     AI writes the name, subject, and email blocks — you can edit everything after.
                   </p>
                 </div>
+
+                {/* Save as preset */}
+                {aiGoal.trim() && (
+                  <div className="border-t border-primary/20 pt-3">
+                    {aiPresetNaming ? (
+                      <div className="space-y-1.5">
+                        <div className="flex gap-1.5 items-center">
+                          <input
+                            className="flex-1 h-7 text-xs rounded-md border bg-background px-2 outline-none focus:ring-1 focus:ring-primary"
+                            placeholder="Preset name…"
+                            value={aiPresetName}
+                            onChange={(e) => setAiPresetName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && aiPresetName.trim()) {
+                                savePresetMutation.mutate({ name: aiPresetName.trim(), category: aiPresetCategory.trim() || undefined, goal: aiGoal.trim(), tone: aiTone, shared: aiPresetShared });
+                              }
+                              if (e.key === "Escape") { setAiPresetNaming(false); setAiPresetName(""); setAiPresetCategory(""); setAiPresetShared(false); }
+                            }}
+                            autoFocus
+                          />
+                          <Button
+                            size="sm" type="button" className="h-7 px-2 text-xs"
+                            disabled={!aiPresetName.trim() || savePresetMutation.isPending}
+                            onClick={() => savePresetMutation.mutate({ name: aiPresetName.trim(), category: aiPresetCategory.trim() || undefined, goal: aiGoal.trim(), tone: aiTone, shared: aiPresetShared })}
+                          >
+                            {savePresetMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+                          </Button>
+                          <Button
+                            size="sm" type="button" variant="ghost" className="h-7 px-2 text-xs"
+                            onClick={() => { setAiPresetNaming(false); setAiPresetName(""); setAiPresetCategory(""); setAiPresetShared(false); }}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <input
+                          className="w-full h-7 text-xs rounded-md border bg-background px-2 outline-none focus:ring-1 focus:ring-primary"
+                          placeholder="Category (optional) — e.g. Prospecting, Renewal…"
+                          value={aiPresetCategory}
+                          onChange={(e) => setAiPresetCategory(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") { setAiPresetNaming(false); setAiPresetName(""); setAiPresetCategory(""); setAiPresetShared(false); }
+                          }}
+                        />
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={aiPresetShared}
+                            onChange={(e) => setAiPresetShared(e.target.checked)}
+                            className="rounded"
+                          />
+                          <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                            <Globe className="h-3 w-3" /> Share with team
+                          </span>
+                        </label>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors"
+                        onClick={() => setAiPresetNaming(true)}
+                      >
+                        <BookmarkPlus className="h-3 w-3" />
+                        Save as preset
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
