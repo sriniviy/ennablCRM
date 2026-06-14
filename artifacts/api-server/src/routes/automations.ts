@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { db, backgroundJobsTable, usersTable, workspaceSettingsTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, gte, and, sql, ne } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 
@@ -14,6 +14,23 @@ function requireAdmin(req: Request, res: Response): boolean {
   }
   return true;
 }
+
+// ── Industry Intelligence constants ──────────────────────────────────────────
+const INTEL_CONFIG_KEY = "industry_intel_config";
+const INTEL_RESULTS_KEY = "industry_intel_results";
+const MAX_RUNS_PER_DAY = 3;
+const INTEL_CONFIG_DEFAULTS = {
+  enabled: true,
+  activeTopics: ["competitors", "pc_market", "benefits_market", "regulatory"] as string[],
+  competitors: [
+    "Applied Epic", "Vertafore AMS360", "EZLynx", "HawkSoft", "AgencyBloc",
+    "NowCerts", "Zywave", "Salesforce Financial Services Cloud", "HubSpot",
+    "Relay Platform", "Canopy Connect", "TechCanary",
+  ] as string[],
+  customTopics: [] as string[],
+  surfaceTypes: ["competitor_intel", "market_conditions", "regulatory_updates", "technology_trends"] as string[],
+  schedule: ["08:00", "17:00"] as string[],
+};
 
 /* GET /api/automations/jobs — last 50 jobs (admin only) */
 router.get("/jobs", requireAuth, async (req: Request, res: Response) => {
@@ -59,16 +76,37 @@ router.post("/jobs", requireAuth, async (req: Request, res: Response) => {
   const { dbUser } = req as AuthRequest;
   const { type, payload = {} } = req.body as { type: string; payload?: Record<string, unknown> };
 
-  const VALID_TYPES = ["ai_sequence_draft", "data_hygiene", "ai_email_summary"];
+  const VALID_TYPES = ["ai_sequence_draft", "data_hygiene", "ai_email_summary", "industry_intel_refresh"];
   if (!VALID_TYPES.includes(type)) {
     res.status(400).json({ error: `Unknown job type: ${type}` });
     return;
+  }
+
+  // Rate-limit industry_intel_refresh to 3 completed/running runs per calendar day
+  if (type === "industry_intel_refresh") {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const [{ runCount }] = await db
+      .select({ runCount: sql<number>`count(*)::int` })
+      .from(backgroundJobsTable)
+      .where(
+        and(
+          eq(backgroundJobsTable.type, "industry_intel_refresh"),
+          gte(backgroundJobsTable.createdAt, todayStart),
+          ne(backgroundJobsTable.status, "failed"),
+        ),
+      );
+    if (runCount >= 3) {
+      res.status(429).json({ error: "Daily limit reached. Industry Intelligence can run at most 3 times per day.", runsToday: runCount });
+      return;
+    }
   }
 
   let label = type;
   if (type === "ai_sequence_draft") label = `AI Sequence Draft${payload.goal ? ` — ${String(payload.goal).slice(0, 60)}` : ""}`;
   if (type === "data_hygiene") label = "Data Hygiene Scan";
   if (type === "ai_email_summary") label = "AI Email Summarization";
+  if (type === "industry_intel_refresh") label = "Industry Intelligence Refresh";
 
   // Insert job as running
   const [job] = await db
@@ -122,6 +160,81 @@ Tone: ${tone}. Sound human, not templated. Never use "I hope this email finds yo
 
     if (type === "ai_email_summary") {
       result = { message: "Gmail integration required. Connect Gmail in Settings → Integrations to enable this automation." };
+    }
+
+    if (type === "industry_intel_refresh") {
+      // Load config
+      const configRow = await db
+        .select()
+        .from(workspaceSettingsTable)
+        .where(eq(workspaceSettingsTable.key, INTEL_CONFIG_KEY))
+        .then((r) => r[0]);
+      const cfg = { ...INTEL_CONFIG_DEFAULTS, ...(configRow?.value ?? {}) } as typeof INTEL_CONFIG_DEFAULTS;
+
+      const TOPIC_LABELS: Record<string, string> = {
+        competitors: "Insurtech Competitors vs Ennabl (CRM/AMS tools for insurance brokers)",
+        pc_market: "P&C Commercial Market Conditions (rates, capacity, underwriting trends)",
+        benefits_market: "Group Benefits & Employee Health Trends (ACA, self-insurance, plan design)",
+        regulatory: "Regulatory & Compliance Updates (DOL, IRS, state regulations, P&C/benefits only)",
+        agency_tech: "Agency Technology & Automation (AMS, API integrations, AI tools for brokers)",
+        ma_activity: "M&A & Carrier Consolidation (agency acquisitions, PE rollups, carrier mergers)",
+      };
+
+      const activeLabels = cfg.activeTopics
+        .filter((t: string) => TOPIC_LABELS[t])
+        .map((t: string) => `- ${TOPIC_LABELS[t]}`);
+
+      const customLabels = (cfg.customTopics as string[])
+        .filter((t) => t.trim())
+        .map((t) => `- Custom: ${t}`);
+
+      const allTopics = [...activeLabels, ...customLabels];
+      if (allTopics.length === 0) throw new Error("No research topics configured. Enable at least one topic first.");
+
+      const competitorList = (cfg.competitors as string[]).join(", ");
+
+      const systemPrompt = `You are an industry intelligence analyst for P&C (property & casualty) and group benefits insurance brokers. 
+Produce concise, actionable market intelligence. Focus ONLY on commercial P&C lines and employer-sponsored group benefits. Never include life insurance.
+Return ONLY a JSON array, no markdown, no explanation.`;
+
+      const userPrompt = `Research these topics and produce 2 sharp intelligence items per topic (max 10 items total):
+
+${allTopics.join("\n")}
+
+Ennabl context: Ennabl is a CRM built specifically for independent P&C and group benefits brokers.
+Direct competitors include: ${competitorList}
+
+For each item return: { "section": "<topic name>", "headline": "<max 80 chars>", "summary": "<2 sentences max, actionable>", "tag": "<one word>", "date": "<Month YYYY>" }
+
+Return only a JSON array. P&C & group benefits ONLY. No life insurance.`;
+
+      const message = await anthropic.messages.create({
+        model: "claude-haiku-4-5",
+        max_tokens: 4096,
+        messages: [{ role: "user", content: userPrompt }],
+        system: systemPrompt,
+      });
+
+      const rawText = message.content
+        .filter((b) => b.type === "text")
+        .map((b) => (b as { type: "text"; text: string }).text)
+        .join("");
+
+      const arrayMatch = rawText.match(/\[[\s\S]*\]/);
+      if (!arrayMatch) throw new Error("AI returned unexpected format for industry intel");
+      const items = JSON.parse(arrayMatch[0]) as unknown[];
+
+      const intelResult = { generatedAt: new Date().toISOString(), jobId: job.id, items };
+      result = intelResult;
+
+      // Persist results to workspace_settings for dashboard to read
+      await db
+        .insert(workspaceSettingsTable)
+        .values({ key: INTEL_RESULTS_KEY, value: intelResult as unknown as Record<string, unknown> })
+        .onConflictDoUpdate({
+          target: workspaceSettingsTable.key,
+          set: { value: intelResult as unknown as Record<string, unknown>, updatedAt: new Date() },
+        });
     }
 
     const [updated] = await db
@@ -191,6 +304,56 @@ router.patch("/email-analysis-config", requireAuth, async (req: Request, res: Re
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }
+});
+
+// ── Industry Intelligence config + results ────────────────────────────────────
+
+/* GET /api/automations/industry-intel-config */
+router.get("/industry-intel-config", requireAuth, async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const row = await db.select().from(workspaceSettingsTable)
+      .where(eq(workspaceSettingsTable.key, INTEL_CONFIG_KEY)).then((r) => r[0]);
+    res.json({ ...INTEL_CONFIG_DEFAULTS, ...(row?.value ?? {}) });
+  } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+});
+
+/* PATCH /api/automations/industry-intel-config */
+router.patch("/industry-intel-config", requireAuth, async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const row = await db.select().from(workspaceSettingsTable)
+      .where(eq(workspaceSettingsTable.key, INTEL_CONFIG_KEY)).then((r) => r[0]);
+    const current = { ...INTEL_CONFIG_DEFAULTS, ...(row?.value ?? {}) } as Record<string, unknown>;
+    const updated = { ...current, ...(req.body as Record<string, unknown>) };
+    await db.insert(workspaceSettingsTable).values({ key: INTEL_CONFIG_KEY, value: updated })
+      .onConflictDoUpdate({ target: workspaceSettingsTable.key, set: { value: updated, updatedAt: new Date() } });
+    res.json(updated);
+  } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+});
+
+/* GET /api/automations/industry-intel-results — last results + today's run count */
+router.get("/industry-intel-results", requireAuth, async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const [resultsRow, { runCount }] = await Promise.all([
+      db.select().from(workspaceSettingsTable)
+        .where(eq(workspaceSettingsTable.key, INTEL_RESULTS_KEY)).then((r) => r[0]),
+      db.select({ runCount: sql<number>`count(*)::int` }).from(backgroundJobsTable)
+        .where(and(
+          eq(backgroundJobsTable.type, "industry_intel_refresh"),
+          gte(backgroundJobsTable.createdAt, todayStart),
+          ne(backgroundJobsTable.status, "failed"),
+        )).then((r) => r[0]),
+    ]);
+    res.json({
+      results: resultsRow?.value ?? null,
+      runsToday: runCount,
+      runsRemaining: Math.max(0, MAX_RUNS_PER_DAY - runCount),
+      maxRunsPerDay: MAX_RUNS_PER_DAY,
+    });
+  } catch (err) { res.status(500).json({ error: (err as Error).message }); }
 });
 
 export default router;

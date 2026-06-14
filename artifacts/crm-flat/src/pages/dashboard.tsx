@@ -10,20 +10,49 @@ import {
   useListCampaigns,
   CampaignStatus,
 } from "@workspace/api-client-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSessionToken } from "@/hooks/use-session-token";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   Users, CircleDollarSign, Target, CheckSquare, Clock, CheckCheck,
   AlertCircle, ArrowRight, Mail, Zap, Send, CalendarDays, Globe,
-  TrendingUp, Sparkles, ExternalLink, Radio,
+  TrendingUp, Sparkles, ExternalLink, Radio, RefreshCw, Loader2,
 } from "lucide-react";
+
+// ─── Intel types ──────────────────────────────────────────────────────────────
+type IntelItem = { section: string; headline: string; summary: string; tag: string; date: string };
+type IntelResults = { generatedAt: string; jobId: string; items: IntelItem[] };
+type IntelStatus = { results: IntelResults | null; runsToday: number; runsRemaining: number; maxRunsPerDay: number };
+
+function intelTagClass(tag: string): string {
+  const map: Record<string, string> = {
+    Competitors: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300",
+    Market: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
+    Regulatory: "bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300",
+    Technology: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
+    M: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
+    Benefits: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
+    Compliance: "bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300",
+    Cyber: "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300",
+    Competitive: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
+  };
+  for (const [k, v] of Object.entries(map)) if (tag.startsWith(k)) return v;
+  return "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400";
+}
+function relativeTimeDash(iso: string) {
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? `${h}h ago` : `${Math.floor(h / 24)}d ago`;
+}
 
 // ─── Priority styles ──────────────────────────────────────────────────────────
 const PRIORITY_STYLES: Record<string, string> = {
@@ -221,8 +250,44 @@ export function DashboardPage() {
   const completeTask = useCompleteTask();
   const queryClient = useQueryClient();
   const getToken = useSessionToken();
+  const { toast } = useToast();
 
   const [intelTab, setIntelTab] = useState<"events" | "market">("events");
+
+  // ── Intel results ──────────────────────────────────────────────────────────
+  const { data: intelStatus, isLoading: intelLoading, refetch: refetchIntel } = useQuery<IntelStatus>({
+    queryKey: ["dash-intel-results"],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch("/api/automations/industry-intel-results", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    staleTime: 120_000,
+  });
+
+  const runIntelNow = useMutation({
+    mutationFn: async () => {
+      const token = await getToken();
+      const res = await fetch("/api/automations/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ type: "industry_intel_refresh" }),
+      });
+      const body = await res.json() as Record<string, unknown>;
+      if (!res.ok) throw new Error((body.error as string) || res.statusText);
+      return body;
+    },
+    onSuccess: () => {
+      setIntelTab("market");
+      refetchIntel();
+      toast({ title: "Intelligence refreshed", description: "Market Intel tab updated with fresh AI insights." });
+    },
+    onError: (err: Error) =>
+      toast({ title: "Run failed", description: err.message, variant: "destructive" }),
+  });
 
   // Sequences — direct fetch (no generated hook)
   const { data: sequences = [], isLoading: seqLoading } = useQuery<SequenceSummary[]>({
@@ -507,11 +572,40 @@ export function DashboardPage() {
             <CardHeader className="pb-0 pt-4 px-4">
               <div className="flex items-center justify-between mb-3">
                 <CardTitle className="text-sm font-semibold">Industry Intelligence</CardTitle>
-                {intelTab === "events" && daysUntilNext != null && (
-                  <span className="text-[10px] text-muted-foreground">
-                    Next event in <span className="font-semibold text-foreground">{daysUntilNext}d</span>
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {intelTab === "events" && daysUntilNext != null && (
+                    <span className="text-[10px] text-muted-foreground">
+                      Next event in <span className="font-semibold text-foreground">{daysUntilNext}d</span>
+                    </span>
+                  )}
+                  {intelTab === "market" && intelStatus?.results && (
+                    <span className="text-[10px] text-muted-foreground">
+                      AI · {relativeTimeDash(intelStatus.results.generatedAt)}
+                    </span>
+                  )}
+                  <button
+                    onClick={() => runIntelNow.mutate()}
+                    disabled={runIntelNow.isPending || (intelStatus?.runsRemaining ?? 1) === 0}
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-medium transition-all",
+                      runIntelNow.isPending
+                        ? "text-muted-foreground bg-muted cursor-wait"
+                        : (intelStatus?.runsRemaining ?? 1) === 0
+                        ? "text-muted-foreground/50 border-muted cursor-not-allowed"
+                        : "hover:bg-primary hover:text-primary-foreground hover:border-primary",
+                    )}
+                    title={intelStatus ? `${intelStatus.runsRemaining}/${intelStatus.maxRunsPerDay} runs left today` : "Run intelligence refresh"}
+                  >
+                    {runIntelNow.isPending
+                      ? <><Loader2 className="h-2.5 w-2.5 animate-spin" />Running…</>
+                      : <><RefreshCw className="h-2.5 w-2.5" />Run now</>}
+                  </button>
+                  {intelStatus && !runIntelNow.isPending && (
+                    <span className="text-[9px] text-muted-foreground/70 tabular-nums">
+                      {intelStatus.runsRemaining}/{intelStatus.maxRunsPerDay}
+                    </span>
+                  )}
+                </div>
               </div>
               {/* Tabs */}
               <div className="flex gap-1 border-b">
@@ -527,7 +621,14 @@ export function DashboardPage() {
                     )}
                   >
                     {tab === "events" ? <CalendarDays className="h-3 w-3" /> : <TrendingUp className="h-3 w-3" />}
-                    {tab === "events" ? "Insurance Events" : "Market Intelligence"}
+                    {tab === "events" ? "Insurance Events" : (
+                      <span className="flex items-center gap-1">
+                        Market Intelligence
+                        {intelStatus?.results && (
+                          <span className="flex h-1.5 w-1.5 rounded-full bg-green-500" title="AI results available" />
+                        )}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -581,22 +682,54 @@ export function DashboardPage() {
               )}
 
               {intelTab === "market" && (
-                <div className="space-y-0 divide-y">
-                  {MARKET_INTEL.map((item) => (
-                    <div key={item.id} className="py-3">
-                      <div className="flex items-start gap-2 mb-1">
-                        <p className="flex-1 text-xs font-semibold leading-snug">{item.headline}</p>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <Badge variant="outline" className={cn("text-[9px] h-4 px-1.5", item.tagClass)}>
-                            {item.tag}
-                          </Badge>
-                          <span className="text-[10px] text-muted-foreground">{item.date}</span>
+                <>
+                  {intelLoading ? (
+                    <div className="space-y-3 pt-1">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-14" />)}</div>
+                  ) : intelStatus?.results?.items?.length ? (
+                    <div className="space-y-0 divide-y">
+                      {intelStatus.results.items.map((item, i) => (
+                        <div key={i} className="py-3">
+                          <div className="flex items-start gap-2 mb-1">
+                            <p className="flex-1 text-xs font-semibold leading-snug">{item.headline}</p>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <Badge variant="outline" className={cn("text-[9px] h-4 px-1.5", intelTagClass(item.tag))}>
+                                {item.tag}
+                              </Badge>
+                              <span className="text-[10px] text-muted-foreground">{item.date}</span>
+                            </div>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2">{item.summary}</p>
+                          <p className="text-[9px] text-muted-foreground/50 mt-0.5">{item.section}</p>
                         </div>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2">{item.summary}</p>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2 mb-3 px-0.5 py-2 rounded-lg bg-muted/40 border">
+                        <RefreshCw className="h-3 w-3 text-muted-foreground ml-2 shrink-0" />
+                        <p className="text-[11px] text-muted-foreground flex-1">
+                          No AI briefing yet. Click <strong>Run now</strong> to generate live intelligence for your configured topics.
+                        </p>
+                      </div>
+                      <div className="space-y-0 divide-y">
+                        {MARKET_INTEL.map((item) => (
+                          <div key={item.id} className="py-3">
+                            <div className="flex items-start gap-2 mb-1">
+                              <p className="flex-1 text-xs font-semibold leading-snug">{item.headline}</p>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <Badge variant="outline" className={cn("text-[9px] h-4 px-1.5", item.tagClass)}>
+                                  {item.tag}
+                                </Badge>
+                                <span className="text-[10px] text-muted-foreground">{item.date}</span>
+                              </div>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2">{item.summary}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
