@@ -495,7 +495,7 @@ export function DashboardPage() {
           <Card className="flex flex-col">
             <CardHeader className="pb-2 pt-4 px-4">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold">Ongoing Engage</CardTitle>
+                <CardTitle className="text-sm font-semibold">Ongoing Engagements</CardTitle>
                 <div className="flex gap-2">
                   <Link href="/campaigns" className="text-[10px] text-muted-foreground hover:text-primary transition-colors">Campaigns</Link>
                   <span className="text-[10px] text-muted-foreground">/</span>
