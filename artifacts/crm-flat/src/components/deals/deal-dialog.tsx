@@ -19,12 +19,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Trash2, UserCircle, Plus, X, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { NotesFeed } from "@/components/notes/notes-feed";
-import { AuditHistory } from "@/components/audit/audit-history";
-import { AttachmentsPanel } from "@/components/attachments/attachments-panel";
-import { AiSuggestions } from "@/components/ai/ai-suggestions";
-import { CustomFieldsSection } from "@/components/custom-fields/custom-fields-section";
-import { CustomFieldsForm } from "@/components/custom-fields/custom-fields-form";
-import { useSaveCustomFieldValuesForRecord } from "@/hooks/use-custom-fields";
 
 function memberInitials(name: string | null | undefined) {
   if (!name) return "?";
@@ -53,8 +47,6 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
   const [notes, setNotes] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
   const [showDelete, setShowDelete] = useState(false);
-  const [cfValues, setCfValues] = useState<Record<string, string | null>>({});
-  const saveCf = useSaveCustomFieldValuesForRecord("deal");
 
   type SplitRow = { userId: string; percentage: string };
   const [splitRows, setSplitRows] = useState<SplitRow[]>([]);
@@ -113,10 +105,7 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
       setCompanyId(deal?.company?.id ?? "");
       setNotes(deal?.notes ?? "");
       setAssigneeId((deal as unknown as { assigneeId?: string })?.assigneeId ?? "");
-      if (!deal) {
-        setCfValues({});
-        setSplitRows([]);
-      }
+      if (!deal) setSplitRows([]);
     }
   }, [open, deal, defaultStageId]);
 
@@ -126,15 +115,8 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
     }
   }, [existingSplits]);
 
-  const persistCf = (recordId: string) => {
-    const values = Object.entries(cfValues).map(([fieldId, value]) => ({ fieldId, value }));
-    if (values.length === 0) return Promise.resolve();
-    return saveCf.mutateAsync({ recordId, values }).catch(() => undefined);
-  };
-
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: getListDealsQueryKey() });
-    if (deal?.id) qc.invalidateQueries({ queryKey: ["ai-suggestions", "deal", deal.id] });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -161,7 +143,7 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
       });
     } else {
       create.mutate({ data }, {
-        onSuccess: async (created) => { await persistCf(created.id); toast({ title: "Deal created" }); invalidate(); onOpenChange(false); },
+        onSuccess: () => { toast({ title: "Deal created" }); invalidate(); onOpenChange(false); },
         onError: () => toast({ title: "Error", description: "Failed to create deal", variant: "destructive" }),
       });
     }
@@ -176,6 +158,112 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
 
   const isPending = create.isPending || update.isPending;
 
+  const detailsForm = (isEditMode: boolean) => (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-1.5">
+        <Label htmlFor="d-title">Deal Title *</Label>
+        <Input id="d-title" value={title} onChange={e => setTitle(e.target.value)} required />
+      </div>
+      <div className="space-y-1.5">
+        <Label>Stage *</Label>
+        <Select value={stageId || "none"} onValueChange={v => setStageId(v === "none" ? "" : v)}>
+          <SelectTrigger><SelectValue placeholder="Select stage…" /></SelectTrigger>
+          <SelectContent>
+            {stages?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="d-value">Value ($)</Label>
+          <Input id="d-value" type="number" min="0" step="0.01" value={value} onChange={e => setValue(e.target.value)} placeholder="0.00" />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="d-prob">Probability (%)</Label>
+          <Input id="d-prob" type="number" min="0" max="100" value={probability} onChange={e => setProbability(e.target.value)} />
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="d-close">Close Date</Label>
+        <Input id="d-close" type="date" value={closeDate} onChange={e => setCloseDate(e.target.value)} />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label>Contact</Label>
+          <Select value={contactId || "none"} onValueChange={v => setContactId(v === "none" ? "" : v)}>
+            <SelectTrigger><SelectValue placeholder="No contact" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No contact</SelectItem>
+              {contacts?.data?.map(c => <SelectItem key={c.id} value={c.id}>{c.firstName} {c.lastName}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Company</Label>
+          <Select value={companyId || "none"} onValueChange={v => setCompanyId(v === "none" ? "" : v)}>
+            <SelectTrigger><SelectValue placeholder="No company" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No company</SelectItem>
+              {companies?.data?.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <Label>Assignee</Label>
+        <Select value={assigneeId || "none"} onValueChange={v => setAssigneeId(v === "none" ? "" : v)}>
+          <SelectTrigger>
+            <SelectValue placeholder="Unassigned">
+              {assigneeId
+                ? (() => {
+                    const m = members?.find((x) => x.id === assigneeId);
+                    return m ? (
+                      <span className="flex items-center gap-2">
+                        <span className="h-5 w-5 rounded-full bg-primary/10 text-primary text-[10px] flex items-center justify-center font-semibold shrink-0">
+                          {memberInitials(m.name)}
+                        </span>
+                        {m.name ?? m.email}
+                      </span>
+                    ) : "Unassigned";
+                  })()
+                : <span className="flex items-center gap-2 text-muted-foreground"><UserCircle className="h-4 w-4" />Unassigned</span>}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">
+              <span className="flex items-center gap-2 text-muted-foreground">
+                <UserCircle className="h-4 w-4" /> Unassigned
+              </span>
+            </SelectItem>
+            {members?.map((m) => (
+              <SelectItem key={m.id} value={m.id}>
+                <span className="flex items-center gap-2">
+                  <span className="h-5 w-5 rounded-full bg-primary/10 text-primary text-[10px] flex items-center justify-center font-semibold shrink-0">
+                    {memberInitials(m.name)}
+                  </span>
+                  {m.name ?? m.email}
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="d-notes">Deal Notes</Label>
+        <Textarea id="d-notes" value={notes} onChange={e => setNotes(e.target.value)} rows={2} />
+      </div>
+      <DialogFooter className="gap-2 sm:gap-0">
+        {isEditMode && isAdmin && (
+          <Button type="button" variant="destructive" size="icon" className="mr-auto" onClick={() => setShowDelete(true)}>
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        )}
+        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+        <Button type="submit" disabled={isPending}>{isPending ? "Saving…" : isEditMode ? "Save Changes" : "Create Deal"}</Button>
+      </DialogFooter>
+    </form>
+  );
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -185,358 +273,136 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
           </DialogHeader>
           {isEdit ? (
             <Tabs defaultValue="details" className="flex flex-col flex-1 min-h-0 px-6">
-              <TabsList className="w-full justify-start border-b rounded-none bg-transparent h-auto p-0 mb-0 shrink-0 overflow-x-auto">
+              <TabsList className="w-full justify-start border-b rounded-none bg-transparent h-auto p-0 mb-0 shrink-0">
                 <TabsTrigger value="details" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-2 pt-1">
                   Details
                 </TabsTrigger>
-                <TabsTrigger value="suggestions" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-2 pt-1">
-                  AI Suggestions
-                </TabsTrigger>
                 <TabsTrigger value="notes" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-2 pt-1">
                   Notes
-                </TabsTrigger>
-                <TabsTrigger value="history" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-2 pt-1">
-                  History
-                </TabsTrigger>
-                <TabsTrigger value="fields" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-2 pt-1">
-                  Custom Fields
-                </TabsTrigger>
-                <TabsTrigger value="files" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-2 pt-1">
-                  Files
                 </TabsTrigger>
                 <TabsTrigger value="split" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-2 pt-1">
                   Deal Split
                 </TabsTrigger>
               </TabsList>
               <div className="flex-1 overflow-y-auto pb-6">
-              <TabsContent value="details">
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="d-title">Deal Title *</Label>
-                    <Input id="d-title" value={title} onChange={e => setTitle(e.target.value)} required />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Stage *</Label>
-                    <Select value={stageId || "none"} onValueChange={v => setStageId(v === "none" ? "" : v)}>
-                      <SelectTrigger><SelectValue placeholder="Select stage…" /></SelectTrigger>
-                      <SelectContent>
-                        {stages?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="d-value">Value ($)</Label>
-                      <Input id="d-value" type="number" min="0" step="0.01" value={value} onChange={e => setValue(e.target.value)} placeholder="0.00" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="d-prob">Probability (%)</Label>
-                      <Input id="d-prob" type="number" min="0" max="100" value={probability} onChange={e => setProbability(e.target.value)} />
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="d-close">Close Date</Label>
-                    <Input id="d-close" type="date" value={closeDate} onChange={e => setCloseDate(e.target.value)} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label>Contact</Label>
-                      <Select value={contactId || "none"} onValueChange={v => setContactId(v === "none" ? "" : v)}>
-                        <SelectTrigger><SelectValue placeholder="No contact" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">No contact</SelectItem>
-                          {contacts?.data?.map(c => <SelectItem key={c.id} value={c.id}>{c.firstName} {c.lastName}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Company</Label>
-                      <Select value={companyId || "none"} onValueChange={v => setCompanyId(v === "none" ? "" : v)}>
-                        <SelectTrigger><SelectValue placeholder="No company" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">No company</SelectItem>
-                          {companies?.data?.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Assignee</Label>
-                    <Select value={assigneeId || "none"} onValueChange={v => setAssigneeId(v === "none" ? "" : v)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Unassigned">
-                          {assigneeId
-                            ? (() => {
-                                const m = members?.find((x) => x.id === assigneeId);
-                                return m ? (
+                <TabsContent value="details">
+                  {detailsForm(true)}
+                </TabsContent>
+                <TabsContent value="notes">
+                  <NotesFeed entityType="deal" entityId={deal.id} />
+                </TabsContent>
+                <TabsContent value="split">
+                  {(() => {
+                    const dealValue = parseFloat(value) || 0;
+                    const totalPct = splitRows.reduce((s, r) => s + (parseFloat(r.percentage) || 0), 0);
+                    const isValid = Math.abs(totalPct - 100) < 0.01 || splitRows.length === 0;
+                    const usedUserIds = new Set(splitRows.map(r => r.userId));
+                    const availableMembers = (members ?? []).filter(m => !usedUserIds.has(m.id));
+                    return (
+                      <div className="space-y-4">
+                        <p className="text-sm text-muted-foreground">Split this deal between team members. Percentages must add up to 100%.</p>
+
+                        {splitRows.length > 0 && (
+                          <div className="space-y-2">
+                            <div className="grid grid-cols-[1fr_100px_100px_32px] gap-2 text-xs font-medium text-muted-foreground px-1">
+                              <span>Team Member</span>
+                              <span>%</span>
+                              <span>Amount</span>
+                              <span />
+                            </div>
+                            {splitRows.map((row, i) => {
+                              const member = members?.find(m => m.id === row.userId);
+                              const dollarAmt = dealValue * ((parseFloat(row.percentage) || 0) / 100);
+                              return (
+                                <div key={i} className="grid grid-cols-[1fr_100px_100px_32px] gap-2 items-center">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="h-7 w-7 rounded-full bg-primary/10 text-primary text-[10px] flex items-center justify-center font-semibold shrink-0">
+                                      {memberInitials(member?.name)}
+                                    </span>
+                                    <span className="text-sm truncate">{member?.name ?? member?.email ?? row.userId}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      max="100"
+                                      step="0.1"
+                                      value={row.percentage}
+                                      onChange={e => setSplitRows(prev => prev.map((r, idx) => idx === i ? { ...r, percentage: e.target.value } : r))}
+                                      className="h-8 text-sm pr-1"
+                                    />
+                                    <span className="text-xs text-muted-foreground">%</span>
+                                  </div>
+                                  <span className="text-sm text-muted-foreground">
+                                    {dealValue > 0 ? `$${dollarAmt.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : "—"}
+                                  </span>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                    onClick={() => setSplitRows(prev => prev.filter((_, idx) => idx !== i))}
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {availableMembers.length > 0 && (
+                          <Select
+                            value=""
+                            onValueChange={userId => setSplitRows(prev => [...prev, { userId, percentage: "" }])}
+                          >
+                            <SelectTrigger className="h-8 w-auto gap-1 text-sm border-dashed">
+                              <Plus className="h-3.5 w-3.5" />
+                              <SelectValue placeholder="Add team member" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {availableMembers.map(m => (
+                                <SelectItem key={m.id} value={m.id}>
                                   <span className="flex items-center gap-2">
                                     <span className="h-5 w-5 rounded-full bg-primary/10 text-primary text-[10px] flex items-center justify-center font-semibold shrink-0">
                                       {memberInitials(m.name)}
                                     </span>
                                     {m.name ?? m.email}
                                   </span>
-                                ) : "Unassigned";
-                              })()
-                            : <span className="flex items-center gap-2 text-muted-foreground"><UserCircle className="h-4 w-4" />Unassigned</span>}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">
-                          <span className="flex items-center gap-2 text-muted-foreground">
-                            <UserCircle className="h-4 w-4" /> Unassigned
-                          </span>
-                        </SelectItem>
-                        {members?.map((m) => (
-                          <SelectItem key={m.id} value={m.id}>
-                            <span className="flex items-center gap-2">
-                              <span className="h-5 w-5 rounded-full bg-primary/10 text-primary text-[10px] flex items-center justify-center font-semibold shrink-0">
-                                {memberInitials(m.name)}
-                              </span>
-                              {m.name ?? m.email}
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="d-notes">Deal Notes</Label>
-                    <Textarea id="d-notes" value={notes} onChange={e => setNotes(e.target.value)} rows={2} />
-                  </div>
-                  <DialogFooter className="gap-2 sm:gap-0">
-                    {isAdmin && (
-                      <Button type="button" variant="destructive" size="icon" className="mr-auto" onClick={() => setShowDelete(true)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                    <Button type="submit" disabled={isPending}>{isPending ? "Saving…" : "Save Changes"}</Button>
-                  </DialogFooter>
-                </form>
-              </TabsContent>
-              <TabsContent value="suggestions">
-                <AiSuggestions objectType="deal" recordId={deal.id} dealId={deal.id} contactId={deal.contact?.id} />
-              </TabsContent>
-              <TabsContent value="notes">
-                <NotesFeed entityType="deal" entityId={deal.id} />
-              </TabsContent>
-              <TabsContent value="history">
-                <AuditHistory objectType="deal" objectId={deal.id} />
-              </TabsContent>
-              <TabsContent value="fields">
-                <CustomFieldsSection objectType="deal" recordId={deal.id} />
-              </TabsContent>
-              <TabsContent value="files">
-                <AttachmentsPanel objectType="deal" recordId={deal.id} />
-              </TabsContent>
-              <TabsContent value="split">
-                {(() => {
-                  const dealValue = parseFloat(value) || 0;
-                  const totalPct = splitRows.reduce((s, r) => s + (parseFloat(r.percentage) || 0), 0);
-                  const isValid = Math.abs(totalPct - 100) < 0.01 || splitRows.length === 0;
-                  const usedUserIds = new Set(splitRows.map(r => r.userId));
-                  const availableMembers = (members ?? []).filter(m => !usedUserIds.has(m.id));
-                  return (
-                    <div className="space-y-4">
-                      <p className="text-sm text-muted-foreground">Split this deal between team members. Percentages must add up to 100%.</p>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
 
-                      {splitRows.length > 0 && (
-                        <div className="space-y-2">
-                          <div className="grid grid-cols-[1fr_100px_100px_32px] gap-2 text-xs font-medium text-muted-foreground px-1">
-                            <span>Team Member</span>
-                            <span>%</span>
-                            <span>Amount</span>
-                            <span />
+                        {splitRows.length > 0 && (
+                          <div className={`flex items-center gap-2 text-sm ${isValid ? "text-green-600" : "text-amber-600"}`}>
+                            {isValid
+                              ? <CheckCircle2 className="h-4 w-4" />
+                              : <AlertCircle className="h-4 w-4" />}
+                            <span>Total: {totalPct.toFixed(1)}%{!isValid && " — must equal 100%"}</span>
                           </div>
-                          {splitRows.map((row, i) => {
-                            const member = members?.find(m => m.id === row.userId);
-                            const dollarAmt = dealValue * ((parseFloat(row.percentage) || 0) / 100);
-                            return (
-                              <div key={i} className="grid grid-cols-[1fr_100px_100px_32px] gap-2 items-center">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <span className="h-7 w-7 rounded-full bg-primary/10 text-primary text-[10px] flex items-center justify-center font-semibold shrink-0">
-                                    {memberInitials(member?.name)}
-                                  </span>
-                                  <span className="text-sm truncate">{member?.name ?? member?.email ?? row.userId}</span>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    max="100"
-                                    step="0.1"
-                                    value={row.percentage}
-                                    onChange={e => setSplitRows(prev => prev.map((r, idx) => idx === i ? { ...r, percentage: e.target.value } : r))}
-                                    className="h-8 text-sm pr-1"
-                                  />
-                                  <span className="text-xs text-muted-foreground">%</span>
-                                </div>
-                                <span className="text-sm text-muted-foreground">
-                                  {dealValue > 0 ? `$${dollarAmt.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : "—"}
-                                </span>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                  onClick={() => setSplitRows(prev => prev.filter((_, idx) => idx !== i))}
-                                >
-                                  <X className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            );
-                          })}
+                        )}
+
+                        <div className="flex justify-end pt-2">
+                          <Button
+                            type="button"
+                            disabled={saveSplits.isPending || (splitRows.length > 0 && !isValid)}
+                            onClick={() => saveSplits.mutate(splitRows)}
+                          >
+                            {saveSplits.isPending ? "Saving…" : "Save Split"}
+                          </Button>
                         </div>
-                      )}
-
-                      {availableMembers.length > 0 && (
-                        <Select
-                          value=""
-                          onValueChange={userId => setSplitRows(prev => [...prev, { userId, percentage: "" }])}
-                        >
-                          <SelectTrigger className="h-8 w-auto gap-1 text-sm border-dashed">
-                            <Plus className="h-3.5 w-3.5" />
-                            <SelectValue placeholder="Add team member" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {availableMembers.map(m => (
-                              <SelectItem key={m.id} value={m.id}>
-                                <span className="flex items-center gap-2">
-                                  <span className="h-5 w-5 rounded-full bg-primary/10 text-primary text-[10px] flex items-center justify-center font-semibold shrink-0">
-                                    {memberInitials(m.name)}
-                                  </span>
-                                  {m.name ?? m.email}
-                                </span>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-
-                      {splitRows.length > 0 && (
-                        <div className={`flex items-center gap-2 text-sm ${isValid ? "text-green-600" : "text-amber-600"}`}>
-                          {isValid
-                            ? <CheckCircle2 className="h-4 w-4" />
-                            : <AlertCircle className="h-4 w-4" />}
-                          <span>Total: {totalPct.toFixed(1)}%{!isValid && " — must equal 100%"}</span>
-                        </div>
-                      )}
-
-                      <div className="flex justify-end pt-2">
-                        <Button
-                          type="button"
-                          disabled={saveSplits.isPending || (splitRows.length > 0 && !isValid)}
-                          onClick={() => saveSplits.mutate(splitRows)}
-                        >
-                          {saveSplits.isPending ? "Saving…" : "Save Split"}
-                        </Button>
                       </div>
-                    </div>
-                  );
-                })()}
-              </TabsContent>
+                    );
+                  })()}
+                </TabsContent>
               </div>
             </Tabs>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-4 px-6 pb-6 overflow-y-auto flex-1">
-              <div className="space-y-1.5">
-                <Label htmlFor="d-title">Deal Title *</Label>
-                <Input id="d-title" value={title} onChange={e => setTitle(e.target.value)} required />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Stage *</Label>
-                <Select value={stageId || "none"} onValueChange={v => setStageId(v === "none" ? "" : v)}>
-                  <SelectTrigger><SelectValue placeholder="Select stage…" /></SelectTrigger>
-                  <SelectContent>
-                    {stages?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="d-value">Value ($)</Label>
-                  <Input id="d-value" type="number" min="0" step="0.01" value={value} onChange={e => setValue(e.target.value)} placeholder="0.00" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="d-prob">Probability (%)</Label>
-                  <Input id="d-prob" type="number" min="0" max="100" value={probability} onChange={e => setProbability(e.target.value)} />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="d-close">Close Date</Label>
-                <Input id="d-close" type="date" value={closeDate} onChange={e => setCloseDate(e.target.value)} />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label>Contact</Label>
-                  <Select value={contactId || "none"} onValueChange={v => setContactId(v === "none" ? "" : v)}>
-                    <SelectTrigger><SelectValue placeholder="No contact" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No contact</SelectItem>
-                      {contacts?.data?.map(c => <SelectItem key={c.id} value={c.id}>{c.firstName} {c.lastName}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Company</Label>
-                  <Select value={companyId || "none"} onValueChange={v => setCompanyId(v === "none" ? "" : v)}>
-                    <SelectTrigger><SelectValue placeholder="No company" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No company</SelectItem>
-                      {companies?.data?.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Assignee</Label>
-                <Select value={assigneeId || "none"} onValueChange={v => setAssigneeId(v === "none" ? "" : v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Unassigned">
-                      {assigneeId
-                        ? (() => {
-                            const m = members?.find((x) => x.id === assigneeId);
-                            return m ? (
-                              <span className="flex items-center gap-2">
-                                <span className="h-5 w-5 rounded-full bg-primary/10 text-primary text-[10px] flex items-center justify-center font-semibold shrink-0">
-                                  {memberInitials(m.name)}
-                                </span>
-                                {m.name ?? m.email}
-                              </span>
-                            ) : "Unassigned";
-                          })()
-                        : <span className="flex items-center gap-2 text-muted-foreground"><UserCircle className="h-4 w-4" />Unassigned</span>}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">
-                      <span className="flex items-center gap-2 text-muted-foreground">
-                        <UserCircle className="h-4 w-4" /> Unassigned
-                      </span>
-                    </SelectItem>
-                    {members?.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
-                        <span className="flex items-center gap-2">
-                          <span className="h-5 w-5 rounded-full bg-primary/10 text-primary text-[10px] flex items-center justify-center font-semibold shrink-0">
-                            {memberInitials(m.name)}
-                          </span>
-                          {m.name ?? m.email}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="d-notes">Deal Notes</Label>
-                <Textarea id="d-notes" value={notes} onChange={e => setNotes(e.target.value)} rows={2} />
-              </div>
-              <CustomFieldsForm objectType="deal" values={cfValues} onChange={(id, v) => setCfValues(p => ({ ...p, [id]: v }))} />
-              <DialogFooter className="gap-2 sm:gap-0">
-                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                <Button type="submit" disabled={isPending}>{isPending ? "Saving…" : "Create Deal"}</Button>
-              </DialogFooter>
-            </form>
+            <div className="overflow-y-auto flex-1 px-6 pb-6">
+              {detailsForm(false)}
+            </div>
           )}
         </DialogContent>
       </Dialog>
