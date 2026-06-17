@@ -23,6 +23,41 @@ import { useCustomFieldValues, useSaveCustomFieldValuesForRecord } from "@/hooks
 const STATUSES = Object.values(CompanyStatus);
 const toList = (s: string) => s.split(",").map(v => v.trim()).filter(Boolean);
 
+const DEFAULT_MEMBER_OF = [
+  "Acrisure",
+  "Afore",
+  "ALKEME",
+  "Alera",
+  "Alliant",
+  "Applied Reference Client",
+  "Association of Risk Managers Northwest",
+  "Assurex",
+  "BIGN",
+  "BroadStreet",
+  "CIAB",
+  "Fortified",
+  "Gallagher",
+  "HUB",
+  "HighStreet",
+  "InCite",
+  "Insurors Group",
+  "Intersure",
+  "Iroquois Group",
+  "ISU",
+  "Keystone",
+  "Marsh/MMA",
+  "MarshBerry Connect",
+  "New Demos Challenge 26",
+  "Outmarket Customer",
+  "PacWest",
+  "Patriot",
+  "Reagan Survey",
+  "RiskProNet",
+  "Top 100 Target List",
+  "USI",
+  "Vertafore Reference Customer",
+];
+
 interface CompanyDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -57,7 +92,7 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
   const { data: teamMembers = [] } = useTeamMembers();
   const { data: allCompanies } = useListCompanies({ page: 1, pageSize: 500 });
   const memberOfOptions = useMemo(() => {
-    const set = new Set<string>();
+    const set = new Set<string>(DEFAULT_MEMBER_OF);
     for (const co of allCompanies?.data ?? []) {
       for (const m of co.memberOf ?? []) {
         if (m) set.add(m);
