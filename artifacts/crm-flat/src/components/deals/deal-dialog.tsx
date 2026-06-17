@@ -289,6 +289,7 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
                   {detailsForm(true)}
                 </TabsContent>
                 <TabsContent value="notes">
+                  <h3 className="text-sm font-semibold mb-3">Notes</h3>
                   <NotesFeed entityType="deal" entityId={deal.id} />
                 </TabsContent>
                 <TabsContent value="split">
