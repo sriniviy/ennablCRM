@@ -238,7 +238,7 @@ export function DealsPage() {
 
         {/* Stats bar */}
         {!dealsLoading && columns && (
-          <div className="grid grid-cols-6 border border-border shrink-0 bg-[#f0f7fa] dark:bg-muted/30">
+          <div className="grid grid-cols-6 border border-border shrink-0">
             {[
               { label: "Total Deal Amount", value: totalValue, count: totalDeals },
               { label: "Weighted Deal Amount", value: weightedValue, count: totalDeals },
@@ -246,14 +246,14 @@ export function DealsPage() {
               { label: "Closed Deal Amount", value: closedValue, count: closedDeals.length },
               { label: "New Deal Amount", value: newValue, count: newDeals.length },
             ].map((stat, i) => (
-              <div key={stat.label} className={`px-4 py-3 ${i < 5 ? "border-r border-border/60" : ""}`}>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-[#1a6b8a] dark:text-primary mb-1">
+              <div key={stat.label} className={`px-3 py-2 ${i < 5 ? "border-r border-border" : ""}`}>
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                   {stat.label}
                 </div>
-                <div className="text-2xl font-bold text-[#1a6b8a] dark:text-primary leading-tight">
+                <div className="text-2xl font-bold text-primary leading-tight">
                   {formatCurrencyCompact(stat.value)}
                 </div>
-                <div className="text-[11px] text-[#1a6b8a]/70 dark:text-primary/70 mt-0.5">
+                <div className="text-[10px] text-muted-foreground mt-0.5">
                   Average per deal{" "}
                   <span className="font-medium">
                     {stat.count > 0 ? formatCurrencyCompact(stat.value / stat.count) : "—"}
@@ -262,14 +262,14 @@ export function DealsPage() {
               </div>
             ))}
             {/* Average Deal Age */}
-            <div className="px-4 py-3">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-[#1a6b8a] dark:text-primary mb-1">
+            <div className="px-3 py-2">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
                 Average Deal Age
               </div>
-              <div className="text-2xl font-bold text-[#1a6b8a] dark:text-primary leading-tight">
-                {avgAgeMonths.toFixed(1)} <span className="text-base font-semibold">months</span>
+              <div className="text-2xl font-bold text-foreground leading-tight">
+                {avgAgeMonths.toFixed(1)} <span className="text-sm font-semibold">months</span>
               </div>
-              <div className="text-[11px] text-[#1a6b8a]/70 dark:text-primary/70 mt-0.5">
+              <div className="text-[10px] text-muted-foreground mt-0.5">
                 Across {totalDeals} deal{totalDeals !== 1 ? "s" : ""}
               </div>
             </div>
