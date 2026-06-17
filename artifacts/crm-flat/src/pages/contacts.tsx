@@ -304,11 +304,11 @@ export function ContactsPage() {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
+                  <TableHead>Phone</TableHead>
                   <TableHead>Company</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Engagement</TableHead>
-                  <TableHead>Review</TableHead>
                   <TableHead>Tags</TableHead>
+                  <TableHead>Last Activity</TableHead>
                   <TableHead className="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -316,7 +316,7 @@ export function ContactsPage() {
                 {isLoading ? (
                   [...Array(5)].map((_, i) => (
                     <TableRow key={i}>
-                      {[...Array(7)].map((__, j) => <TableCell key={j}><Skeleton className="h-4 w-24" /></TableCell>)}
+                      {[...Array(8)].map((__, j) => <TableCell key={j}><Skeleton className="h-4 w-24" /></TableCell>)}
                     </TableRow>
                   ))
                 ) : contacts.length > 0 ? (
@@ -340,7 +340,14 @@ export function ContactsPage() {
                           </p>
                         )}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">{contact.email ?? "—"}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{contact.email ?? "—"}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {contact.phone ? (
+                          <a href={`tel:${contact.phone}`} className="hover:text-primary" onClick={e => e.stopPropagation()}>
+                            {contact.phone}
+                          </a>
+                        ) : "—"}
+                      </TableCell>
                       <TableCell>
                         {contact.company ? (
                           <Link href={`/companies/${contact.company.id}`} className="hover:underline" onClick={e => e.stopPropagation()}>
@@ -354,19 +361,16 @@ export function ContactsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <EngagementBadge opens={contact.engagementOpens} clicks={contact.engagementClicks} />
-                      </TableCell>
-                      <TableCell>
-                        {contact.reviewStatus ? (
-                          <Badge variant="outline" className="font-normal">{contact.reviewStatus.replace(/_/g, " ")}</Badge>
-                        ) : <span className="text-muted-foreground">—</span>}
-                      </TableCell>
-                      <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {(contact.tags ?? []).slice(0, 3).map(tag => (
                             <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
                           ))}
                         </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm tabular-nums">
+                        {(contact as any).lastActivityDate
+                          ? new Date((contact as any).lastActivityDate).toLocaleDateString()
+                          : "—"}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
@@ -417,7 +421,7 @@ export function ContactsPage() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                       No contacts found.
                     </TableCell>
                   </TableRow>

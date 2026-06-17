@@ -33,6 +33,7 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
           contactCount: sql<number>`count(distinct ${contactsTable.id})::int`,
           openDeals: sql<number>`count(distinct ${dealsTable.id})::int`,
           totalDealsValue: sql<number>`coalesce(sum(${dealsTable.value}), 0)::float`,
+          lastActivityDate: sql<string | null>`(SELECT MAX(a.created_at) FROM activities a WHERE a.company_id = ${companiesTable.id})`,
         })
         .from(companiesTable)
         .leftJoin(contactsTable, eq(contactsTable.companyId, companiesTable.id))
@@ -46,11 +47,12 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
     ]);
 
     res.json({
-      data: companies.map(({ company, contactCount, openDeals, totalDealsValue }) => ({
+      data: companies.map(({ company, contactCount, openDeals, totalDealsValue, lastActivityDate }) => ({
         ...company,
         contactCount,
         openDeals,
         totalDealsValue,
+        lastActivityDate,
       })),
       total: count,
       page: pg,

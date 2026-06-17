@@ -79,6 +79,7 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
           },
           engagementOpens: sql<number>`count(distinct case when ${campaignContactsTable.openedAt} is not null then ${campaignContactsTable.id} end)::int`,
           engagementClicks: sql<number>`count(distinct case when ${campaignContactsTable.clickedAt} is not null then ${campaignContactsTable.id} end)::int`,
+          lastActivityDate: sql<string | null>`(SELECT MAX(a.created_at) FROM activities a WHERE a.contact_id = ${contactsTable.id})`,
         })
         .from(contactsTable)
         .leftJoin(companiesTable, eq(contactsTable.companyId, companiesTable.id))
@@ -96,12 +97,13 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
     ]);
 
     res.json({
-      data: contacts.map(({ contact, company, assignee, engagementOpens, engagementClicks }) => ({
+      data: contacts.map(({ contact, company, assignee, engagementOpens, engagementClicks, lastActivityDate }) => ({
         ...contact,
         company: company?.id ? company : null,
         assignee: assignee?.id ? assignee : null,
         engagementOpens,
         engagementClicks,
+        lastActivityDate,
       })),
       total: count,
       page: pg,

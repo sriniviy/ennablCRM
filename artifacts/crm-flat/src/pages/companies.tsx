@@ -30,7 +30,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 const COL_STORAGE_KEY = "crm-flat:companies-col-widths";
-const DEFAULT_WIDTHS = [28, 18, 18, 16, 10, 10]; // percentages summing to 100
+const DEFAULT_WIDTHS = [20, 12, 10, 11, 11, 10, 10, 12, 4]; // 9 cols: name, owner, created, phone, website, memberof, dealvalue, lastactivity, action
 const MIN_COL_PCT = 5;
 
 function useResizableColumns() {
@@ -300,13 +300,10 @@ export function CompaniesPage() {
               </colgroup>
               <TableHeader>
                 <TableRow>
-                  {(["Name", "Website", "Account Owner", "Member Of", "Open Deals", "Deal Value", ""] as const).map((label, i) => (
-                    <TableHead
-                      key={label}
-                      className="relative select-none overflow-hidden"
-                    >
+                  {(["Name", "Account Owner", "Created", "Phone", "Website", "Member Of", "Deal Value", "Last Activity", ""] as const).map((label, i) => (
+                    <TableHead key={label} className="relative select-none overflow-hidden">
                       <span className="block truncate">{label}</span>
-                      {i < 6 && label !== "" && (
+                      {i < 8 && label !== "" && (
                         <span
                           onMouseDown={e => startResize(i, e)}
                           className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors z-10"
@@ -349,6 +346,17 @@ export function CompaniesPage() {
                             </p>
                           )}
                         </TableCell>
+                        <TableCell className="text-muted-foreground truncate">{ownerName}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm tabular-nums">
+                          {company.createdAt ? new Date(company.createdAt).toLocaleDateString() : "—"}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground truncate text-sm">
+                          {(company as any).phone ? (
+                            <a href={`tel:${(company as any).phone}`} className="hover:text-primary" onClick={e => e.stopPropagation()}>
+                              {(company as any).phone}
+                            </a>
+                          ) : "—"}
+                        </TableCell>
                         <TableCell className="text-muted-foreground">
                           {company.website ? (
                             <a
@@ -363,21 +371,18 @@ export function CompaniesPage() {
                             </a>
                           ) : "—"}
                         </TableCell>
-                        <TableCell className="text-muted-foreground truncate">{ownerName}</TableCell>
                         <TableCell className="text-muted-foreground truncate">{memberOfStr}</TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {company.openDeals != null && company.openDeals > 0 ? (
-                            <span className="font-medium">{company.openDeals}</span>
+                        <TableCell className="text-right tabular-nums text-sm">
+                          {(company as any).totalDealsValue > 0 ? (
+                            <span className="font-medium text-primary">{formatCurrency((company as any).totalDealsValue)}</span>
                           ) : (
                             <span className="text-muted-foreground">—</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right tabular-nums text-sm">
-                          {company.totalDealsValue != null && company.totalDealsValue > 0 ? (
-                            <span className="font-medium text-primary">{formatCurrency(company.totalDealsValue)}</span>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
+                        <TableCell className="text-muted-foreground text-sm tabular-nums">
+                          {(company as any).lastActivityDate
+                            ? new Date((company as any).lastActivityDate).toLocaleDateString()
+                            : "—"}
                         </TableCell>
                         <TableCell className="w-10">
                           <TooltipProvider>
