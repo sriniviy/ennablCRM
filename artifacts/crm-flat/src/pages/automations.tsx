@@ -134,6 +134,14 @@ function getInitialCollapsedSections(): Record<string, boolean> {
   return defaults;
 }
 
+function getInitialIntelTab(): "configure" | "results" {
+  try {
+    const stored = localStorage.getItem("crm-automation-intel-tab");
+    if (stored === "configure" || stored === "results") return stored;
+  } catch {}
+  return "configure";
+}
+
 export function AutomationsPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -232,7 +240,13 @@ export function AutomationsPage() {
   }
 
   // ── Industry Intelligence ─────────────────────────────────────────────────
-  const [intelTab, setIntelTab] = useState<"configure" | "results">("configure");
+  const [intelTab, setIntelTab] = useState<"configure" | "results">(getInitialIntelTab);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("crm-automation-intel-tab", intelTab);
+    } catch {}
+  }, [intelTab]);
 
   const { data: intelConfig, isLoading: intelConfigLoading } = useQuery<IntelConfig>({
     queryKey: ["industry-intel-config"],
