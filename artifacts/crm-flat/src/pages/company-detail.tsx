@@ -221,7 +221,7 @@ export function CompanyDetailPage() {
                   <NotesTabLabel entityType="company" entityId={id} />
                 </TabsTrigger>
                 <TabsTrigger value="history" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
-                  History
+                  Activities
                 </TabsTrigger>
                 <TabsTrigger value="files" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   Files
@@ -231,7 +231,7 @@ export function CompanyDetailPage() {
               <TabsContent value="contacts" className="pt-6">
                 {company.contacts && company.contacts.length > 0 ? (
                   <div className="grid gap-4 sm:grid-cols-2">
-                    {company.contacts.map(contact => (
+                    {[...company.contacts].sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`)).map(contact => (
                       <Card key={contact.id}>
                         <CardContent className="p-4 flex items-start gap-4">
                           <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center font-medium">
@@ -258,7 +258,7 @@ export function CompanyDetailPage() {
               <TabsContent value="deals" className="pt-6">
                 {company.deals && company.deals.length > 0 ? (
                   <div className="space-y-4">
-                    {company.deals.map(deal => (
+                    {[...company.deals].sort((a, b) => a.title.localeCompare(b.title)).map(deal => (
                       <Card key={deal.id}>
                         <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                           <div>

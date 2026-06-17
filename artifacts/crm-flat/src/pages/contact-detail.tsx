@@ -536,7 +536,7 @@ export function ContactDetailPage() {
             <Tabs defaultValue="history">
               <TabsList className="w-full justify-start border-b rounded-none bg-transparent h-auto p-0 flex-wrap">
                 <TabsTrigger value="history" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
-                  History
+                  Activities
                 </TabsTrigger>
                 <TabsTrigger value="notes" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   <NotesTabLabel entityType="contact" entityId={id} />
@@ -558,13 +558,12 @@ export function ContactDetailPage() {
                 </TabsTrigger>
               </TabsList>
 
-              {/* HISTORY — timeline + audit trail */}
+              {/* ACTIVITIES — timeline + audit trail */}
               <TabsContent value="history" className="pt-6">
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">Timeline</h3>
                   {contact.activities && contact.activities.length > 0 ? (
                     <div className="space-y-4">
-                      {contact.activities.map(activity => (
+                      {[...contact.activities].sort((a, b) => (a.title || '').localeCompare(b.title || '')).map(activity => (
                         <div key={activity.id} className="flex gap-4 p-4 border rounded-lg bg-card">
                           <div className="mt-1">
                             {activity.type === 'NOTE' ? <MessageSquare className="h-5 w-5 text-blue-500" /> :
@@ -615,7 +614,7 @@ export function ContactDetailPage() {
               <TabsContent value="deals" className="pt-6">
                 {contact.deals && contact.deals.length > 0 ? (
                   <div className="space-y-4">
-                    {contact.deals.map(deal => (
+                    {[...contact.deals].sort((a, b) => a.title.localeCompare(b.title)).map(deal => (
                       <Card key={deal.id}>
                         <CardContent className="p-4 flex items-center justify-between">
                           <div>
@@ -709,7 +708,7 @@ export function ContactDetailPage() {
                   <h3 className="text-lg font-semibold mb-4">Tasks</h3>
                   {contact.tasks && contact.tasks.length > 0 ? (
                     <div className="space-y-3">
-                      {contact.tasks.map(task => (
+                      {[...contact.tasks].sort((a, b) => a.title.localeCompare(b.title)).map(task => (
                         <div key={task.id} className="flex items-center gap-3 p-3 border rounded-lg">
                           <CheckSquare className={`h-5 w-5 ${task.completed ? 'text-green-500' : 'text-muted-foreground'}`} />
                           <div className="flex-1">
