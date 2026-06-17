@@ -127,6 +127,17 @@ function getInitialCollapsed(): boolean {
   }
 }
 
+function getInitialCollapsedGroups(): Record<string, boolean> {
+  const defaults: Record<string, boolean> = {
+    RECORDS: true, ACTIVITIES: true, ENGAGEMENT: true, AUTOMATION: true, SETTINGS: true,
+  };
+  try {
+    const stored = localStorage.getItem("crm-sidebar-collapsed-groups");
+    if (stored) return JSON.parse(stored) as Record<string, boolean>;
+  } catch {}
+  return defaults;
+}
+
 export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const { data: user } = useGetMe();
@@ -142,9 +153,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const myTaskCount = assignmentData?.tasks ?? 0;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(getInitialCollapsed);
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
-    RECORDS: true, ACTIVITIES: true, ENGAGEMENT: true, AUTOMATION: true, SETTINGS: true,
-  });
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(getInitialCollapsedGroups);
   const toggleGroup = (label: string) => setCollapsedGroups(p => ({ ...p, [label]: !p[label] }));
 
   useEffect(() => {
@@ -152,6 +161,12 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       localStorage.setItem("crm-sidebar-collapsed", String(collapsed));
     } catch {}
   }, [collapsed]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("crm-sidebar-collapsed-groups", JSON.stringify(collapsedGroups));
+    } catch {}
+  }, [collapsedGroups]);
 
   const handleSignOut = async () => {
     await authClient.signOut();

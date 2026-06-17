@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -125,6 +125,15 @@ function tagColor(tag: string) {
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
+function getInitialCollapsedSections(): Record<string, boolean> {
+  const defaults: Record<string, boolean> = { intel: true, hygiene: true, sequence: true, email: true };
+  try {
+    const stored = localStorage.getItem("crm-automation-collapsed-sections");
+    if (stored) return JSON.parse(stored) as Record<string, boolean>;
+  } catch {}
+  return defaults;
+}
+
 export function AutomationsPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -304,8 +313,14 @@ export function AutomationsPage() {
   const lastIntelJob = jobs.find((j) => j.type === "industry_intel_refresh");
   const intelRunning = triggerJob.isPending && lastIntelJob?.status === "running";
 
-  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({ intel: true, hygiene: true, sequence: true, email: true });
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(getInitialCollapsedSections);
   const toggleSection = (id: string) => setCollapsedSections(p => ({ ...p, [id]: !p[id] }));
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("crm-automation-collapsed-sections", JSON.stringify(collapsedSections));
+    } catch {}
+  }, [collapsedSections]);
 
   async function runIntelNow() {
     // Save dirty config first
