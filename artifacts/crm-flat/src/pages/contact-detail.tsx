@@ -536,7 +536,7 @@ export function ContactDetailPage() {
             <Tabs defaultValue="history">
               <TabsList className="w-full justify-start border-b rounded-none bg-transparent h-auto p-0 flex-wrap">
                 <TabsTrigger value="history" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
-                  Activities
+                  All Activities
                 </TabsTrigger>
                 <TabsTrigger value="campaigns" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   Campaigns

@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ArrowLeft, Globe, MapPin, Phone, Pencil, CopyCheck,
-  Mail, MessageSquare, Calendar, CheckSquare,
+  Mail, MessageSquare, Calendar, CheckSquare, Sparkles, Users, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { NotesFeed } from "@/components/notes/notes-feed";
@@ -106,6 +106,7 @@ export function CompanyDetailPage() {
   const { data: teamMembers = [] } = useTeamMembers();
   const [editOpen, setEditOpen] = useState(false);
   const [duplicatesOpen, setDuplicatesOpen] = useState(false);
+  const [showMoreContacts, setShowMoreContacts] = useState(false);
   const { data: me } = useGetMe();
   const isAdmin = me?.role === "ADMIN";
   const queryClient = useQueryClient();
@@ -238,17 +239,17 @@ export function CompanyDetailPage() {
         <div className="grid gap-6 md:grid-cols-3">
           {/* Left Column - Info */}
           <div className="space-y-6 md:col-span-1">
-            <CollapsibleCard title="Company Info" previewHeight={110} contentClassName="space-y-4">
+            <CollapsibleCard title="Company Info" previewHeight={160} contentClassName="space-y-4">
+              <div className="flex items-center gap-3 text-sm">
+                <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+                {company.phone
+                  ? <a href={`tel:${company.phone}`} className="hover:underline">{company.phone}</a>
+                  : <span className="text-muted-foreground">No phone</span>}
+              </div>
               {company.domain && (
                 <div className="flex items-center gap-3 text-sm">
-                  <Globe className="h-4 w-4 text-muted-foreground" />
-                  <a href={`https://${company.domain}`} target="_blank" rel="noreferrer" className="hover:underline">{company.domain}</a>
-                </div>
-              )}
-              {company.phone && (
-                <div className="flex items-center gap-3 text-sm">
-                  <Phone className="h-4 w-4 text-muted-foreground" />
-                  <a href={`tel:${company.phone}`} className="hover:underline">{company.phone}</a>
+                  <Globe className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <a href={`https://${company.domain}`} target="_blank" rel="noreferrer" className="hover:underline truncate">{company.domain}</a>
                 </div>
               )}
               {(company.address || company.city || company.country) && (
@@ -325,6 +326,98 @@ export function CompanyDetailPage() {
                   {formatCurrency(company.openPipelineValue)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">Open pipeline value</p>
+                <div className="mt-3 pt-3 border-t grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <p className="text-muted-foreground text-xs">Open deals</p>
+                    <p className="font-semibold">{company.openDeals ?? 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground text-xs">Total deals</p>
+                    <p className="font-semibold">{company.deals?.length ?? 0}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* AI Summary — derived from activity data */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  Activity Summary
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm space-y-2">
+                {companyActivities.length === 0 ? (
+                  <p className="text-muted-foreground text-xs">No activities recorded yet.</p>
+                ) : (() => {
+                  const counts: Record<string, number> = {};
+                  companyActivities.forEach(a => {
+                    const label = a.type === 'NOTE' ? 'Notes' : a.type === 'CALL' ? 'Calls' : a.type.startsWith('EMAIL') ? 'Emails' : a.type === 'MEETING' ? 'Meetings' : 'Other';
+                    counts[label] = (counts[label] || 0) + 1;
+                  });
+                  const last = companyActivities[0];
+                  return (
+                    <>
+                      <div className="flex flex-wrap gap-2">
+                        {Object.entries(counts).map(([label, n]) => (
+                          <span key={label} className="inline-flex items-center gap-1 text-xs bg-muted rounded-full px-2 py-0.5">
+                            <span className="font-semibold">{n}</span> {label}
+                          </span>
+                        ))}
+                      </div>
+                      {last && (
+                        <p className="text-xs text-muted-foreground pt-1 border-t">
+                          Last activity: <span className="text-foreground font-medium">{last.title}</span>
+                          {" · "}{new Date(last.createdAt).toLocaleDateString()}
+                        </p>
+                      )}
+                    </>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+
+            {/* Contacts in left panel */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                  Contacts ({sortedContacts.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {sortedContacts.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No contacts yet.</p>
+                ) : (
+                  <>
+                    {(showMoreContacts ? sortedContacts : sortedContacts.slice(0, 3)).map(c => (
+                      <div key={c.id} className="flex items-center gap-2">
+                        <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-xs font-medium shrink-0">
+                          {c.firstName[0]}{c.lastName[0]}
+                        </div>
+                        <div className="min-w-0">
+                          <Link href={`/contacts/${c.id}`} className="text-sm font-medium hover:underline text-primary truncate block">
+                            {c.firstName} {c.lastName}
+                          </Link>
+                          {c.title && <p className="text-xs text-muted-foreground truncate">{c.title}</p>}
+                        </div>
+                      </div>
+                    ))}
+                    {sortedContacts.length > 3 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full text-xs h-7 mt-1"
+                        onClick={() => setShowMoreContacts(v => !v)}
+                      >
+                        {showMoreContacts
+                          ? <><ChevronUp className="h-3 w-3 mr-1" /> Show less</>
+                          : <><ChevronDown className="h-3 w-3 mr-1" /> Show {sortedContacts.length - 3} more</>}
+                      </Button>
+                    )}
+                  </>
+                )}
               </CardContent>
             </Card>
 
@@ -336,10 +429,13 @@ export function CompanyDetailPage() {
             <Tabs defaultValue="history">
               <TabsList className="w-full justify-start border-b rounded-none bg-transparent h-auto p-0 flex-wrap">
                 <TabsTrigger value="history" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
-                  Activities
+                  All Activities
                 </TabsTrigger>
                 <TabsTrigger value="campaigns" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   Campaigns
+                </TabsTrigger>
+                <TabsTrigger value="contacts" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
+                  Contacts ({company.contacts?.length || 0})
                 </TabsTrigger>
                 <TabsTrigger value="deals" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   Deals ({company.deals?.length || 0})
@@ -355,9 +451,6 @@ export function CompanyDetailPage() {
                 </TabsTrigger>
                 <TabsTrigger value="tasks" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   Tasks
-                </TabsTrigger>
-                <TabsTrigger value="contacts" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
-                  Contacts ({company.contacts?.length || 0})
                 </TabsTrigger>
               </TabsList>
 
