@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CheckCircle2, AlertCircle, Loader2, KeyRound, Eye, EyeOff } from "lucide-react";
-import { EnnablLogo, EnnablMark } from "@/components/brand/ennabl-logo";
+import { EnnablLogo } from "@/components/brand/ennabl-logo";
 
 type Stage = "loading" | "ready" | "invalid" | "submitting" | "done";
 
@@ -77,8 +77,7 @@ export function SetPasswordPage() {
       <div className="w-full max-w-sm">
         {/* Logo / brand */}
         <div className="mb-8 flex flex-col items-center text-center">
-          <EnnablMark className="h-10 w-10 mb-3" />
-          <EnnablLogo className="h-7 w-auto" />
+          <EnnablLogo className="h-9 w-auto" />
         </div>
 
         {/* Loading */}

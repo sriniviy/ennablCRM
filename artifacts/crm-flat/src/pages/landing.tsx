@@ -1,14 +1,13 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { EnnablLogo, EnnablMark } from "@/components/brand/ennabl-logo";
+import { EnnablLogo } from "@/components/brand/ennabl-logo";
 
 export function LandingPage() {
   return (
     <div className="min-h-[100dvh] flex flex-col">
       <header className="px-6 py-4 flex items-center justify-between border-b">
         <div className="flex items-center gap-2">
-          <EnnablMark className="h-8 w-8" />
-          <EnnablLogo className="h-6 w-auto" />
+          <EnnablLogo className="h-7 w-auto" />
         </div>
         <div className="flex items-center gap-4">
           <Link href="/sign-in" className="text-sm font-medium text-muted-foreground hover:text-foreground">
