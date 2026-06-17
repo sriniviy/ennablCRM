@@ -193,46 +193,93 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[560px] overflow-visible">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[580px] max-h-[90vh] !flex !flex-col p-0 overflow-visible">
+          <DialogHeader className="px-6 pt-6 shrink-0">
             <DialogTitle>{isEdit ? "Edit Company" : "New Company"}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="co-name">Company Name *</Label>
-              <Input id="co-name" value={name} onChange={e => setName(e.target.value)} required />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
+          <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+            <div className="flex-1 overflow-y-auto px-6 pb-2 space-y-4 pt-2">
+
+              {/* Identity */}
               <div className="space-y-1.5">
-                <Label htmlFor="co-domain">Domain</Label>
-                <Input id="co-domain" value={domain} onChange={e => setDomain(e.target.value)} placeholder="acme.com" />
+                <Label htmlFor="co-name">Company Name *</Label>
+                <Input id="co-name" value={name} onChange={e => setName(e.target.value)} required />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="co-domain">Domain</Label>
+                  <Input id="co-domain" value={domain} onChange={e => setDomain(e.target.value)} placeholder="acme.com" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="co-website">Website</Label>
+                  <Input id="co-website" value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://acme.com" />
+                </div>
+              </div>
+
+              {/* Classification */}
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide border-t border-border pt-3">Classification</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Status</Label>
+                  <Select value={status} onValueChange={setStatus}>
+                    <SelectTrigger><SelectValue placeholder="No status" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No status</SelectItem>
+                      {STATUSES.map(s => <SelectItem key={s} value={s}>{s.replace(/_/g, " ")}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Account Owner</Label>
+                  <Select value={assignedCsmId} onValueChange={setAssignedCsmId}>
+                    <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Unassigned</SelectItem>
+                      {teamMembers.map(m => <SelectItem key={m.id} value={m.id}>{m.name || m.email}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="co-industry">Industry</Label>
+                  <Input id="co-industry" value={industry} onChange={e => setIndustry(e.target.value)} placeholder="SaaS, Finance…" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="co-size">Company Size</Label>
+                  <Input id="co-size" value={size} onChange={e => setSize(e.target.value)} placeholder="1-10, 50-200…" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="co-revenue">Est. Annual Revenue</Label>
+                  <Input id="co-revenue" type="number" value={estimatedAnnualRevenue} onChange={e => setEstimatedAnnualRevenue(e.target.value)} placeholder="1000000" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="co-employees">Number of Employees</Label>
+                  <Input id="co-employees" type="number" value={numberOfEmployees} onChange={e => setNumberOfEmployees(e.target.value)} placeholder="250" />
+                </div>
+              </div>
+
+              {/* Location & Contact */}
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide border-t border-border pt-3">Location & Contact</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="co-phone">Phone</Label>
+                  <Input id="co-phone" value={phone} onChange={e => setPhone(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="co-city">City</Label>
+                  <Input id="co-city" value={city} onChange={e => setCity(e.target.value)} />
+                </div>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="co-website">Website</Label>
-                <Input id="co-website" value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://acme.com" />
+                <Label htmlFor="co-country">Country</Label>
+                <Input id="co-country" value={country} onChange={e => setCountry(e.target.value)} />
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Status</Label>
-                <Select value={status} onValueChange={setStatus}>
-                  <SelectTrigger><SelectValue placeholder="No status" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No status</SelectItem>
-                    {STATUSES.map(s => <SelectItem key={s} value={s}>{s.replace(/_/g, " ")}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="co-domains">Additional Domains <span className="text-muted-foreground text-xs">(comma-separated)</span></Label>
-                <Input id="co-domains" value={domains} onChange={e => setDomains(e.target.value)} placeholder="acme.io, acme.net" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="co-products">Products Licensed <span className="text-muted-foreground text-xs">(comma-separated)</span></Label>
-                <Input id="co-products" value={productLicensed} onChange={e => setProductLicensed(e.target.value)} placeholder="Benchmarks, Insights" />
-              </div>
+
+              {/* Network & Products */}
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide border-t border-border pt-3">Network & Products</p>
               <div className="space-y-1.5">
                 <Label>Member Of</Label>
                 <div className="relative">
@@ -248,7 +295,6 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
                   </Button>
                   {memberOfOpen && (
                     <>
-                      {/* invisible overlay captures clicks outside to close */}
                       <div className="fixed inset-0 z-40" onClick={() => setMemberOfOpen(false)} />
                       <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border bg-popover shadow-md">
                         <Command>
@@ -294,55 +340,21 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
                   </div>
                 )}
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="co-products">Products Licensed <span className="text-muted-foreground text-xs">(comma-separated)</span></Label>
+                  <Input id="co-products" value={productLicensed} onChange={e => setProductLicensed(e.target.value)} placeholder="Benchmarks, Insights" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="co-domains">Additional Domains <span className="text-muted-foreground text-xs">(comma-separated)</span></Label>
+                  <Input id="co-domains" value={domains} onChange={e => setDomains(e.target.value)} placeholder="acme.io, acme.net" />
+                </div>
+              </div>
+
+              <CustomFieldsForm objectType="company" values={cfValues} onChange={(id, v) => setCfValues(p => ({ ...p, [id]: v }))} />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="co-revenue">Est. Annual Revenue</Label>
-                <Input id="co-revenue" type="number" value={estimatedAnnualRevenue} onChange={e => setEstimatedAnnualRevenue(e.target.value)} placeholder="1000000" />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="co-employees">Number of Employees</Label>
-                <Input id="co-employees" type="number" value={numberOfEmployees} onChange={e => setNumberOfEmployees(e.target.value)} placeholder="250" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Account Owner</Label>
-                <Select value={assignedCsmId} onValueChange={setAssignedCsmId}>
-                  <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Unassigned</SelectItem>
-                    {teamMembers.map(m => <SelectItem key={m.id} value={m.id}>{m.name || m.email}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="co-industry">Industry</Label>
-                <Input id="co-industry" value={industry} onChange={e => setIndustry(e.target.value)} placeholder="SaaS, Finance…" />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="co-size">Company Size</Label>
-                <Input id="co-size" value={size} onChange={e => setSize(e.target.value)} placeholder="1-10, 50-200…" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="co-phone">Phone</Label>
-                <Input id="co-phone" value={phone} onChange={e => setPhone(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="co-city">City</Label>
-                <Input id="co-city" value={city} onChange={e => setCity(e.target.value)} />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="co-country">Country</Label>
-              <Input id="co-country" value={country} onChange={e => setCountry(e.target.value)} />
-            </div>
-            <CustomFieldsForm objectType="company" values={cfValues} onChange={(id, v) => setCfValues(p => ({ ...p, [id]: v }))} />
-            <DialogFooter className="gap-2 sm:gap-0">
+
+            <DialogFooter className="px-6 py-4 border-t border-border shrink-0 gap-2 sm:gap-0">
               {isEdit && isAdmin && (
                 <Button type="button" variant="destructive" size="icon" className="mr-auto" onClick={() => setShowDelete(true)}>
                   <Trash2 className="h-4 w-4" />
