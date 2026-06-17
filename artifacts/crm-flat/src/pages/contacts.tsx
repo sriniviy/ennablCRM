@@ -203,7 +203,9 @@ export function ContactsPage() {
   const openNew = () => { setEditContact(undefined); setDialogOpen(true); };
   const openEdit = (c: ContactWithRelations) => { setEditContact(c); setDialogOpen(true); };
 
-  const contacts = data?.data ?? [];
+  const contacts = [...(data?.data ?? [])].sort((a, b) =>
+    `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`)
+  );
 
   const { data: me } = useGetMe();
   const isAdmin = me?.role === "ADMIN";

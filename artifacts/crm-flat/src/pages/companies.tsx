@@ -213,7 +213,7 @@ export function CompaniesPage() {
   const openNew = () => { setEditCompany(undefined); setDialogOpen(true); };
   const openEdit = (c: Company) => { setEditCompany(c); setDialogOpen(true); };
 
-  const companies = data?.data ?? [];
+  const companies = [...(data?.data ?? [])].sort((a, b) => a.name.localeCompare(b.name));
 
   const { data: me } = useGetMe();
   const isAdmin = me?.role === "ADMIN";

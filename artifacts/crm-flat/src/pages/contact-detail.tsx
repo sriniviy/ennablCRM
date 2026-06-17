@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Mail, Phone, Building2, Calendar, MessageSquare, Linkedin, CheckSquare, Pencil, CopyCheck, Send, Eye, MousePointerClick, BellOff, RefreshCw } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Building2, Calendar, MessageSquare, Linkedin, CheckSquare, Pencil, CopyCheck, Send, Eye, MousePointerClick, BellOff, RefreshCw, Sparkles } from "lucide-react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { NotesFeed } from "@/components/notes/notes-feed";
@@ -29,6 +29,44 @@ import { AiSuggestions } from "@/components/ai/ai-suggestions";
 import { ActivitySummary } from "@/components/ai/activity-summary";
 import { AttachmentsPanel } from "@/components/attachments/attachments-panel";
 import { useContactCampaigns, useSetContactSubscription } from "@/hooks/use-contact-campaigns";
+
+function buildContactSummary(
+  firstName: string,
+  lastName: string,
+  status: string,
+  companyName: string | undefined,
+  activities: any[],
+  deals: any[],
+): string {
+  const name = `${firstName} ${lastName}`.trim();
+  const n = activities.length;
+
+  const typeCounts: Record<string, number> = {};
+  const sorted = [...activities].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  sorted.forEach(a => {
+    const t = a.type === 'NOTE' ? 'notes' : a.type === 'CALL' ? 'calls' : a.type.startsWith('EMAIL') ? 'emails' : a.type === 'MEETING' ? 'meetings' : 'interactions';
+    typeCounts[t] = (typeCounts[t] || 0) + 1;
+  });
+  const breakdown = Object.entries(typeCounts).map(([t, c]) => `${c} ${c === 1 ? t.replace(/s$/, '') : t}`).join(', ');
+  const last = sorted[0];
+  const lastStr = last
+    ? ` Most recently, a ${last.type.replace(/_/g, ' ').toLowerCase().replace('email sent', 'email')} — "${last.title}" — was logged on ${new Date(last.createdAt).toLocaleDateString()}.`
+    : '';
+
+  const companyStr = companyName ? ` at ${companyName}` : '';
+  const statusStr = status ? status.charAt(0) + status.slice(1).toLowerCase() : '';
+  const dealCount = deals.length;
+  const totalValue = deals.reduce((s, d) => s + (d.value || 0), 0);
+  const dealStr = dealCount > 0
+    ? ` There ${dealCount === 1 ? 'is' : 'are'} ${dealCount} deal${dealCount !== 1 ? 's' : ''} in the pipeline${totalValue > 0 ? ` worth ${formatCurrency(totalValue)}` : ''}.`
+    : '';
+
+  if (n === 0) {
+    return `${name} is a ${statusStr} contact${companyStr}. No activities have been recorded yet — consider logging a call, note, or email to get started.${dealStr}`;
+  }
+
+  return `${name} is a ${statusStr} contact${companyStr} with ${n} interaction${n !== 1 ? 's' : ''} on record — ${breakdown}.${lastStr}${dealStr}`;
+}
 
 function NotesTabLabel({ entityType, entityId }: { entityType: string; entityId: string }) {
   const { data } = useNotesCount(entityType, entityId);
@@ -475,6 +513,58 @@ export function ContactDetailPage() {
         <div className="grid gap-6 md:grid-cols-3">
           {/* Left Column - Info */}
           <div className="space-y-6 md:col-span-1">
+
+            {/* 1 — Latest Summary */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  Latest Summary
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  {buildContactSummary(
+                    contact.firstName,
+                    contact.lastName,
+                    contact.status,
+                    contact.company?.name,
+                    contact.activities ?? [],
+                    contact.deals ?? [],
+                  )}
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* 2 — Pipeline Snapshot */}
+            {(contact.deals ?? []).length > 0 && (() => {
+              const deals = contact.deals ?? [];
+              const totalValue = deals.reduce((s: number, d: any) => s + (d.value || 0), 0);
+              const openDeals = deals.filter((d: any) => d.stage?.name !== 'Won' && d.stage?.name !== 'Lost');
+              return (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Pipeline Snapshot</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-primary">{formatCurrency(totalValue)}</div>
+                    <p className="text-xs text-muted-foreground mt-1">Total deal value</p>
+                    <div className="mt-3 pt-3 border-t grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <p className="text-muted-foreground text-xs">Open deals</p>
+                        <p className="font-semibold">{openDeals.length}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-xs">Total deals</p>
+                        <p className="font-semibold">{deals.length}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
+            {/* 3 — Contact Info */}
             <CollapsibleCard title="Contact Info" previewHeight={120} contentClassName="space-y-4">
               {contact.email && (
                 <div className="flex items-center gap-3 text-sm">
@@ -520,45 +610,122 @@ export function ContactDetailPage() {
                   <CardTitle className="text-lg">Tags</CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-wrap gap-2">
-                  {contact.tags.map(tag => (
+                  {contact.tags.map((tag: string) => (
                     <Badge key={tag} variant="secondary">{tag}</Badge>
                   ))}
                 </CardContent>
               </Card>
             )}
 
-            <CustomFieldsSection objectType="contact" recordId={id} />
             <AiSuggestions objectType="contact" recordId={id} contactId={id} />
+            <CustomFieldsSection objectType="contact" recordId={id} />
           </div>
 
           {/* Right Column - Tabs */}
           <div className="md:col-span-2">
-            <Tabs defaultValue="activity">
-              <TabsList className="w-full justify-start border-b rounded-none bg-transparent h-auto p-0">
-                <TabsTrigger value="activity" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
-                  Activity
-                </TabsTrigger>
-                <TabsTrigger value="notes" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
-                  <NotesTabLabel entityType="contact" entityId={id} />
-                </TabsTrigger>
-                <TabsTrigger value="deals" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
-                  Deals ({contact.deals?.length || 0})
-                </TabsTrigger>
-                <TabsTrigger value="tasks" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
-                  Tasks ({contact.tasks?.length || 0})
-                </TabsTrigger>
+            <Tabs defaultValue="history">
+              <TabsList className="w-full justify-start border-b rounded-none bg-transparent h-auto p-0 flex-wrap">
                 <TabsTrigger value="history" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
-                  History
+                  All Activities
                 </TabsTrigger>
                 <TabsTrigger value="campaigns" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   Campaigns
                 </TabsTrigger>
+                <TabsTrigger value="deals" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
+                  Deals ({contact.deals?.length || 0})
+                </TabsTrigger>
+                <TabsTrigger value="email" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
+                  Email
+                </TabsTrigger>
                 <TabsTrigger value="files" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   Files
                 </TabsTrigger>
+                <TabsTrigger value="notes" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
+                  <NotesTabLabel entityType="contact" entityId={id} />
+                </TabsTrigger>
+                <TabsTrigger value="tasks" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
+                  Tasks ({contact.tasks?.length || 0})
+                </TabsTrigger>
               </TabsList>
-              
-              <TabsContent value="activity" className="pt-6">
+
+              {/* ACTIVITIES — timeline + audit trail */}
+              <TabsContent value="history" className="pt-6">
+                <div className="space-y-4">
+                  {contact.activities && contact.activities.length > 0 ? (
+                    <div className="space-y-4">
+                      {[...contact.activities].sort((a, b) => (a.title || '').localeCompare(b.title || '')).map(activity => (
+                        <div key={activity.id} className="flex gap-4 p-4 border rounded-lg bg-card">
+                          <div className="mt-1">
+                            {activity.type === 'NOTE' ? <MessageSquare className="h-5 w-5 text-blue-500" /> :
+                             activity.type === 'CALL' ? <Phone className="h-5 w-5 text-green-500" /> :
+                             activity.type.startsWith('EMAIL') ? <Mail className="h-5 w-5 text-purple-500" /> :
+                             <Calendar className="h-5 w-5 text-muted-foreground" />}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium">{activity.title}</p>
+                            {activity.emailSubject && (
+                              <p className="text-sm mt-1"><span className="text-muted-foreground">Subject: </span>{activity.emailSubject}</p>
+                            )}
+                            {activity.description && <p className="text-sm mt-1 text-muted-foreground">{activity.description}</p>}
+                            {activity.emailBody && (
+                              <p className="text-sm mt-1 text-muted-foreground whitespace-pre-wrap">{activity.emailBody}</p>
+                            )}
+                            <ActivitySummary
+                              activityId={activity.id}
+                              type={activity.type}
+                              summary={activity.aiSummary}
+                              onUpdated={() => queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) })}
+                            />
+                            <p className="text-xs text-muted-foreground mt-2">
+                              {new Date(activity.createdAt).toLocaleString()}
+                              {activity.endDate ? ` · ends ${new Date(activity.endDate).toLocaleString()}` : ""}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">No activities recorded yet.</p>
+                  )}
+                </div>
+
+                <div className="mt-10 pt-8 border-t">
+                  <h3 className="text-lg font-semibold mb-4">Audit Trail</h3>
+                  <AuditHistory objectType="contact" objectId={contact.id} />
+                </div>
+              </TabsContent>
+
+              {/* NOTES */}
+              <TabsContent value="notes" className="pt-6">
+                <NotesFeed entityType="contact" entityId={id} />
+              </TabsContent>
+
+              {/* DEALS */}
+              <TabsContent value="deals" className="pt-6">
+                {contact.deals && contact.deals.length > 0 ? (
+                  <div className="space-y-4">
+                    {[...contact.deals].sort((a, b) => a.title.localeCompare(b.title)).map(deal => (
+                      <Card key={deal.id}>
+                        <CardContent className="p-4 flex items-center justify-between">
+                          <div>
+                            <p className="font-medium"><Link href={`/deals`} className="hover:underline">{deal.title}</Link></p>
+                            <p className="text-sm text-muted-foreground">Stage: {deal.stage.name}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold">{formatCurrency(deal.value || 0)}</p>
+                            <p className="text-xs text-muted-foreground">{deal.probability}% probability</p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-sm">No deals associated with this contact.</p>
+                )}
+              </TabsContent>
+
+              {/* TASKS — includes Log Activity form */}
+              <TabsContent value="tasks" className="pt-6 space-y-8">
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-lg">Log Activity</CardTitle>
@@ -602,9 +769,9 @@ export function ContactDetailPage() {
                       )}
                       <div className="space-y-1.5">
                         <Label htmlFor="act-note">Notes</Label>
-                        <Textarea 
+                        <Textarea
                           id="act-note"
-                          placeholder="Details about this activity..." 
+                          placeholder="Details about this activity..."
                           value={note}
                           onChange={(e) => setNote(e.target.value)}
                           className="resize-none"
@@ -616,8 +783,8 @@ export function ContactDetailPage() {
                       </div>
                       <CustomFieldsForm objectType="activity" values={actCfValues} onChange={(fid, v) => setActCfValues(p => ({ ...p, [fid]: v }))} />
                       <div className="flex justify-end">
-                        <Button 
-                          onClick={handleLogActivity} 
+                        <Button
+                          onClick={handleLogActivity}
                           disabled={!canLog || createActivity.isPending}
                         >
                           {createActivity.isPending ? "Saving..." : "Log Activity"}
@@ -626,101 +793,80 @@ export function ContactDetailPage() {
                     </div>
                   </CardContent>
                 </Card>
-                
-                <div className="mt-8 space-y-4">
-                  <h3 className="text-lg font-semibold">Timeline</h3>
-                  {contact.activities && contact.activities.length > 0 ? (
-                    <div className="space-y-4">
-                      {contact.activities.map(activity => (
-                        <div key={activity.id} className="flex gap-4 p-4 border rounded-lg bg-card">
-                          <div className="mt-1">
-                            {activity.type === 'NOTE' ? <MessageSquare className="h-5 w-5 text-blue-500" /> :
-                             activity.type === 'CALL' ? <Phone className="h-5 w-5 text-green-500" /> :
-                             <Calendar className="h-5 w-5 text-muted-foreground" />}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="font-medium">{activity.title}</p>
-                            {activity.emailSubject && (
-                              <p className="text-sm mt-1"><span className="text-muted-foreground">Subject: </span>{activity.emailSubject}</p>
-                            )}
-                            {activity.description && <p className="text-sm mt-1 text-muted-foreground">{activity.description}</p>}
-                            {activity.emailBody && (
-                              <p className="text-sm mt-1 text-muted-foreground whitespace-pre-wrap">{activity.emailBody}</p>
-                            )}
-                            <ActivitySummary
-                              activityId={activity.id}
-                              type={activity.type}
-                              summary={activity.aiSummary}
-                              onUpdated={() => queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) })}
-                            />
-                            <p className="text-xs text-muted-foreground mt-2">
-                              {new Date(activity.createdAt).toLocaleString()}
-                              {activity.endDate ? ` · ends ${new Date(activity.endDate).toLocaleString()}` : ""}
-                            </p>
+
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Tasks</h3>
+                  {contact.tasks && contact.tasks.length > 0 ? (
+                    <div className="space-y-3">
+                      {[...contact.tasks].sort((a, b) => a.title.localeCompare(b.title)).map(task => (
+                        <div key={task.id} className="flex items-center gap-3 p-3 border rounded-lg">
+                          <CheckSquare className={`h-5 w-5 ${task.completed ? 'text-green-500' : 'text-muted-foreground'}`} />
+                          <div className="flex-1">
+                            <p className={`font-medium ${task.completed ? 'line-through text-muted-foreground' : ''}`}>{task.title}</p>
+                            {task.dueDate && <p className="text-xs text-muted-foreground">Due: {new Date(task.dueDate).toLocaleDateString()}</p>}
                           </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-muted-foreground text-sm">No activity recorded yet.</p>
+                    <p className="text-muted-foreground text-sm">No tasks for this contact.</p>
                   )}
                 </div>
               </TabsContent>
 
-              <TabsContent value="notes" className="pt-6">
-                <NotesFeed entityType="contact" entityId={id} />
-              </TabsContent>
-
-              <TabsContent value="deals" className="pt-6">
-                {contact.deals && contact.deals.length > 0 ? (
-                  <div className="space-y-4">
-                    {contact.deals.map(deal => (
-                      <Card key={deal.id}>
-                        <CardContent className="p-4 flex items-center justify-between">
-                          <div>
-                            <p className="font-medium"><Link href={`/deals`} className="hover:underline">{deal.title}</Link></p>
-                            <p className="text-sm text-muted-foreground">Stage: {deal.stage.name}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-bold">{formatCurrency(deal.value || 0)}</p>
-                            <p className="text-xs text-muted-foreground">{deal.probability}% probability</p>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground text-sm">No deals associated with this contact.</p>
-                )}
-              </TabsContent>
-
-              <TabsContent value="tasks" className="pt-6">
-                {contact.tasks && contact.tasks.length > 0 ? (
-                  <div className="space-y-4">
-                    {contact.tasks.map(task => (
-                      <div key={task.id} className="flex items-center gap-3 p-3 border rounded-lg">
-                        <CheckSquare className={`h-5 w-5 ${task.completed ? 'text-green-500' : 'text-muted-foreground'}`} />
-                        <div className="flex-1">
-                          <p className={`font-medium ${task.completed ? 'line-through text-muted-foreground' : ''}`}>{task.title}</p>
-                          {task.dueDate && <p className="text-xs text-muted-foreground">Due: {new Date(task.dueDate).toLocaleDateString()}</p>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground text-sm">No tasks for this contact.</p>
-                )}
-              </TabsContent>
-
-              <TabsContent value="history" className="pt-6">
-                <AuditHistory objectType="contact" objectId={contact.id} />
-              </TabsContent>
-
+              {/* CAMPAIGNS */}
               <TabsContent value="campaigns" className="pt-6">
                 <ContactCampaignsTab contactId={id} canEdit={me?.role === "ADMIN" || me?.role === "MEMBER"} />
               </TabsContent>
 
+              {/* EMAIL — synced emails */}
+              <TabsContent value="email" className="pt-6">
+                {(() => {
+                  const emails = (contact.activities ?? []).filter(a => a.type.startsWith("EMAIL"));
+                  if (emails.length === 0) {
+                    return (
+                      <div className="text-center py-12 text-muted-foreground text-sm space-y-1">
+                        <Mail className="h-8 w-8 mx-auto mb-3 opacity-30" />
+                        <p className="font-medium">No emails synced yet</p>
+                        <p>Emails will appear here automatically once Gmail sync is active.</p>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="space-y-4">
+                      {emails.map(activity => (
+                        <div key={activity.id} className="p-4 border rounded-lg bg-card space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Mail className="h-4 w-4 text-purple-500 shrink-0" />
+                              <p className="font-medium truncate">{activity.emailSubject || activity.title}</p>
+                            </div>
+                            <p className="text-xs text-muted-foreground shrink-0">{new Date(activity.createdAt).toLocaleString()}</p>
+                          </div>
+                          {activity.emailBody && (
+                            <p className="text-sm text-muted-foreground whitespace-pre-wrap pl-6 line-clamp-4">{activity.emailBody}</p>
+                          )}
+                          {activity.description && !activity.emailBody && (
+                            <p className="text-sm text-muted-foreground pl-6">{activity.description}</p>
+                          )}
+                          <ActivitySummary
+                            activityId={activity.id}
+                            type={activity.type}
+                            summary={activity.aiSummary}
+                            onUpdated={() => queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) })}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </TabsContent>
+
+              {/* FILES */}
               <TabsContent value="files" className="pt-6">
+                <p className="text-xs text-muted-foreground mb-4">
+                  Files uploaded here, or automatically synced from email attachments and deals.
+                </p>
                 <AttachmentsPanel objectType="contact" recordId={contact.id} />
               </TabsContent>
             </Tabs>
