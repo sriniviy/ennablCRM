@@ -6,7 +6,6 @@ import {
   Users,
   Building2,
   CircleDollarSign,
-  Activity,
   CheckSquare,
   Mail,
   BarChart2,
@@ -19,13 +18,17 @@ import {
   ClipboardCheck,
   Filter,
   SlidersHorizontal,
-  CalendarClock,
   Sparkles,
   ScrollText,
   ArrowDownToLine,
   Plug2,
   Bot,
+  Phone,
+  FileText,
+  Megaphone,
+  MessageSquare,
 } from "lucide-react";
+import { EnnablLogo } from "@/components/ennabl-logo";
 import { GlobalSearch } from "@/components/global-search";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -63,33 +66,35 @@ type NavGroup = {
 
 const navGroups: NavGroup[] = [
   {
-    label: "PIPELINE",
+    label: "GENERAL",
     items: [
       { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { name: "Deals", href: "/deals", icon: CircleDollarSign },
+      { name: "Needs Review", href: "/needs-review", icon: ClipboardCheck },
+      { name: "Reports", href: "/reports", icon: BarChart2 },
     ],
   },
   {
     label: "RECORDS",
     items: [
-      { name: "Contacts", href: "/contacts", icon: Users },
-      { name: "Needs Review", href: "/needs-review", icon: ClipboardCheck },
       { name: "Companies", href: "/companies", icon: Building2 },
+      { name: "Contacts", href: "/contacts", icon: Users },
+      { name: "Deals", href: "/deals", icon: CircleDollarSign },
+    ],
+  },
+  {
+    label: "ACTIVITIES",
+    items: [
+      { name: "Calls", href: "/activities?type=CALL", icon: Phone },
+      { name: "Emails", href: "/activities?type=EMAIL_SENT", icon: Mail },
+      { name: "Notes", href: "/activities?type=NOTE", icon: FileText },
       { name: "Tasks", href: "/tasks", icon: CheckSquare },
-      { name: "Activities", href: "/activities", icon: Activity },
     ],
   },
   {
     label: "ENGAGE",
     items: [
-      { name: "Campaigns", href: "/campaigns", icon: Mail },
+      { name: "Campaigns", href: "/campaigns", icon: Megaphone },
       { name: "Segments", href: "/segments", icon: Filter },
-    ],
-  },
-  {
-    label: "INSIGHTS",
-    items: [
-      { name: "Reports", href: "/reports", icon: BarChart2 },
     ],
   },
   {
@@ -101,11 +106,11 @@ const navGroups: NavGroup[] = [
   {
     label: "SETTINGS",
     items: [
-      { name: "Team", href: "/settings/team", icon: Users, adminOnly: true },
+      { name: "Teams", href: "/settings/team", icon: Users, adminOnly: true },
       { name: "Custom Fields", href: "/settings/custom-fields", icon: SlidersHorizontal, adminOnly: true },
-      { name: "Exports", href: "/settings/exports", icon: CalendarClock, adminOnly: true },
       { name: "AI Presets", href: "/settings/ai-presets", icon: Sparkles, adminOnly: true },
-      { name: "Audit Log", href: "/settings/audit-log", icon: ScrollText, adminOnly: true },
+      { name: "Audit Logs", href: "/settings/audit-log", icon: ScrollText, adminOnly: true },
+      { name: "Export", href: "/settings/exports", icon: MessageSquare, adminOnly: true },
       { name: "Import", href: "/settings/import", icon: ArrowDownToLine, adminOnly: true },
       { name: "Integrations", href: "/settings/integrations", icon: Plug2, adminOnly: true },
     ],
@@ -174,9 +179,13 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
             {collapsed && <div className="mb-1 border-t border-sidebar-border mx-1" />}
             <div className="space-y-0.5">
               {visible.map((item) => {
+                const itemPath = item.href.split("?")[0];
                 const isActive = item.exact
-                  ? location === item.href
-                  : location.startsWith(item.href);
+                  ? location === itemPath
+                  : location.startsWith(itemPath) && (
+                      !item.href.includes("?") ||
+                      (typeof window !== "undefined" && window.location.search === "?" + item.href.split("?")[1])
+                    );
                 const badge = getBadge(item.href);
 
                 if (collapsed) {
@@ -273,10 +282,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
           <div className="flex h-full flex-col border-r border-sidebar-border bg-sidebar">
             {/* Brand */}
             <div className="flex items-center gap-2 px-4 py-3 border-b border-sidebar-border">
-              <div className="flex h-6 w-6 items-center justify-center rounded bg-primary text-primary-foreground font-bold text-xs shrink-0">
-                M
-              </div>
-              <span className="text-sm font-bold tracking-tight">MyCRM</span>
+              <EnnablLogo collapsed={false} />
             </div>
             {/* Search */}
             <div className="px-3 py-2 border-b border-sidebar-border">
@@ -318,12 +324,10 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       >
         {/* Brand row */}
         <div className={`flex items-center border-b border-sidebar-border ${collapsed ? "px-2 py-3 flex-col gap-1" : "px-4 py-3 gap-2"}`}>
-          <div className="flex h-6 w-6 items-center justify-center rounded bg-primary text-primary-foreground font-bold text-xs shrink-0">
-            M
-          </div>
+          <EnnablLogo collapsed={collapsed} className="shrink-0" />
           {!collapsed && (
             <>
-              <span className="text-sm font-bold tracking-tight flex-1 min-w-0">MyCRM</span>
+              <span className="flex-1" />
               <Tooltip delayDuration={0}>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon" onClick={toggleTheme} className="h-6 w-6 shrink-0">
