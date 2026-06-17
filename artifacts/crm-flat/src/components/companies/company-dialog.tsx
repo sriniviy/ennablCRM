@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { useSessionToken } from "@/hooks/use-session-token";
 import {
   useCreateCompany, useUpdateCompany, useDeleteCompany, useGetMe,
   getListCompaniesQueryKey, getGetCompanyQueryKey,
-  useListCompanies,
   CompanyStatus, type Company,
 } from "@workspace/api-client-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -90,16 +90,17 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
   const [cfValues, setCfValues] = useState<Record<string, string | null>>({});
 
   const { data: teamMembers = [] } = useTeamMembers();
-  const { data: allCompanies } = useListCompanies({ page: 1, pageSize: 500 });
-  const memberOfOptions = useMemo(() => {
-    const set = new Set<string>(DEFAULT_MEMBER_OF);
-    for (const co of allCompanies?.data ?? []) {
-      for (const m of co.memberOf ?? []) {
-        if (m) set.add(m);
-      }
-    }
-    return Array.from(set).sort();
-  }, [allCompanies]);
+  const getToken = useSessionToken();
+  const { data: memberOfData } = useQuery<{ options: string[] }>({
+    queryKey: ["settings", "member-of"],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch("/api/settings/member-of", { headers: { Authorization: `Bearer ${token}` } });
+      return res.json();
+    },
+    staleTime: 60_000,
+  });
+  const memberOfOptions = memberOfData?.options ?? DEFAULT_MEMBER_OF;
   const create = useCreateCompany();
   const update = useUpdateCompany();
   const remove = useDeleteCompany();
@@ -252,7 +253,7 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
                   <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
                     <Command>
                       <CommandInput placeholder="Search or type new…" />
-                      <CommandList>
+                      <CommandList className="max-h-60 overflow-y-auto">
                         <CommandEmpty className="py-2 px-3 text-sm text-muted-foreground">No matches.</CommandEmpty>
                         <CommandGroup>
                           {memberOfOptions.map(opt => (

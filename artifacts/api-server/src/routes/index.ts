@@ -28,6 +28,7 @@ import segmentsRouter from "./segments";
 import messagesRouter from "./messages";
 import integrationsRouter from "./integrations";
 import automationsRouter from "./automations";
+import settingsRouter from "./settings";
 
 const router: IRouter = Router();
 
@@ -60,5 +61,6 @@ router.use("/migrate", migrateRouter);
 router.use("/messages", messagesRouter);
 router.use("/integrations", integrationsRouter);
 router.use("/automations", automationsRouter);
+router.use("/settings", settingsRouter);
 
 export default router;
