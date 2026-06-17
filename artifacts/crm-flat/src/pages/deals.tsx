@@ -191,9 +191,9 @@ export function DealsPage() {
 
   const weightedValue = allDeals.reduce((sum, d) => sum + (d.value || 0) * ((d.probability ?? 0) / 100), 0);
 
-  const openDeals = (columns ?? []).filter(c => !/won|lost|closed/i.test(c.stage.name)).flatMap(c => c.deals);
-  const closedDeals = (columns ?? []).filter(c => /won|closed/i.test(c.stage.name)).flatMap(c => c.deals);
-  const newDeals = (columns ?? []).filter(c => /\bnew\b/i.test(c.stage.name)).flatMap(c => c.deals);
+  const openDeals = (columns ?? []).filter(c => !/^won$|^lost$/i.test(c.stage.name)).flatMap(c => c.deals);
+  const closedDeals = (columns ?? []).filter(c => /^won$/i.test(c.stage.name)).flatMap(c => c.deals);
+  const newDeals = (columns ?? []).filter(c => /^discovery$/i.test(c.stage.name)).flatMap(c => c.deals);
 
   const openValue = openDeals.reduce((sum, d) => sum + (d.value || 0), 0);
   const closedValue = closedDeals.reduce((sum, d) => sum + (d.value || 0), 0);
@@ -244,7 +244,7 @@ export function DealsPage() {
               { label: "Weighted Deal Amount", value: weightedValue, count: totalDeals },
               { label: "Open Deal Amount", value: openValue, count: openDeals.length },
               { label: "Closed Deal Amount", value: closedValue, count: closedDeals.length },
-              { label: "New Deal Amount", value: newValue, count: newDeals.length },
+              { label: "Discovery Amount", value: newValue, count: newDeals.length },
             ].map((stat, i) => (
               <div key={stat.label} className={`px-3 py-2 ${i < 5 ? "border-r border-border" : ""}`}>
                 <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
