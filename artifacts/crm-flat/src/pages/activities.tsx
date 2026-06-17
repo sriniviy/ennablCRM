@@ -1,5 +1,4 @@
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
-import { useState, useEffect } from "react";
 
 import { useListActivities, ActivityType, type ActivityWithRelations } from "@workspace/api-client-react";
 import { Link } from "wouter";
@@ -44,19 +43,10 @@ const CARD_FIELDS: CardField<ActivityWithRelations>[] = [
 export function ActivitiesPage() {
   const { get, set } = useUrlFilters();
 
-  const [typeFilter, setTypeFilter] = useState(() => get("type") || "ALL");
-  const [dateFrom, setDateFrom] = useState(() => get("dateFrom"));
-  const [dateTo, setDateTo] = useState(() => get("dateTo"));
-  const [view, setView] = useState<ViewMode>(() => (get("view") === "cards" ? "cards" : "table"));
-
-  useEffect(() => {
-    set({
-      type: typeFilter,
-      dateFrom,
-      dateTo,
-      view: view === "cards" ? "cards" : undefined,
-    });
-  }, [typeFilter, dateFrom, dateTo, view, set]);
+  const typeFilter = get("type") || "ALL";
+  const dateFrom = get("dateFrom");
+  const dateTo = get("dateTo");
+  const view: ViewMode = get("view") === "cards" ? "cards" : "table";
 
   const { data, isLoading } = useListActivities({
     type: typeFilter !== "ALL" ? typeFilter as typeof ActivityType[keyof typeof ActivityType] : undefined,
@@ -81,7 +71,7 @@ export function ActivitiesPage() {
         <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Type</Label>
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <Select value={typeFilter} onValueChange={val => set({ type: val })}>
               <SelectTrigger className="w-48" data-testid="select-activity-type"><SelectValue placeholder="Type" /></SelectTrigger>
               <SelectContent>
                 {TYPES.map(t => <SelectItem key={t} value={t}>{t === "ALL" ? "All types" : fmtType(t)}</SelectItem>)}
@@ -94,7 +84,7 @@ export function ActivitiesPage() {
               type="date"
               className="w-40"
               value={dateFrom}
-              onChange={e => setDateFrom(e.target.value)}
+              onChange={e => set({ dateFrom: e.target.value })}
               data-testid="input-activity-from"
             />
           </div>
@@ -104,12 +94,12 @@ export function ActivitiesPage() {
               type="date"
               className="w-40"
               value={dateTo}
-              onChange={e => setDateTo(e.target.value)}
+              onChange={e => set({ dateTo: e.target.value })}
               data-testid="input-activity-to"
             />
           </div>
           <div className="ml-auto">
-            <ViewToggle value={view} onChange={setView} />
+            <ViewToggle value={view} onChange={v => set({ view: v === "cards" ? "cards" : undefined })} />
           </div>
         </div>
 
