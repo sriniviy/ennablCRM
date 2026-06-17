@@ -193,7 +193,7 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[560px]">
+        <DialogContent className="sm:max-w-[560px] overflow-visible">
           <DialogHeader>
             <DialogTitle>{isEdit ? "Edit Company" : "New Company"}</DialogTitle>
           </DialogHeader>
@@ -235,42 +235,48 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
               </div>
               <div className="space-y-1.5">
                 <Label>Member Of</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  role="combobox"
-                  className="w-full justify-between font-normal"
-                  onClick={() => setMemberOfOpen(o => !o)}
-                >
-                  {memberOf.length > 0 ? `${memberOf.length} selected` : "Select networks…"}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-                {memberOfOpen && (
-                  <div className="rounded-md border bg-popover shadow-sm">
-                    <Command>
-                      <CommandInput placeholder="Search networks…" />
-                      <CommandList>
-                        <CommandEmpty className="py-2 px-3 text-sm text-muted-foreground">No matches.</CommandEmpty>
-                        <CommandGroup>
-                          {memberOfOptions.map(opt => (
-                            <CommandItem
-                              key={opt}
-                              value={opt}
-                              onSelect={() =>
-                                setMemberOf(prev =>
-                                  prev.includes(opt) ? prev.filter(v => v !== opt) : [...prev, opt]
-                                )
-                              }
-                            >
-                              <Check className={`mr-2 h-4 w-4 ${memberOf.includes(opt) ? "opacity-100" : "opacity-0"}`} />
-                              {opt}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </div>
-                )}
+                <div className="relative">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between font-normal"
+                    onClick={() => setMemberOfOpen(o => !o)}
+                  >
+                    {memberOf.length > 0 ? `${memberOf.length} selected` : "Select networks…"}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                  {memberOfOpen && (
+                    <>
+                      {/* invisible overlay captures clicks outside to close */}
+                      <div className="fixed inset-0 z-40" onClick={() => setMemberOfOpen(false)} />
+                      <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border bg-popover shadow-md">
+                        <Command>
+                          <CommandInput placeholder="Search networks…" />
+                          <CommandList>
+                            <CommandEmpty className="py-2 px-3 text-sm text-muted-foreground">No matches.</CommandEmpty>
+                            <CommandGroup>
+                              {memberOfOptions.map(opt => (
+                                <CommandItem
+                                  key={opt}
+                                  value={opt}
+                                  onSelect={() =>
+                                    setMemberOf(prev =>
+                                      prev.includes(opt) ? prev.filter(v => v !== opt) : [...prev, opt]
+                                    )
+                                  }
+                                >
+                                  <Check className={`mr-2 h-4 w-4 ${memberOf.includes(opt) ? "opacity-100" : "opacity-0"}`} />
+                                  {opt}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </div>
+                    </>
+                  )}
+                </div>
                 {memberOf.length > 0 && (
                   <div className="flex flex-wrap gap-1 pt-1">
                     {memberOf.map(m => (

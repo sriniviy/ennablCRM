@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { CustomFieldsSettings } from "@/components/custom-fields/custom-fields-settings";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +11,41 @@ import { useSessionToken } from "@/hooks/use-session-token";
 import { useGetMe } from "@workspace/api-client-react";
 import { Network, Plus, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+const DEFAULT_MEMBER_OF = [
+  "Acrisure",
+  "Afore",
+  "ALKEME",
+  "Alera",
+  "Alliant",
+  "Applied Reference Client",
+  "Association of Risk Managers Northwest",
+  "Assurex",
+  "BIGN",
+  "BroadStreet",
+  "CIAB",
+  "Fortified",
+  "Gallagher",
+  "HUB",
+  "HighStreet",
+  "InCite",
+  "Insurors Group",
+  "Intersure",
+  "Iroquois Group",
+  "ISU",
+  "Keystone",
+  "Marsh/MMA",
+  "MarshBerry Connect",
+  "New Demos Challenge 26",
+  "Outmarket Customer",
+  "PacWest",
+  "Patriot",
+  "Reagan Survey",
+  "RiskProNet",
+  "Top 100 Target List",
+  "USI",
+  "Vertafore Reference Customer",
+];
 
 function MemberOfSettings() {
   const getToken = useSessionToken();
@@ -26,11 +61,13 @@ function MemberOfSettings() {
     queryFn: async () => {
       const token = await getToken();
       const res = await fetch("/api/settings/member-of", { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error("Failed to load");
       return res.json();
     },
   });
 
-  const options = data?.options ?? [];
+  // Fall back to the hardcoded defaults so the list is never empty on load
+  const options: string[] = data?.options?.length ? data.options : DEFAULT_MEMBER_OF;
 
   const save = useMutation({
     mutationFn: async (newOptions: string[]) => {
@@ -40,6 +77,7 @@ function MemberOfSettings() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ options: newOptions }),
       });
+      if (!res.ok) throw new Error("Failed to save");
       return res.json();
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["settings", "member-of"] }),
@@ -72,7 +110,7 @@ function MemberOfSettings() {
       <CardContent className="space-y-4">
         {isLoading ? (
           <div className="flex flex-wrap gap-2">
-            {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-6 w-24 rounded-full" />)}
+            {[...Array(8)].map((_, i) => <Skeleton key={i} className="h-7 w-28 rounded-full" />)}
           </div>
         ) : (
           <div className="flex flex-wrap gap-2">
@@ -81,6 +119,7 @@ function MemberOfSettings() {
                 {opt}
                 {isAdmin && (
                   <button
+                    type="button"
                     onClick={() => handleRemove(opt)}
                     className="rounded-full hover:text-destructive transition-colors"
                     title={`Remove ${opt}`}
@@ -90,13 +129,10 @@ function MemberOfSettings() {
                 )}
               </Badge>
             ))}
-            {options.length === 0 && (
-              <p className="text-sm text-muted-foreground">No members added yet.</p>
-            )}
           </div>
         )}
         {isAdmin && (
-          <div className="flex gap-2 pt-2">
+          <div className="flex gap-2 pt-1 border-t">
             <Input
               ref={inputRef}
               placeholder="Add a network or group…"
