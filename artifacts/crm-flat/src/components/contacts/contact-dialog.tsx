@@ -27,6 +27,7 @@ interface ContactDialogProps {
 
 const STATUSES = Object.values(ContactStatus);
 const REVIEW_STATUSES = Object.values(ReviewStatus);
+const toLabel = (s: string) => s.replace(/_/g, " ").toLowerCase().replace(/^\w/, c => c.toUpperCase());
 
 export function ContactDialog({ open, onOpenChange, contact }: ContactDialogProps) {
   const qc = useQueryClient();
@@ -190,7 +191,7 @@ export function ContactDialog({ open, onOpenChange, contact }: ContactDialogProp
                   <Select value={status} onValueChange={setStatus}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                      {STATUSES.map(s => <SelectItem key={s} value={s}>{toLabel(s)}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -199,7 +200,7 @@ export function ContactDialog({ open, onOpenChange, contact }: ContactDialogProp
                   <Select value={reviewStatus} onValueChange={setReviewStatus}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {REVIEW_STATUSES.map(s => <SelectItem key={s} value={s}>{s.replace(/_/g, " ")}</SelectItem>)}
+                      {REVIEW_STATUSES.map(s => <SelectItem key={s} value={s}>{toLabel(s)}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
