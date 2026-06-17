@@ -210,7 +210,7 @@ export function CompanyDetailPage() {
           {/* Right Column - Tabs */}
           <div className="md:col-span-2">
             <Tabs defaultValue="contacts">
-              <TabsList className="w-full justify-start border-b rounded-none bg-transparent h-auto p-0">
+              <TabsList className="w-full justify-start border-b rounded-none bg-transparent h-auto p-0 flex-wrap">
                 <TabsTrigger value="contacts" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   Contacts ({company.contacts?.length || 0})
                 </TabsTrigger>
@@ -284,6 +284,9 @@ export function CompanyDetailPage() {
                 <AuditHistory objectType="company" objectId={id} />
               </TabsContent>
               <TabsContent value="files" className="pt-6">
+                <p className="text-xs text-muted-foreground mb-4">
+                  Files uploaded here, or automatically synced from email attachments and deals.
+                </p>
                 <AttachmentsPanel objectType="company" recordId={id} />
               </TabsContent>
             </Tabs>

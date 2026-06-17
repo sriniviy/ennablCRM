@@ -533,10 +533,10 @@ export function ContactDetailPage() {
 
           {/* Right Column - Tabs */}
           <div className="md:col-span-2">
-            <Tabs defaultValue="activity">
-              <TabsList className="w-full justify-start border-b rounded-none bg-transparent h-auto p-0">
-                <TabsTrigger value="activity" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
-                  Activity
+            <Tabs defaultValue="history">
+              <TabsList className="w-full justify-start border-b rounded-none bg-transparent h-auto p-0 flex-wrap">
+                <TabsTrigger value="history" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
+                  History
                 </TabsTrigger>
                 <TabsTrigger value="notes" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   <NotesTabLabel entityType="contact" entityId={id} />
@@ -547,18 +547,96 @@ export function ContactDetailPage() {
                 <TabsTrigger value="tasks" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   Tasks ({contact.tasks?.length || 0})
                 </TabsTrigger>
-                <TabsTrigger value="history" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
-                  History
-                </TabsTrigger>
                 <TabsTrigger value="campaigns" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   Campaigns
+                </TabsTrigger>
+                <TabsTrigger value="email" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
+                  Email
                 </TabsTrigger>
                 <TabsTrigger value="files" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   Files
                 </TabsTrigger>
               </TabsList>
-              
-              <TabsContent value="activity" className="pt-6">
+
+              {/* HISTORY — timeline + audit trail */}
+              <TabsContent value="history" className="pt-6">
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold">Timeline</h3>
+                  {contact.activities && contact.activities.length > 0 ? (
+                    <div className="space-y-4">
+                      {contact.activities.map(activity => (
+                        <div key={activity.id} className="flex gap-4 p-4 border rounded-lg bg-card">
+                          <div className="mt-1">
+                            {activity.type === 'NOTE' ? <MessageSquare className="h-5 w-5 text-blue-500" /> :
+                             activity.type === 'CALL' ? <Phone className="h-5 w-5 text-green-500" /> :
+                             activity.type.startsWith('EMAIL') ? <Mail className="h-5 w-5 text-purple-500" /> :
+                             <Calendar className="h-5 w-5 text-muted-foreground" />}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium">{activity.title}</p>
+                            {activity.emailSubject && (
+                              <p className="text-sm mt-1"><span className="text-muted-foreground">Subject: </span>{activity.emailSubject}</p>
+                            )}
+                            {activity.description && <p className="text-sm mt-1 text-muted-foreground">{activity.description}</p>}
+                            {activity.emailBody && (
+                              <p className="text-sm mt-1 text-muted-foreground whitespace-pre-wrap">{activity.emailBody}</p>
+                            )}
+                            <ActivitySummary
+                              activityId={activity.id}
+                              type={activity.type}
+                              summary={activity.aiSummary}
+                              onUpdated={() => queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) })}
+                            />
+                            <p className="text-xs text-muted-foreground mt-2">
+                              {new Date(activity.createdAt).toLocaleString()}
+                              {activity.endDate ? ` · ends ${new Date(activity.endDate).toLocaleString()}` : ""}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">No activities recorded yet.</p>
+                  )}
+                </div>
+
+                <div className="mt-10 pt-8 border-t">
+                  <h3 className="text-lg font-semibold mb-4">Audit Trail</h3>
+                  <AuditHistory objectType="contact" objectId={contact.id} />
+                </div>
+              </TabsContent>
+
+              {/* NOTES */}
+              <TabsContent value="notes" className="pt-6">
+                <NotesFeed entityType="contact" entityId={id} />
+              </TabsContent>
+
+              {/* DEALS */}
+              <TabsContent value="deals" className="pt-6">
+                {contact.deals && contact.deals.length > 0 ? (
+                  <div className="space-y-4">
+                    {contact.deals.map(deal => (
+                      <Card key={deal.id}>
+                        <CardContent className="p-4 flex items-center justify-between">
+                          <div>
+                            <p className="font-medium"><Link href={`/deals`} className="hover:underline">{deal.title}</Link></p>
+                            <p className="text-sm text-muted-foreground">Stage: {deal.stage.name}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold">{formatCurrency(deal.value || 0)}</p>
+                            <p className="text-xs text-muted-foreground">{deal.probability}% probability</p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-sm">No deals associated with this contact.</p>
+                )}
+              </TabsContent>
+
+              {/* TASKS — includes Log Activity form */}
+              <TabsContent value="tasks" className="pt-6 space-y-8">
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-lg">Log Activity</CardTitle>
@@ -602,9 +680,9 @@ export function ContactDetailPage() {
                       )}
                       <div className="space-y-1.5">
                         <Label htmlFor="act-note">Notes</Label>
-                        <Textarea 
+                        <Textarea
                           id="act-note"
-                          placeholder="Details about this activity..." 
+                          placeholder="Details about this activity..."
                           value={note}
                           onChange={(e) => setNote(e.target.value)}
                           className="resize-none"
@@ -616,8 +694,8 @@ export function ContactDetailPage() {
                       </div>
                       <CustomFieldsForm objectType="activity" values={actCfValues} onChange={(fid, v) => setActCfValues(p => ({ ...p, [fid]: v }))} />
                       <div className="flex justify-end">
-                        <Button 
-                          onClick={handleLogActivity} 
+                        <Button
+                          onClick={handleLogActivity}
                           disabled={!canLog || createActivity.isPending}
                         >
                           {createActivity.isPending ? "Saving..." : "Log Activity"}
@@ -626,101 +704,80 @@ export function ContactDetailPage() {
                     </div>
                   </CardContent>
                 </Card>
-                
-                <div className="mt-8 space-y-4">
-                  <h3 className="text-lg font-semibold">Timeline</h3>
-                  {contact.activities && contact.activities.length > 0 ? (
-                    <div className="space-y-4">
-                      {contact.activities.map(activity => (
-                        <div key={activity.id} className="flex gap-4 p-4 border rounded-lg bg-card">
-                          <div className="mt-1">
-                            {activity.type === 'NOTE' ? <MessageSquare className="h-5 w-5 text-blue-500" /> :
-                             activity.type === 'CALL' ? <Phone className="h-5 w-5 text-green-500" /> :
-                             <Calendar className="h-5 w-5 text-muted-foreground" />}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="font-medium">{activity.title}</p>
-                            {activity.emailSubject && (
-                              <p className="text-sm mt-1"><span className="text-muted-foreground">Subject: </span>{activity.emailSubject}</p>
-                            )}
-                            {activity.description && <p className="text-sm mt-1 text-muted-foreground">{activity.description}</p>}
-                            {activity.emailBody && (
-                              <p className="text-sm mt-1 text-muted-foreground whitespace-pre-wrap">{activity.emailBody}</p>
-                            )}
-                            <ActivitySummary
-                              activityId={activity.id}
-                              type={activity.type}
-                              summary={activity.aiSummary}
-                              onUpdated={() => queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) })}
-                            />
-                            <p className="text-xs text-muted-foreground mt-2">
-                              {new Date(activity.createdAt).toLocaleString()}
-                              {activity.endDate ? ` · ends ${new Date(activity.endDate).toLocaleString()}` : ""}
-                            </p>
+
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Tasks</h3>
+                  {contact.tasks && contact.tasks.length > 0 ? (
+                    <div className="space-y-3">
+                      {contact.tasks.map(task => (
+                        <div key={task.id} className="flex items-center gap-3 p-3 border rounded-lg">
+                          <CheckSquare className={`h-5 w-5 ${task.completed ? 'text-green-500' : 'text-muted-foreground'}`} />
+                          <div className="flex-1">
+                            <p className={`font-medium ${task.completed ? 'line-through text-muted-foreground' : ''}`}>{task.title}</p>
+                            {task.dueDate && <p className="text-xs text-muted-foreground">Due: {new Date(task.dueDate).toLocaleDateString()}</p>}
                           </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-muted-foreground text-sm">No activity recorded yet.</p>
+                    <p className="text-muted-foreground text-sm">No tasks for this contact.</p>
                   )}
                 </div>
               </TabsContent>
 
-              <TabsContent value="notes" className="pt-6">
-                <NotesFeed entityType="contact" entityId={id} />
-              </TabsContent>
-
-              <TabsContent value="deals" className="pt-6">
-                {contact.deals && contact.deals.length > 0 ? (
-                  <div className="space-y-4">
-                    {contact.deals.map(deal => (
-                      <Card key={deal.id}>
-                        <CardContent className="p-4 flex items-center justify-between">
-                          <div>
-                            <p className="font-medium"><Link href={`/deals`} className="hover:underline">{deal.title}</Link></p>
-                            <p className="text-sm text-muted-foreground">Stage: {deal.stage.name}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-bold">{formatCurrency(deal.value || 0)}</p>
-                            <p className="text-xs text-muted-foreground">{deal.probability}% probability</p>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground text-sm">No deals associated with this contact.</p>
-                )}
-              </TabsContent>
-
-              <TabsContent value="tasks" className="pt-6">
-                {contact.tasks && contact.tasks.length > 0 ? (
-                  <div className="space-y-4">
-                    {contact.tasks.map(task => (
-                      <div key={task.id} className="flex items-center gap-3 p-3 border rounded-lg">
-                        <CheckSquare className={`h-5 w-5 ${task.completed ? 'text-green-500' : 'text-muted-foreground'}`} />
-                        <div className="flex-1">
-                          <p className={`font-medium ${task.completed ? 'line-through text-muted-foreground' : ''}`}>{task.title}</p>
-                          {task.dueDate && <p className="text-xs text-muted-foreground">Due: {new Date(task.dueDate).toLocaleDateString()}</p>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground text-sm">No tasks for this contact.</p>
-                )}
-              </TabsContent>
-
-              <TabsContent value="history" className="pt-6">
-                <AuditHistory objectType="contact" objectId={contact.id} />
-              </TabsContent>
-
+              {/* CAMPAIGNS */}
               <TabsContent value="campaigns" className="pt-6">
                 <ContactCampaignsTab contactId={id} canEdit={me?.role === "ADMIN" || me?.role === "MEMBER"} />
               </TabsContent>
 
+              {/* EMAIL — synced emails */}
+              <TabsContent value="email" className="pt-6">
+                {(() => {
+                  const emails = (contact.activities ?? []).filter(a => a.type.startsWith("EMAIL"));
+                  if (emails.length === 0) {
+                    return (
+                      <div className="text-center py-12 text-muted-foreground text-sm space-y-1">
+                        <Mail className="h-8 w-8 mx-auto mb-3 opacity-30" />
+                        <p className="font-medium">No emails synced yet</p>
+                        <p>Emails will appear here automatically once Gmail sync is active.</p>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="space-y-4">
+                      {emails.map(activity => (
+                        <div key={activity.id} className="p-4 border rounded-lg bg-card space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Mail className="h-4 w-4 text-purple-500 shrink-0" />
+                              <p className="font-medium truncate">{activity.emailSubject || activity.title}</p>
+                            </div>
+                            <p className="text-xs text-muted-foreground shrink-0">{new Date(activity.createdAt).toLocaleString()}</p>
+                          </div>
+                          {activity.emailBody && (
+                            <p className="text-sm text-muted-foreground whitespace-pre-wrap pl-6 line-clamp-4">{activity.emailBody}</p>
+                          )}
+                          {activity.description && !activity.emailBody && (
+                            <p className="text-sm text-muted-foreground pl-6">{activity.description}</p>
+                          )}
+                          <ActivitySummary
+                            activityId={activity.id}
+                            type={activity.type}
+                            summary={activity.aiSummary}
+                            onUpdated={() => queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) })}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </TabsContent>
+
+              {/* FILES */}
               <TabsContent value="files" className="pt-6">
+                <p className="text-xs text-muted-foreground mb-4">
+                  Files uploaded here, or automatically synced from email attachments and deals.
+                </p>
                 <AttachmentsPanel objectType="contact" recordId={contact.id} />
               </TabsContent>
             </Tabs>
