@@ -1,15 +1,13 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { EnnablLogo } from "@/components/brand/ennabl-logo";
 
 export function LandingPage() {
   return (
     <div className="min-h-[100dvh] flex flex-col">
       <header className="px-6 py-4 flex items-center justify-between border-b">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold">
-            M
-          </div>
-          <span className="text-xl font-bold tracking-tight">MyCRM</span>
+          <EnnablLogo className="h-7 w-auto" />
         </div>
         <div className="flex items-center gap-4">
           <Link href="/sign-in" className="text-sm font-medium text-muted-foreground hover:text-foreground">
@@ -58,7 +56,7 @@ export function LandingPage() {
       </main>
 
       <footer className="border-t py-8 text-center text-muted-foreground text-sm">
-        <p>MyCRM &copy; {new Date().getFullYear()}. Built for modern sales teams.</p>
+        <p>Ennabl &copy; {new Date().getFullYear()}. Built for modern insurance brokers.</p>
       </footer>
     </div>
   );

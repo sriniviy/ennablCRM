@@ -809,7 +809,7 @@ export function SettingsTeamPage() {
             <AlertDialogTitle>Remove team member?</AlertDialogTitle>
             <AlertDialogDescription>
               This permanently removes <strong>{deleteTarget?.name ?? deleteTarget?.email}</strong> from
-              MyCRM and deletes their login. This cannot be undone.
+              Ennabl and deletes their login. This cannot be undone.
               <br /><br />
               To preserve their history, consider <strong>archiving</strong> instead.
             </AlertDialogDescription>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -16,7 +16,7 @@ import {
   Bot, Sparkles, Mail, Merge, FileUp, Clock, CheckCircle2,
   XCircle, Loader2, ChevronDown, ChevronUp, ArrowRight, Play,
   AlertCircle, Building2, Users, Plus, X, Save, Globe,
-  RefreshCw, TrendingUp, Shield, Cpu, BarChart2, Swords,
+  RefreshCw, TrendingUp, Shield, Cpu, BarChart2, Swords, Star,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -37,6 +37,7 @@ type EmailAnalysisConfig = {
 };
 type IntelConfig = {
   enabled: boolean; activeTopics: string[]; competitors: string[];
+  highPriorityCompetitors: string[];
   customTopics: string[]; surfaceTypes: string[]; schedule: string[];
 };
 type IntelItem = { section: string; headline: string; summary: string; tag: string; date: string };
@@ -124,6 +125,23 @@ function tagColor(tag: string) {
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
+function getInitialCollapsedSections(): Record<string, boolean> {
+  const defaults: Record<string, boolean> = { intel: true, hygiene: true, sequence: true, email: true };
+  try {
+    const stored = localStorage.getItem("crm-automation-collapsed-sections");
+    if (stored) return JSON.parse(stored) as Record<string, boolean>;
+  } catch {}
+  return defaults;
+}
+
+function getInitialIntelTab(): "configure" | "results" {
+  try {
+    const stored = localStorage.getItem("crm-automation-intel-tab");
+    if (stored === "configure" || stored === "results") return stored;
+  } catch {}
+  return "configure";
+}
+
 export function AutomationsPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -222,7 +240,13 @@ export function AutomationsPage() {
   }
 
   // ── Industry Intelligence ─────────────────────────────────────────────────
-  const [intelTab, setIntelTab] = useState<"configure" | "results">("configure");
+  const [intelTab, setIntelTab] = useState<"configure" | "results">(getInitialIntelTab);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("crm-automation-intel-tab", intelTab);
+    } catch {}
+  }, [intelTab]);
 
   const { data: intelConfig, isLoading: intelConfigLoading } = useQuery<IntelConfig>({
     queryKey: ["industry-intel-config"],
@@ -263,7 +287,16 @@ export function AutomationsPage() {
     setCompetitorInput("");
   }
   function removeCompetitor(c: string) {
-    updateIntelConfig({ competitors: (activeIntelConfig?.competitors ?? []).filter((x) => x !== c) });
+    updateIntelConfig({
+      competitors: (activeIntelConfig?.competitors ?? []).filter((x) => x !== c),
+      highPriorityCompetitors: (activeIntelConfig?.highPriorityCompetitors ?? []).filter((x) => x !== c),
+    });
+  }
+  function toggleHighPriority(c: string) {
+    const cur = activeIntelConfig?.highPriorityCompetitors ?? [];
+    updateIntelConfig({
+      highPriorityCompetitors: cur.includes(c) ? cur.filter((x) => x !== c) : [...cur, c],
+    });
   }
 
   const [customTopicInput, setCustomTopicInput] = useState("");
@@ -293,6 +326,15 @@ export function AutomationsPage() {
 
   const lastIntelJob = jobs.find((j) => j.type === "industry_intel_refresh");
   const intelRunning = triggerJob.isPending && lastIntelJob?.status === "running";
+
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(getInitialCollapsedSections);
+  const toggleSection = (id: string) => setCollapsedSections(p => ({ ...p, [id]: !p[id] }));
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("crm-automation-collapsed-sections", JSON.stringify(collapsedSections));
+    } catch {}
+  }, [collapsedSections]);
 
   async function runIntelNow() {
     // Save dirty config first
@@ -328,7 +370,7 @@ export function AutomationsPage() {
           {/* ── Industry Intelligence ── full width ─────────────────────── */}
           <Card className="lg:col-span-2">
             <CardHeader className="pb-0">
-              <div className="flex items-start gap-3 mb-3">
+              <div className="flex items-start gap-3 mb-3 cursor-pointer select-none" onClick={() => toggleSection('intel')}>
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 dark:bg-indigo-950/30">
                   <Globe className="text-indigo-500" style={{ height: "1.125rem", width: "1.125rem" }} />
                 </div>
@@ -337,12 +379,15 @@ export function AutomationsPage() {
                     <p className="text-sm font-semibold">Industry Intelligence</p>
                     <p className="text-xs text-muted-foreground">AI-researched P&C & group benefits intelligence — configurable topics, competitor tracking, and scheduled runs</p>
                   </div>
-                  <Badge variant="secondary" className="text-[10px] shrink-0 bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">AI-powered</Badge>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge variant="secondary" className="text-[10px] bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">AI-powered</Badge>
+                    <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", !collapsedSections['intel'] && "-rotate-180")} />
+                  </div>
                 </div>
               </div>
 
               {/* Tabs */}
-              <div className="flex gap-1 border-b">
+              <div className={cn("flex gap-1 border-b", collapsedSections['intel'] && "hidden")}>
                 {(["configure", "results"] as const).map((tab) => (
                   <button
                     key={tab}
@@ -359,7 +404,7 @@ export function AutomationsPage() {
               </div>
             </CardHeader>
 
-            <CardContent className="pt-4 space-y-0">
+            <CardContent className={cn("pt-4 space-y-0", collapsedSections['intel'] && "hidden")}>
               {intelTab === "configure" && (
                 <div className="space-y-5">
                   {intelConfigLoading ? (
@@ -398,17 +443,44 @@ export function AutomationsPage() {
 
                       {/* Competitor tracking */}
                       <div>
-                        <p className="text-xs font-semibold mb-1">Insurtech competitors to track</p>
-                        <p className="text-[11px] text-muted-foreground mb-2">The AI will specifically research how these tools compare with Ennabl.</p>
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-xs font-semibold">Insurtech competitors to track</p>
+                          <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                            <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
+                            High priority = deeper AI research
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground mb-2">
+                          The AI researches all competitors. Star <Star className="inline h-2.5 w-2.5 fill-amber-400 text-amber-400" /> a competitor to make the AI go deeper — dedicated items, product moves, and Ennabl win/loss analysis.
+                        </p>
                         <div className="flex flex-wrap gap-1.5 mb-2.5">
-                          {activeIntelConfig.competitors.map((c) => (
-                            <span key={c} className="inline-flex items-center gap-1 rounded-full bg-red-100 dark:bg-red-950/30 px-2.5 py-1 text-[11px] font-medium text-red-700 dark:text-red-300">
-                              {c}
-                              <button onClick={() => removeCompetitor(c)} className="flex h-3.5 w-3.5 items-center justify-center rounded-full hover:bg-red-200 dark:hover:bg-red-900/40 transition-colors">
-                                <X className="h-2.5 w-2.5" />
-                              </button>
-                            </span>
-                          ))}
+                          {activeIntelConfig.competitors.map((c) => {
+                            const isHigh = (activeIntelConfig.highPriorityCompetitors ?? []).includes(c);
+                            return (
+                              <span key={c} className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium transition-colors ${
+                                isHigh
+                                  ? "bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 ring-1 ring-amber-300 dark:ring-amber-700"
+                                  : "bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-300"
+                              }`}>
+                                <button
+                                  onClick={() => toggleHighPriority(c)}
+                                  title={isHigh ? "Remove high-priority" : "Mark as high-priority"}
+                                  className="flex items-center justify-center rounded-full transition-colors hover:scale-110"
+                                >
+                                  <Star className={`h-2.5 w-2.5 ${isHigh ? "fill-amber-500 text-amber-500" : "text-red-300 dark:text-red-600 hover:text-amber-400"}`} />
+                                </button>
+                                {c}
+                                <button
+                                  onClick={() => removeCompetitor(c)}
+                                  className={`flex h-3.5 w-3.5 items-center justify-center rounded-full transition-colors ${
+                                    isHigh ? "hover:bg-amber-200 dark:hover:bg-amber-900/40" : "hover:bg-red-200 dark:hover:bg-red-900/40"
+                                  }`}
+                                >
+                                  <X className="h-2.5 w-2.5" />
+                                </button>
+                              </span>
+                            );
+                          })}
                         </div>
                         <div className="flex gap-2">
                           <Input value={competitorInput} onChange={(e) => setCompetitorInput(e.target.value)}
@@ -607,19 +679,20 @@ export function AutomationsPage() {
           </Card>
 
           {/* Data Hygiene */}
-          <Card>
+          <Card className="lg:col-span-2">
             <CardHeader className="pb-3">
-              <div className="flex items-start gap-3">
+              <div className="flex items-center gap-3 cursor-pointer select-none" onClick={() => toggleSection('hygiene')}>
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-50 dark:bg-orange-950/30">
                   <Merge className="text-orange-500" style={{ height: "1.125rem", width: "1.125rem" }} />
                 </div>
-                <div>
+                <div className="flex-1">
                   <p className="text-sm font-semibold">Data Hygiene</p>
                   <p className="text-xs text-muted-foreground">Find and merge duplicate contacts & companies</p>
                 </div>
+                <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform shrink-0", !collapsedSections['hygiene'] && "-rotate-180")} />
               </div>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className={cn("space-y-3", collapsedSections['hygiene'] && "hidden")}>
               <p className="text-xs text-muted-foreground">Scans for records with matching emails, names, or domains and lets you merge them — preserving all notes, deals, and activity history.</p>
               <div className="flex gap-2 flex-wrap">
                 <Button size="sm" variant="outline" className="gap-2 text-xs" onClick={() => setContactDupOpen(true)}>
@@ -632,41 +705,22 @@ export function AutomationsPage() {
             </CardContent>
           </Card>
 
-          {/* Bulk CSV Import */}
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-950/30">
-                  <FileUp className="text-blue-500" style={{ height: "1.125rem", width: "1.125rem" }} />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold">Bulk CSV Import</p>
-                  <p className="text-xs text-muted-foreground">Import large contact & company datasets</p>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-xs text-muted-foreground">Import contacts and companies from HubSpot exports or custom CSV files. Field mapping, duplicate detection, and error reporting included.</p>
-              <Link href="/settings/import">
-                <Button size="sm" variant="outline" className="gap-2 text-xs"><ArrowRight className="h-3.5 w-3.5" />Go to Import</Button>
-              </Link>
-            </CardContent>
-          </Card>
 
           {/* AI Sequence Draft */}
           <Card className="lg:col-span-2">
             <CardHeader className="pb-3">
-              <div className="flex items-start gap-3">
+              <div className="flex items-center gap-3 cursor-pointer select-none" onClick={() => toggleSection('sequence')}>
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-50 dark:bg-purple-950/30">
                   <Sparkles className="text-purple-500" style={{ height: "1.125rem", width: "1.125rem" }} />
                 </div>
-                <div>
+                <div className="flex-1">
                   <p className="text-sm font-semibold">AI Sequence Draft Generation</p>
                   <p className="text-xs text-muted-foreground">Let AI write a complete multi-step outreach sequence — review, tweak, and save it</p>
                 </div>
+                <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform shrink-0", !collapsedSections['sequence'] && "-rotate-180")} />
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className={cn("space-y-4", collapsedSections['sequence'] && "hidden")}>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2">
                   <label className="text-xs text-muted-foreground mb-1 block">Sequence goal <span className="text-destructive">*</span></label>
@@ -737,7 +791,7 @@ export function AutomationsPage() {
           {/* AI Email Summarization */}
           <Card className="lg:col-span-2">
             <CardHeader className="pb-3">
-              <div className="flex items-start gap-3">
+              <div className="flex items-start gap-3 cursor-pointer select-none" onClick={() => toggleSection('email')}>
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-50 dark:bg-red-950/30">
                   <Mail className="text-red-500" style={{ height: "1.125rem", width: "1.125rem" }} />
                 </div>
@@ -746,11 +800,14 @@ export function AutomationsPage() {
                     <p className="text-sm font-semibold">AI Email Summarization</p>
                     <p className="text-xs text-muted-foreground">Configure how the AI agent analyses your inbox</p>
                   </div>
-                  <Badge variant="secondary" className="text-[10px] shrink-0">Gmail required</Badge>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge variant="secondary" className="text-[10px]">Gmail required</Badge>
+                    <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", !collapsedSections['email'] && "-rotate-180")} />
+                  </div>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-5">
+            <CardContent className={cn("space-y-5", collapsedSections['email'] && "hidden")}>
               <div className="flex items-center gap-2 p-2.5 rounded-lg bg-muted/50 border">
                 <AlertCircle className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                 <p className="text-[11px] text-muted-foreground">

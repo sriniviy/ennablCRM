@@ -13,6 +13,7 @@ import {
   Menu,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Sun,
   Moon,
   ClipboardCheck,
@@ -28,7 +29,6 @@ import {
   Megaphone,
   MessageSquare,
 } from "lucide-react";
-import { EnnablLogo } from "@/components/ennabl-logo";
 import { GlobalSearch } from "@/components/global-search";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -46,6 +46,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { EnnablLogo, EnnablMark } from "@/components/brand/ennabl-logo";
+import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { useTheme } from "@/hooks/use-theme";
 import { useMyAssignments } from "@/hooks/use-my-assignments";
@@ -91,14 +93,14 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    label: "ENGAGE",
+    label: "ENGAGEMENT",
     items: [
       { name: "Campaigns", href: "/campaigns", icon: Megaphone },
       { name: "Segments", href: "/segments", icon: Filter },
     ],
   },
   {
-    label: "AUTOMATE",
+    label: "AUTOMATION",
     items: [
       { name: "Automations", href: "/automations", icon: Bot, adminOnly: true },
     ],
@@ -125,6 +127,17 @@ function getInitialCollapsed(): boolean {
   }
 }
 
+function getInitialCollapsedGroups(): Record<string, boolean> {
+  const defaults: Record<string, boolean> = {
+    RECORDS: true, ACTIVITIES: true, ENGAGEMENT: true, AUTOMATION: true, SETTINGS: true,
+  };
+  try {
+    const stored = localStorage.getItem("crm-sidebar-collapsed-groups");
+    if (stored) return JSON.parse(stored) as Record<string, boolean>;
+  } catch {}
+  return defaults;
+}
+
 export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const { data: user } = useGetMe();
@@ -140,12 +153,20 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const myTaskCount = assignmentData?.tasks ?? 0;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(getInitialCollapsed);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(getInitialCollapsedGroups);
+  const toggleGroup = (label: string) => setCollapsedGroups(p => ({ ...p, [label]: !p[label] }));
 
   useEffect(() => {
     try {
       localStorage.setItem("crm-sidebar-collapsed", String(collapsed));
     } catch {}
   }, [collapsed]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("crm-sidebar-collapsed-groups", JSON.stringify(collapsedGroups));
+    } catch {}
+  }, [collapsedGroups]);
 
   const handleSignOut = async () => {
     await authClient.signOut();
@@ -172,12 +193,18 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
         return (
           <div key={group.label}>
             {!collapsed && (
-              <p className="px-3 mb-0.5 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase select-none">
-                {group.label}
-              </p>
+              <button
+                onClick={() => toggleGroup(group.label)}
+                className="w-full flex items-center gap-1.5 px-3 py-0.5 mb-0.5 rounded hover:bg-sidebar-accent transition-colors"
+              >
+                <span className="flex-1 text-left text-[10px] font-semibold tracking-widest text-muted-foreground uppercase select-none">
+                  {group.label}
+                </span>
+                <ChevronDown className={cn("h-3 w-3 text-muted-foreground/50 transition-transform shrink-0", !collapsedGroups[group.label] && "-rotate-180")} />
+              </button>
             )}
             {collapsed && <div className="mb-1 border-t border-sidebar-border mx-1" />}
-            <div className="space-y-0.5">
+            <div className={cn("space-y-0.5", !collapsed && collapsedGroups[group.label] && "hidden")}>
               {visible.map((item) => {
                 const itemPath = item.href.split("?")[0];
                 const isActive = item.exact
@@ -282,7 +309,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
           <div className="flex h-full flex-col border-r border-sidebar-border bg-sidebar">
             {/* Brand */}
             <div className="flex items-center gap-2 px-4 py-3 border-b border-sidebar-border">
-              <EnnablLogo collapsed={false} />
+              <EnnablLogo className="h-6 w-auto" />
             </div>
             {/* Search */}
             <div className="px-3 py-2 border-b border-sidebar-border">
@@ -324,10 +351,13 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       >
         {/* Brand row */}
         <div className={`flex items-center border-b border-sidebar-border ${collapsed ? "px-2 py-3 flex-col gap-1" : "px-4 py-3 gap-2"}`}>
-          <EnnablLogo collapsed={collapsed} className="shrink-0" />
+          {collapsed ? (
+            <EnnablMark className="h-6 w-6 shrink-0" />
+          ) : (
+            <EnnablLogo className="h-5 w-auto flex-1 min-w-0" />
+          )}
           {!collapsed && (
             <>
-              <span className="flex-1" />
               <Tooltip delayDuration={0}>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon" onClick={toggleTheme} className="h-6 w-6 shrink-0">

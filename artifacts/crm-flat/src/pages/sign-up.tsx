@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { EnnablLogo } from "@/components/brand/ennabl-logo";
 import { Link } from "wouter";
 
 export function SignUpPage() {
@@ -42,18 +43,13 @@ export function SignUpPage() {
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
       <div className="w-full max-w-[440px] space-y-4">
         <div className="flex justify-center mb-2">
-          <img
-            src={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/logo.svg`}
-            alt="MyCRM"
-            className="h-10 w-auto"
-            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-          />
+          <EnnablLogo className="h-10 w-auto" />
         </div>
 
         <Card className="shadow-xl">
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl font-semibold">Create your account</CardTitle>
-            <CardDescription>Get started with MyCRM</CardDescription>
+            <CardDescription>Get started with Ennabl</CardDescription>
           </CardHeader>
 
           <CardContent>
