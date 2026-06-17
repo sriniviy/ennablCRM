@@ -70,8 +70,6 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
   const isEdit = !!company;
 
   const [name, setName] = useState("");
-  const [domain, setDomain] = useState("");
-  const [domains, setDomains] = useState("");
   const [status, setStatus] = useState<string>("none");
   const [productLicensed, setProductLicensed] = useState("");
   const [memberOf, setMemberOf] = useState<string[]>([]);
@@ -111,8 +109,6 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
   useEffect(() => {
     if (open) {
       setName(company?.name ?? "");
-      setDomain(company?.domain ?? "");
-      setDomains((company?.domains ?? []).join(", "));
       setStatus(company?.status ?? "none");
       setProductLicensed((company?.productLicensed ?? []).join(", "));
       setMemberOf(company?.memberOf ?? []);
@@ -152,8 +148,6 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
     e.preventDefault();
     const data = {
       name,
-      domain: domain || undefined,
-      domains: toList(domains),
       status: status === "none" ? undefined : (status as typeof CompanyStatus[keyof typeof CompanyStatus]),
       productLicensed: toList(productLicensed),
       memberOf: memberOf,
@@ -205,15 +199,9 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
                 <Label htmlFor="co-name">Company Name *</Label>
                 <Input id="co-name" value={name} onChange={e => setName(e.target.value)} required />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="co-domain">Domain</Label>
-                  <Input id="co-domain" value={domain} onChange={e => setDomain(e.target.value)} placeholder="acme.com" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="co-website">Website</Label>
-                  <Input id="co-website" value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://acme.com" />
-                </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="co-website">Website</Label>
+                <Input id="co-website" value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://acme.com" />
               </div>
 
               {/* Classification */}
@@ -340,15 +328,9 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
                   </div>
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="co-products">Products Licensed <span className="text-muted-foreground text-xs">(comma-separated)</span></Label>
-                  <Input id="co-products" value={productLicensed} onChange={e => setProductLicensed(e.target.value)} placeholder="Benchmarks, Insights" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="co-domains">Additional Domains <span className="text-muted-foreground text-xs">(comma-separated)</span></Label>
-                  <Input id="co-domains" value={domains} onChange={e => setDomains(e.target.value)} placeholder="acme.io, acme.net" />
-                </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="co-products">Products Licensed <span className="text-muted-foreground text-xs">(comma-separated)</span></Label>
+                <Input id="co-products" value={productLicensed} onChange={e => setProductLicensed(e.target.value)} placeholder="Benchmarks, Insights" />
               </div>
 
               <CustomFieldsForm objectType="company" values={cfValues} onChange={(id, v) => setCfValues(p => ({ ...p, [id]: v }))} />
