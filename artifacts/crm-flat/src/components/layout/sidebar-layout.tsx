@@ -6,7 +6,6 @@ import {
   Users,
   Building2,
   CircleDollarSign,
-  Activity,
   CheckSquare,
   Mail,
   BarChart2,
@@ -14,17 +13,21 @@ import {
   Menu,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Sun,
   Moon,
   ClipboardCheck,
   Filter,
   SlidersHorizontal,
-  CalendarClock,
   Sparkles,
   ScrollText,
   ArrowDownToLine,
   Plug2,
   Bot,
+  Phone,
+  FileText,
+  Megaphone,
+  MessageSquare,
 } from "lucide-react";
 import { GlobalSearch } from "@/components/global-search";
 import { Button } from "@/components/ui/button";
@@ -44,6 +47,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { EnnablLogo, EnnablMark } from "@/components/brand/ennabl-logo";
+import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { useTheme } from "@/hooks/use-theme";
 import { useMyAssignments } from "@/hooks/use-my-assignments";
@@ -64,37 +68,39 @@ type NavGroup = {
 
 const navGroups: NavGroup[] = [
   {
-    label: "PIPELINE",
+    label: "GENERAL",
     items: [
       { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { name: "Deals", href: "/deals", icon: CircleDollarSign },
+      { name: "Needs Review", href: "/needs-review", icon: ClipboardCheck },
+      { name: "Reports", href: "/reports", icon: BarChart2 },
     ],
   },
   {
     label: "RECORDS",
     items: [
-      { name: "Contacts", href: "/contacts", icon: Users },
-      { name: "Needs Review", href: "/needs-review", icon: ClipboardCheck },
       { name: "Companies", href: "/companies", icon: Building2 },
-      { name: "Tasks", href: "/tasks", icon: CheckSquare },
-      { name: "Activities", href: "/activities", icon: Activity },
+      { name: "Contacts", href: "/contacts", icon: Users },
+      { name: "Deals", href: "/deals", icon: CircleDollarSign },
     ],
   },
   {
-    label: "ENGAGE",
+    label: "ACTIVITIES",
     items: [
-      { name: "Campaigns", href: "/campaigns", icon: Mail },
+      { name: "Calls", href: "/activities?type=CALL", icon: Phone },
+      { name: "Emails", href: "/activities?type=EMAIL_SENT", icon: Mail },
+      { name: "Notes", href: "/activities?type=NOTE", icon: FileText },
+      { name: "Tasks", href: "/tasks", icon: CheckSquare },
+    ],
+  },
+  {
+    label: "ENGAGEMENT",
+    items: [
+      { name: "Campaigns", href: "/campaigns", icon: Megaphone },
       { name: "Segments", href: "/segments", icon: Filter },
     ],
   },
   {
-    label: "INSIGHTS",
-    items: [
-      { name: "Reports", href: "/reports", icon: BarChart2 },
-    ],
-  },
-  {
-    label: "AUTOMATE",
+    label: "AUTOMATION",
     items: [
       { name: "Automations", href: "/automations", icon: Bot, adminOnly: true },
     ],
@@ -102,11 +108,11 @@ const navGroups: NavGroup[] = [
   {
     label: "SETTINGS",
     items: [
-      { name: "Team", href: "/settings/team", icon: Users, adminOnly: true },
+      { name: "Teams", href: "/settings/team", icon: Users, adminOnly: true },
       { name: "Custom Fields", href: "/settings/custom-fields", icon: SlidersHorizontal, adminOnly: true },
-      { name: "Exports", href: "/settings/exports", icon: CalendarClock, adminOnly: true },
       { name: "AI Presets", href: "/settings/ai-presets", icon: Sparkles, adminOnly: true },
-      { name: "Audit Log", href: "/settings/audit-log", icon: ScrollText, adminOnly: true },
+      { name: "Audit Logs", href: "/settings/audit-log", icon: ScrollText, adminOnly: true },
+      { name: "Export", href: "/settings/exports", icon: MessageSquare, adminOnly: true },
       { name: "Import", href: "/settings/import", icon: ArrowDownToLine, adminOnly: true },
       { name: "Integrations", href: "/settings/integrations", icon: Plug2, adminOnly: true },
     ],
@@ -136,6 +142,10 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const myTaskCount = assignmentData?.tasks ?? 0;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(getInitialCollapsed);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
+    RECORDS: true, ACTIVITIES: true, ENGAGEMENT: true, AUTOMATION: true, SETTINGS: true,
+  });
+  const toggleGroup = (label: string) => setCollapsedGroups(p => ({ ...p, [label]: !p[label] }));
 
   useEffect(() => {
     try {
@@ -168,16 +178,26 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
         return (
           <div key={group.label}>
             {!collapsed && (
-              <p className="px-3 mb-0.5 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase select-none">
-                {group.label}
-              </p>
+              <button
+                onClick={() => toggleGroup(group.label)}
+                className="w-full flex items-center gap-1.5 px-3 py-0.5 mb-0.5 rounded hover:bg-sidebar-accent transition-colors"
+              >
+                <span className="flex-1 text-left text-[10px] font-semibold tracking-widest text-muted-foreground uppercase select-none">
+                  {group.label}
+                </span>
+                <ChevronDown className={cn("h-3 w-3 text-muted-foreground/50 transition-transform shrink-0", !collapsedGroups[group.label] && "-rotate-180")} />
+              </button>
             )}
             {collapsed && <div className="mb-1 border-t border-sidebar-border mx-1" />}
-            <div className="space-y-0.5">
+            <div className={cn("space-y-0.5", !collapsed && collapsedGroups[group.label] && "hidden")}>
               {visible.map((item) => {
+                const itemPath = item.href.split("?")[0];
                 const isActive = item.exact
-                  ? location === item.href
-                  : location.startsWith(item.href);
+                  ? location === itemPath
+                  : location.startsWith(itemPath) && (
+                      !item.href.includes("?") ||
+                      (typeof window !== "undefined" && window.location.search === "?" + item.href.split("?")[1])
+                    );
                 const badge = getBadge(item.href);
 
                 if (collapsed) {

@@ -23,9 +23,13 @@ const INTEL_CONFIG_DEFAULTS = {
   enabled: true,
   activeTopics: ["competitors", "pc_market", "benefits_market", "regulatory"] as string[],
   competitors: [
-    "Applied Epic", "Vertafore AMS360", "EZLynx", "HawkSoft", "AgencyBloc",
-    "NowCerts", "Zywave", "Salesforce Financial Services Cloud", "HubSpot",
-    "Relay Platform", "Canopy Connect", "TechCanary",
+    "Applied Epic", "Vertafore", "HawkSoft", "EZLynx", "ZYWave",
+    "Salesforce Financial Services Cloud",
+    "Outmarket AI", "FulCrum (WithFulcrum)", "FurtherAI", "PowerBroker",
+  ] as string[],
+  highPriorityCompetitors: [
+    "Outmarket AI", "FulCrum (WithFulcrum)", "FurtherAI", "PowerBroker",
+    "Applied Epic", "Vertafore",
   ] as string[],
   customTopics: [] as string[],
   surfaceTypes: ["competitor_intel", "market_conditions", "regulatory_updates", "technology_trends"] as string[],
@@ -191,20 +195,30 @@ Tone: ${tone}. Sound human, not templated. Never use "I hope this email finds yo
       const allTopics = [...activeLabels, ...customLabels];
       if (allTopics.length === 0) throw new Error("No research topics configured. Enable at least one topic first.");
 
-      const competitorList = (cfg.competitors as string[]).join(", ");
+      const allCompetitors = cfg.competitors as string[];
+      const highPriority = ((cfg as typeof INTEL_CONFIG_DEFAULTS).highPriorityCompetitors ?? [])
+        .filter((c: string) => allCompetitors.includes(c));
+      const standardCompetitors = allCompetitors.filter((c) => !highPriority.includes(c));
+
+      const competitorSection = highPriority.length > 0
+        ? `Standard competitors (mention where relevant): ${standardCompetitors.join(", ")}
+
+HIGH-PRIORITY competitors — for EACH of these, produce 2 dedicated intelligence items covering: recent product launches or updates, pricing or packaging changes, wins/losses against Ennabl, key differentiators, and strategic direction. Be specific and actionable:
+${highPriority.map((c: string) => `  • ${c}`).join("\n")}`
+        : `Direct competitors include: ${allCompetitors.join(", ")}`;
 
       const systemPrompt = `You are an industry intelligence analyst for P&C (property & casualty) and group benefits insurance brokers. 
 Produce concise, actionable market intelligence. Focus ONLY on commercial P&C lines and employer-sponsored group benefits. Never include life insurance.
 Return ONLY a JSON array, no markdown, no explanation.`;
 
-      const userPrompt = `Research these topics and produce 2 sharp intelligence items per topic (max 10 items total):
+      const userPrompt = `Research these topics and produce intelligence items (2 per standard topic; 2 dedicated items per high-priority competitor):
 
 ${allTopics.join("\n")}
 
 Ennabl context: Ennabl is a CRM built specifically for independent P&C and group benefits brokers.
-Direct competitors include: ${competitorList}
+${competitorSection}
 
-For each item return: { "section": "<topic name>", "headline": "<max 80 chars>", "summary": "<2 sentences max, actionable>", "tag": "<one word>", "date": "<Month YYYY>" }
+For each item return: { "section": "<topic name>", "headline": "<max 80 chars>", "summary": "<2-3 sentences, specific and actionable>", "tag": "<one word>", "date": "<Month YYYY>" }
 
 Return only a JSON array. P&C & group benefits ONLY. No life insurance.`;
 
