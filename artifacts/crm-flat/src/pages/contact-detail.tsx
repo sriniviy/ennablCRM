@@ -30,6 +30,44 @@ import { ActivitySummary } from "@/components/ai/activity-summary";
 import { AttachmentsPanel } from "@/components/attachments/attachments-panel";
 import { useContactCampaigns, useSetContactSubscription } from "@/hooks/use-contact-campaigns";
 
+function buildContactSummary(
+  firstName: string,
+  lastName: string,
+  status: string,
+  companyName: string | undefined,
+  activities: any[],
+  deals: any[],
+): string {
+  const name = `${firstName} ${lastName}`.trim();
+  const n = activities.length;
+
+  const typeCounts: Record<string, number> = {};
+  const sorted = [...activities].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  sorted.forEach(a => {
+    const t = a.type === 'NOTE' ? 'notes' : a.type === 'CALL' ? 'calls' : a.type.startsWith('EMAIL') ? 'emails' : a.type === 'MEETING' ? 'meetings' : 'interactions';
+    typeCounts[t] = (typeCounts[t] || 0) + 1;
+  });
+  const breakdown = Object.entries(typeCounts).map(([t, c]) => `${c} ${c === 1 ? t.replace(/s$/, '') : t}`).join(', ');
+  const last = sorted[0];
+  const lastStr = last
+    ? ` Most recently, a ${last.type.replace(/_/g, ' ').toLowerCase().replace('email sent', 'email')} — "${last.title}" — was logged on ${new Date(last.createdAt).toLocaleDateString()}.`
+    : '';
+
+  const companyStr = companyName ? ` at ${companyName}` : '';
+  const statusStr = status ? status.charAt(0) + status.slice(1).toLowerCase() : '';
+  const dealCount = deals.length;
+  const totalValue = deals.reduce((s, d) => s + (d.value || 0), 0);
+  const dealStr = dealCount > 0
+    ? ` There ${dealCount === 1 ? 'is' : 'are'} ${dealCount} deal${dealCount !== 1 ? 's' : ''} in the pipeline${totalValue > 0 ? ` worth ${formatCurrency(totalValue)}` : ''}.`
+    : '';
+
+  if (n === 0) {
+    return `${name} is a ${statusStr} contact${companyStr}. No activities have been recorded yet — consider logging a call, note, or email to get started.${dealStr}`;
+  }
+
+  return `${name} is a ${statusStr} contact${companyStr} with ${n} interaction${n !== 1 ? 's' : ''} on record — ${breakdown}.${lastStr}${dealStr}`;
+}
+
 function NotesTabLabel({ entityType, entityId }: { entityType: string; entityId: string }) {
   const { data } = useNotesCount(entityType, entityId);
   const count = data?.count ?? 0;
@@ -477,46 +515,26 @@ export function ContactDetailPage() {
           <div className="space-y-6 md:col-span-1">
 
             {/* 1 — Latest Summary */}
-            {(() => {
-              const acts = contact.activities ?? [];
-              const counts: Record<string, number> = {};
-              acts.forEach((a: any) => {
-                const label = a.type === 'NOTE' ? 'Notes' : a.type === 'CALL' ? 'Calls' : a.type.startsWith('EMAIL') ? 'Emails' : a.type === 'MEETING' ? 'Meetings' : 'Other';
-                counts[label] = (counts[label] || 0) + 1;
-              });
-              const last = [...acts].sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-              return (
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
-                      <Sparkles className="h-4 w-4 text-primary" />
-                      Latest Summary
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-sm space-y-2">
-                    {acts.length === 0 ? (
-                      <p className="text-muted-foreground text-xs">No activities recorded yet.</p>
-                    ) : (
-                      <>
-                        <div className="flex flex-wrap gap-2">
-                          {Object.entries(counts).map(([label, n]) => (
-                            <span key={label} className="inline-flex items-center gap-1 text-xs bg-muted rounded-full px-2 py-0.5">
-                              <span className="font-semibold">{n}</span> {label}
-                            </span>
-                          ))}
-                        </div>
-                        {last && (
-                          <p className="text-xs text-muted-foreground pt-1 border-t">
-                            Last: <span className="text-foreground font-medium">{last.title}</span>
-                            {" · "}{new Date(last.createdAt).toLocaleDateString()}
-                          </p>
-                        )}
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })()}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  Latest Summary
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  {buildContactSummary(
+                    contact.firstName,
+                    contact.lastName,
+                    contact.status,
+                    contact.company?.name,
+                    contact.activities ?? [],
+                    contact.deals ?? [],
+                  )}
+                </p>
+              </CardContent>
+            </Card>
 
             {/* 2 — Pipeline Snapshot */}
             {(contact.deals ?? []).length > 0 && (() => {

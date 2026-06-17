@@ -35,6 +35,45 @@ import { AttachmentsPanel } from "@/components/attachments/attachments-panel";
 import { useTeamMembers } from "@/hooks/use-team-members";
 import { useContactCampaigns } from "@/hooks/use-contact-campaigns";
 
+function buildCompanySummary(
+  name: string,
+  activities: any[],
+  contacts: any[],
+  deals: any[],
+  openPipelineValue: number,
+  openDeals: number,
+): string {
+  const contactCount = contacts.length;
+  const dealCount = deals.length;
+  const n = activities.length;
+
+  const typeCounts: Record<string, number> = {};
+  activities.forEach(a => {
+    const t = a.type === 'NOTE' ? 'notes' : a.type === 'CALL' ? 'calls' : a.type.startsWith('EMAIL') ? 'emails' : a.type === 'MEETING' ? 'meetings' : 'interactions';
+    typeCounts[t] = (typeCounts[t] || 0) + 1;
+  });
+  const breakdown = Object.entries(typeCounts).map(([t, c]) => `${c} ${c === 1 ? t.replace(/s$/, '') : t}`).join(', ');
+  const last = activities[0];
+  const lastStr = last
+    ? `Most recently, a ${last.type.replace(/_/g, ' ').toLowerCase().replace('email sent', 'email')} titled "${last.title}" was logged on ${new Date(last.createdAt).toLocaleDateString()}.`
+    : '';
+
+  const contactStr = contactCount > 0
+    ? `${contactCount} contact${contactCount !== 1 ? 's' : ''} ${contactCount === 1 ? 'is' : 'are'} on file`
+    : 'no contacts on file';
+
+  const pipelineStr = dealCount > 0
+    ? `${openDeals} open deal${openDeals !== 1 ? 's' : ''} worth ${openPipelineValue > 0 ? formatCurrency(openPipelineValue) : '$0'} across ${dealCount} total`
+    : 'no deals in the pipeline';
+
+  if (n === 0) {
+    return `${name} has ${contactStr} and ${pipelineStr}. No activities have been recorded yet — consider logging a call, note, or email to get started.`;
+  }
+
+  const activityStr = `${n} interaction${n !== 1 ? 's' : ''} ${n === 1 ? 'has' : 'have'} been recorded — ${breakdown}.`;
+  return `${name} has ${contactStr} and ${pipelineStr}. ${activityStr} ${lastStr}`.trim();
+}
+
 function NotesTabLabel({ entityType, entityId }: { entityType: string; entityId: string }) {
   const { data } = useNotesCount(entityType, entityId);
   const count = data?.count ?? 0;
@@ -248,34 +287,17 @@ export function CompanyDetailPage() {
                   Latest Summary
                 </CardTitle>
               </CardHeader>
-              <CardContent className="text-sm space-y-2">
-                {companyActivities.length === 0 ? (
-                  <p className="text-muted-foreground text-xs">No activities recorded yet.</p>
-                ) : (() => {
-                  const counts: Record<string, number> = {};
-                  companyActivities.forEach(a => {
-                    const label = a.type === 'NOTE' ? 'Notes' : a.type === 'CALL' ? 'Calls' : a.type.startsWith('EMAIL') ? 'Emails' : a.type === 'MEETING' ? 'Meetings' : 'Other';
-                    counts[label] = (counts[label] || 0) + 1;
-                  });
-                  const last = companyActivities[0];
-                  return (
-                    <>
-                      <div className="flex flex-wrap gap-2">
-                        {Object.entries(counts).map(([label, n]) => (
-                          <span key={label} className="inline-flex items-center gap-1 text-xs bg-muted rounded-full px-2 py-0.5">
-                            <span className="font-semibold">{n}</span> {label}
-                          </span>
-                        ))}
-                      </div>
-                      {last && (
-                        <p className="text-xs text-muted-foreground pt-1 border-t">
-                          Last: <span className="text-foreground font-medium">{last.title}</span>
-                          {" · "}{new Date(last.createdAt).toLocaleDateString()}
-                        </p>
-                      )}
-                    </>
-                  );
-                })()}
+              <CardContent>
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  {buildCompanySummary(
+                    company.name,
+                    companyActivities,
+                    company.contacts ?? [],
+                    company.deals ?? [],
+                    company.openPipelineValue,
+                    company.openDeals ?? 0,
+                  )}
+                </p>
               </CardContent>
             </Card>
 
@@ -325,60 +347,6 @@ export function CompanyDetailPage() {
                   </div>
                 </div>
               )}
-            </CollapsibleCard>
-
-            <CollapsibleCard title="Details" previewHeight={120}>
-              {company.status ? (
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Status</span>
-                  <Badge variant="outline">{company.status.replace(/_/g, " ")}</Badge>
-                </div>
-              ) : null}
-              {csmName ? (
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Assigned CSM</span>
-                  <span className="font-medium">{csmName}</span>
-                </div>
-              ) : null}
-              {company.estimatedAnnualRevenue != null ? (
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Est. Annual Revenue</span>
-                  <span className="font-medium">{formatCurrency(company.estimatedAnnualRevenue)}</span>
-                </div>
-              ) : null}
-              {company.numberOfEmployees != null ? (
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Employees</span>
-                  <span className="font-medium">{company.numberOfEmployees}</span>
-                </div>
-              ) : null}
-              {company.domains && company.domains.length > 0 ? (
-                <div>
-                  <span className="text-muted-foreground">Domains</span>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {company.domains.map(d => <Badge key={d} variant="secondary" className="text-xs">{d}</Badge>)}
-                  </div>
-                </div>
-              ) : null}
-              {company.productLicensed && company.productLicensed.length > 0 ? (
-                <div>
-                  <span className="text-muted-foreground">Products Licensed</span>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {company.productLicensed.map(p => <Badge key={p} variant="secondary" className="text-xs">{p}</Badge>)}
-                  </div>
-                </div>
-              ) : null}
-              {company.memberOf && company.memberOf.length > 0 ? (
-                <div>
-                  <span className="text-muted-foreground">Member Of</span>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {company.memberOf.map(m => <Badge key={m} variant="secondary" className="text-xs">{m}</Badge>)}
-                  </div>
-                </div>
-              ) : null}
-              {!company.status && !csmName && company.estimatedAnnualRevenue == null && company.numberOfEmployees == null && !(company.domains?.length) && !(company.productLicensed?.length) && !(company.memberOf?.length) ? (
-                <p className="text-muted-foreground">No additional details.</p>
-              ) : null}
             </CollapsibleCard>
 
             {/* 4 — Contacts in left panel */}
