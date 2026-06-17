@@ -10,7 +10,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Plus, Download, ChevronDown, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatCurrencyCompact } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { DealDialog } from "@/components/deals/deal-dialog";
 import { ExportColumnsDialog, type ColumnDef } from "@/components/export-columns-dialog";
@@ -186,8 +186,26 @@ export function DealsPage() {
   }, [columns]);
 
   const allDeals = (columns ?? []).flatMap(c => c.deals) as DealWithRelations[];
-  const totalValue = (columns ?? []).reduce((sum, c) => sum + (c.totalValue ?? 0), 0);
-  const totalDeals = (columns ?? []).reduce((sum, c) => sum + c.deals.length, 0);
+  const totalDeals = allDeals.length;
+  const totalValue = allDeals.reduce((sum, d) => sum + (d.value || 0), 0);
+
+  const weightedValue = allDeals.reduce((sum, d) => sum + (d.value || 0) * ((d.probability ?? 0) / 100), 0);
+
+  const openDeals = (columns ?? []).filter(c => !/won|lost|closed/i.test(c.stage.name)).flatMap(c => c.deals);
+  const closedDeals = (columns ?? []).filter(c => /won|closed/i.test(c.stage.name)).flatMap(c => c.deals);
+  const newDeals = (columns ?? []).filter(c => /\bnew\b/i.test(c.stage.name)).flatMap(c => c.deals);
+
+  const openValue = openDeals.reduce((sum, d) => sum + (d.value || 0), 0);
+  const closedValue = closedDeals.reduce((sum, d) => sum + (d.value || 0), 0);
+  const newValue = newDeals.reduce((sum, d) => sum + (d.value || 0), 0);
+
+  const now = Date.now();
+  const avgAgeMonths = totalDeals > 0
+    ? allDeals.reduce((sum, d) => {
+        const created = d.createdAt ? new Date(d.createdAt).getTime() : now;
+        return sum + (now - created) / (1000 * 60 * 60 * 24 * 30.44);
+      }, 0) / totalDeals
+    : 0;
 
   return (
     <SidebarLayout>
@@ -220,29 +238,41 @@ export function DealsPage() {
 
         {/* Stats bar */}
         {!dealsLoading && columns && (
-          <div className="grid border border-border shrink-0" style={{ gridTemplateColumns: `repeat(${2 + (columns.length)}, 1fr)` }}>
-            <div className="px-3 py-2 border-r border-border">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">Total Value</div>
-              <div className="text-base font-bold text-primary">{formatCurrency(totalValue)}</div>
-            </div>
-            <div className="px-3 py-2 border-r border-border">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">Deals</div>
-              <div className="text-base font-bold text-foreground">{totalDeals}</div>
-            </div>
-            {columns.map((col, i) => (
-              <div key={col.stage.id} className={i < columns.length - 1 ? "px-3 py-2 border-r border-border" : "px-3 py-2"}>
-                <div className="flex items-center gap-1 mb-0.5">
-                  <span
-                    className="w-1.5 h-1.5 rounded-full shrink-0 inline-block"
-                    style={{ backgroundColor: col.stage.color || "var(--primary)" }}
-                  />
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{col.stage.name}</span>
+          <div className="grid grid-cols-6 border border-border shrink-0 bg-[#f0f7fa] dark:bg-muted/30">
+            {[
+              { label: "Total Deal Amount", value: totalValue, count: totalDeals },
+              { label: "Weighted Deal Amount", value: weightedValue, count: totalDeals },
+              { label: "Open Deal Amount", value: openValue, count: openDeals.length },
+              { label: "Closed Deal Amount", value: closedValue, count: closedDeals.length },
+              { label: "New Deal Amount", value: newValue, count: newDeals.length },
+            ].map((stat, i) => (
+              <div key={stat.label} className={`px-4 py-3 ${i < 5 ? "border-r border-border/60" : ""}`}>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-[#1a6b8a] dark:text-primary mb-1">
+                  {stat.label}
                 </div>
-                <div className="text-sm font-bold" style={{ color: col.stage.color || "var(--color-primary)" }}>
-                  {formatCurrency(col.totalValue ?? 0)}
+                <div className="text-2xl font-bold text-[#1a6b8a] dark:text-primary leading-tight">
+                  {formatCurrencyCompact(stat.value)}
+                </div>
+                <div className="text-[11px] text-[#1a6b8a]/70 dark:text-primary/70 mt-0.5">
+                  Average per deal{" "}
+                  <span className="font-medium">
+                    {stat.count > 0 ? formatCurrencyCompact(stat.value / stat.count) : "—"}
+                  </span>
                 </div>
               </div>
             ))}
+            {/* Average Deal Age */}
+            <div className="px-4 py-3">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-[#1a6b8a] dark:text-primary mb-1">
+                Average Deal Age
+              </div>
+              <div className="text-2xl font-bold text-[#1a6b8a] dark:text-primary leading-tight">
+                {avgAgeMonths.toFixed(1)} <span className="text-base font-semibold">months</span>
+              </div>
+              <div className="text-[11px] text-[#1a6b8a]/70 dark:text-primary/70 mt-0.5">
+                Across {totalDeals} deal{totalDeals !== 1 ? "s" : ""}
+              </div>
+            </div>
           </div>
         )}
 
