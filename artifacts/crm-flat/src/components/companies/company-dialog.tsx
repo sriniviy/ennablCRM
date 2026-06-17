@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useCreateCompany, useUpdateCompany, useDeleteCompany, useGetMe,
   getListCompaniesQueryKey, getGetCompanyQueryKey,
+  useListCompanies,
   CompanyStatus, type Company,
 } from "@workspace/api-client-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -11,7 +12,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Check, ChevronsUpDown, X, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTeamMembers } from "@/hooks/use-team-members";
 import { CustomFieldsForm } from "@/components/custom-fields/custom-fields-form";
@@ -37,7 +40,8 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
   const [domains, setDomains] = useState("");
   const [status, setStatus] = useState<string>("none");
   const [productLicensed, setProductLicensed] = useState("");
-  const [memberOf, setMemberOf] = useState("");
+  const [memberOf, setMemberOf] = useState<string[]>([]);
+  const [memberOfOpen, setMemberOfOpen] = useState(false);
   const [estimatedAnnualRevenue, setEstimatedAnnualRevenue] = useState("");
   const [numberOfEmployees, setNumberOfEmployees] = useState("");
   const [industry, setIndustry] = useState("");
@@ -51,6 +55,16 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
   const [cfValues, setCfValues] = useState<Record<string, string | null>>({});
 
   const { data: teamMembers = [] } = useTeamMembers();
+  const { data: allCompanies } = useListCompanies({ page: 1, pageSize: 500 });
+  const memberOfOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const co of allCompanies?.data ?? []) {
+      for (const m of co.memberOf ?? []) {
+        if (m) set.add(m);
+      }
+    }
+    return Array.from(set).sort();
+  }, [allCompanies]);
   const create = useCreateCompany();
   const update = useUpdateCompany();
   const remove = useDeleteCompany();
@@ -66,7 +80,7 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
       setDomains((company?.domains ?? []).join(", "));
       setStatus(company?.status ?? "none");
       setProductLicensed((company?.productLicensed ?? []).join(", "));
-      setMemberOf((company?.memberOf ?? []).join(", "));
+      setMemberOf(company?.memberOf ?? []);
       setEstimatedAnnualRevenue(company?.estimatedAnnualRevenue != null ? String(company.estimatedAnnualRevenue) : "");
       setNumberOfEmployees(company?.numberOfEmployees != null ? String(company.numberOfEmployees) : "");
       setIndustry(company?.industry ?? "");
@@ -107,7 +121,7 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
       domains: toList(domains),
       status: status === "none" ? undefined : (status as typeof CompanyStatus[keyof typeof CompanyStatus]),
       productLicensed: toList(productLicensed),
-      memberOf: toList(memberOf),
+      memberOf: memberOf,
       estimatedAnnualRevenue: estimatedAnnualRevenue ? Number(estimatedAnnualRevenue) : undefined,
       numberOfEmployees: numberOfEmployees ? Number(numberOfEmployees) : undefined,
       industry: industry || undefined,
@@ -185,8 +199,62 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
                 <Input id="co-products" value={productLicensed} onChange={e => setProductLicensed(e.target.value)} placeholder="Benchmarks, Insights" />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="co-memberof">Member Of <span className="text-muted-foreground text-xs">(comma-separated)</span></Label>
-                <Input id="co-memberof" value={memberOf} onChange={e => setMemberOf(e.target.value)} placeholder="Group A, Network B" />
+                <Label>Member Of</Label>
+                <Popover open={memberOfOpen} onOpenChange={setMemberOfOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-between font-normal"
+                    >
+                      {memberOf.length > 0
+                        ? `${memberOf.length} selected`
+                        : "Select networks…"}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search or type new…" />
+                      <CommandList>
+                        <CommandEmpty className="py-2 px-3 text-sm text-muted-foreground">No matches.</CommandEmpty>
+                        <CommandGroup>
+                          {memberOfOptions.map(opt => (
+                            <CommandItem
+                              key={opt}
+                              value={opt}
+                              onSelect={() => {
+                                setMemberOf(prev =>
+                                  prev.includes(opt) ? prev.filter(v => v !== opt) : [...prev, opt]
+                                );
+                              }}
+                            >
+                              <Check className={`mr-2 h-4 w-4 ${memberOf.includes(opt) ? "opacity-100" : "opacity-0"}`} />
+                              {opt}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                {memberOf.length > 0 && (
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    {memberOf.map(m => (
+                      <span key={m} className="inline-flex items-center gap-1 rounded-full bg-secondary text-secondary-foreground px-2 py-0.5 text-xs">
+                        {m}
+                        <button
+                          type="button"
+                          onClick={() => setMemberOf(prev => prev.filter(v => v !== m))}
+                          className="hover:text-destructive"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
