@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
+import { useSessionToken } from "@/hooks/use-session-token";
 import {
   useCreateDeal, useUpdateDeal, useDeleteDeal,
   useListDealStages, useListContacts, useListCompanies, useGetMe,
@@ -15,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Trash2, UserCircle } from "lucide-react";
+import { Trash2, UserCircle, Plus, X, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { NotesFeed } from "@/components/notes/notes-feed";
 import { AuditHistory } from "@/components/audit/audit-history";
@@ -55,6 +56,10 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
   const [cfValues, setCfValues] = useState<Record<string, string | null>>({});
   const saveCf = useSaveCustomFieldValuesForRecord("deal");
 
+  type SplitRow = { userId: string; percentage: string };
+  const [splitRows, setSplitRows] = useState<SplitRow[]>([]);
+  const getToken = useSessionToken();
+
   const { data: stages } = useListDealStages();
   const { data: contacts } = useListContacts({ page: 1, pageSize: 200 });
   const { data: companies } = useListCompanies({ page: 1, pageSize: 200 });
@@ -64,6 +69,38 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
   const remove = useDeleteDeal();
   const { data: me } = useGetMe();
   const isAdmin = me?.role === "ADMIN";
+
+  type SplitRecord = { id: string; userId: string; percentage: number; user: { id: string; name: string | null; email: string; avatarUrl: string | null } | null };
+  const { data: existingSplits } = useQuery<SplitRecord[]>({
+    queryKey: ["deal-splits", deal?.id],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch(`/api/deals/${deal!.id}/splits`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to fetch splits");
+      return res.json() as Promise<SplitRecord[]>;
+    },
+    enabled: !!deal?.id && open,
+  });
+
+  const saveSplits = useMutation({
+    mutationFn: async (splits: SplitRow[]) => {
+      const token = await getToken();
+      const res = await fetch(`/api/deals/${deal!.id}/splits`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ splits: splits.map(s => ({ userId: s.userId, percentage: parseFloat(s.percentage) || 0 })) }),
+      });
+      if (!res.ok) throw new Error("Failed to save splits");
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["deal-splits", deal?.id] });
+      toast({ title: "Deal split saved" });
+    },
+    onError: () => toast({ title: "Error", description: "Failed to save deal split", variant: "destructive" }),
+  });
 
   useEffect(() => {
     if (open) {
@@ -76,9 +113,18 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
       setCompanyId(deal?.company?.id ?? "");
       setNotes(deal?.notes ?? "");
       setAssigneeId((deal as unknown as { assigneeId?: string })?.assigneeId ?? "");
-      if (!deal) setCfValues({});
+      if (!deal) {
+        setCfValues({});
+        setSplitRows([]);
+      }
     }
   }, [open, deal, defaultStageId]);
+
+  useEffect(() => {
+    if (existingSplits) {
+      setSplitRows(existingSplits.map(s => ({ userId: s.userId, percentage: String(s.percentage) })));
+    }
+  }, [existingSplits]);
 
   const persistCf = (recordId: string) => {
     const values = Object.entries(cfValues).map(([fieldId, value]) => ({ fieldId, value }));
@@ -157,6 +203,9 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
                 </TabsTrigger>
                 <TabsTrigger value="files" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-2 pt-1">
                   Files
+                </TabsTrigger>
+                <TabsTrigger value="split" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-2 pt-1">
+                  Deal Split
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="details">
@@ -278,6 +327,112 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
               </TabsContent>
               <TabsContent value="files">
                 <AttachmentsPanel objectType="deal" recordId={deal.id} />
+              </TabsContent>
+              <TabsContent value="split">
+                {(() => {
+                  const dealValue = parseFloat(value) || 0;
+                  const totalPct = splitRows.reduce((s, r) => s + (parseFloat(r.percentage) || 0), 0);
+                  const isValid = Math.abs(totalPct - 100) < 0.01 || splitRows.length === 0;
+                  const usedUserIds = new Set(splitRows.map(r => r.userId));
+                  const availableMembers = (members ?? []).filter(m => !usedUserIds.has(m.id));
+                  return (
+                    <div className="space-y-4">
+                      <p className="text-sm text-muted-foreground">Split this deal between team members. Percentages must add up to 100%.</p>
+
+                      {splitRows.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-[1fr_100px_100px_32px] gap-2 text-xs font-medium text-muted-foreground px-1">
+                            <span>Team Member</span>
+                            <span>%</span>
+                            <span>Amount</span>
+                            <span />
+                          </div>
+                          {splitRows.map((row, i) => {
+                            const member = members?.find(m => m.id === row.userId);
+                            const dollarAmt = dealValue * ((parseFloat(row.percentage) || 0) / 100);
+                            return (
+                              <div key={i} className="grid grid-cols-[1fr_100px_100px_32px] gap-2 items-center">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="h-7 w-7 rounded-full bg-primary/10 text-primary text-[10px] flex items-center justify-center font-semibold shrink-0">
+                                    {memberInitials(member?.name)}
+                                  </span>
+                                  <span className="text-sm truncate">{member?.name ?? member?.email ?? row.userId}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.1"
+                                    value={row.percentage}
+                                    onChange={e => setSplitRows(prev => prev.map((r, idx) => idx === i ? { ...r, percentage: e.target.value } : r))}
+                                    className="h-8 text-sm pr-1"
+                                  />
+                                  <span className="text-xs text-muted-foreground">%</span>
+                                </div>
+                                <span className="text-sm text-muted-foreground">
+                                  {dealValue > 0 ? `$${dollarAmt.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : "—"}
+                                </span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                  onClick={() => setSplitRows(prev => prev.filter((_, idx) => idx !== i))}
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {availableMembers.length > 0 && (
+                        <Select
+                          value=""
+                          onValueChange={userId => setSplitRows(prev => [...prev, { userId, percentage: "" }])}
+                        >
+                          <SelectTrigger className="h-8 w-auto gap-1 text-sm border-dashed">
+                            <Plus className="h-3.5 w-3.5" />
+                            <SelectValue placeholder="Add team member" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableMembers.map(m => (
+                              <SelectItem key={m.id} value={m.id}>
+                                <span className="flex items-center gap-2">
+                                  <span className="h-5 w-5 rounded-full bg-primary/10 text-primary text-[10px] flex items-center justify-center font-semibold shrink-0">
+                                    {memberInitials(m.name)}
+                                  </span>
+                                  {m.name ?? m.email}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+
+                      {splitRows.length > 0 && (
+                        <div className={`flex items-center gap-2 text-sm ${isValid ? "text-green-600" : "text-amber-600"}`}>
+                          {isValid
+                            ? <CheckCircle2 className="h-4 w-4" />
+                            : <AlertCircle className="h-4 w-4" />}
+                          <span>Total: {totalPct.toFixed(1)}%{!isValid && " — must equal 100%"}</span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-end pt-2">
+                        <Button
+                          type="button"
+                          disabled={saveSplits.isPending || (splitRows.length > 0 && !isValid)}
+                          onClick={() => saveSplits.mutate(splitRows)}
+                        >
+                          {saveSplits.isPending ? "Saving…" : "Save Split"}
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </TabsContent>
             </Tabs>
           ) : (

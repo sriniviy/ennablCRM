@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { db, dealsTable, dealStagesTable, contactsTable, companiesTable, usersTable, customFieldDefinitionsTable, customFieldValuesTable, sequenceTriggersTable, sequenceEnrollmentsTable, sequenceStepsTable, sequencesTable, activitiesTable } from "@workspace/db";
+import { db, dealsTable, dealStagesTable, contactsTable, companiesTable, usersTable, customFieldDefinitionsTable, customFieldValuesTable, sequenceTriggersTable, sequenceEnrollmentsTable, sequenceStepsTable, sequencesTable, activitiesTable, dealSplitsTable } from "@workspace/db";
 import { eq, ilike, and, asc, desc, inArray, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin, type AuthRequest } from "../middlewares/requireAuth";
 import { logActivity } from "../lib/activity";
@@ -475,6 +475,74 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
     res.json(updated);
   } catch {
     res.status(500).json({ error: "Failed to update deal" });
+  }
+});
+
+router.get("/:id/splits", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const rows = await db
+      .select({
+        id: dealSplitsTable.id,
+        dealId: dealSplitsTable.dealId,
+        userId: dealSplitsTable.userId,
+        percentage: dealSplitsTable.percentage,
+        user: {
+          id: usersTable.id,
+          name: usersTable.name,
+          email: usersTable.email,
+          avatarUrl: usersTable.avatarUrl,
+        },
+      })
+      .from(dealSplitsTable)
+      .leftJoin(usersTable, eq(dealSplitsTable.userId, usersTable.id))
+      .where(eq(dealSplitsTable.dealId, id))
+      .orderBy(asc(dealSplitsTable.createdAt));
+    res.json(rows);
+  } catch {
+    res.status(500).json({ error: "Failed to get deal splits" });
+  }
+});
+
+router.put("/:id/splits", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const { splits } = req.body as { splits: { userId: string; percentage: number }[] };
+    if (!Array.isArray(splits)) {
+      res.status(400).json({ error: "splits must be an array" });
+      return;
+    }
+    await db.delete(dealSplitsTable).where(eq(dealSplitsTable.dealId, id));
+    if (splits.length > 0) {
+      await db.insert(dealSplitsTable).values(
+        splits.map((s) => ({
+          id: crypto.randomUUID(),
+          dealId: id,
+          userId: s.userId,
+          percentage: s.percentage,
+        })),
+      );
+    }
+    const rows = await db
+      .select({
+        id: dealSplitsTable.id,
+        dealId: dealSplitsTable.dealId,
+        userId: dealSplitsTable.userId,
+        percentage: dealSplitsTable.percentage,
+        user: {
+          id: usersTable.id,
+          name: usersTable.name,
+          email: usersTable.email,
+          avatarUrl: usersTable.avatarUrl,
+        },
+      })
+      .from(dealSplitsTable)
+      .leftJoin(usersTable, eq(dealSplitsTable.userId, usersTable.id))
+      .where(eq(dealSplitsTable.dealId, id))
+      .orderBy(asc(dealSplitsTable.createdAt));
+    res.json(rows);
+  } catch {
+    res.status(500).json({ error: "Failed to save deal splits" });
   }
 });
 

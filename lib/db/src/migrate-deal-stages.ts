@@ -1,5 +1,5 @@
 import { db, dealStagesTable, dealsTable } from "./index";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 const PRD_STAGES: { name: string; order: number; color: string }[] = [
   { name: "Discovery",         order: 0, color: "#3b82f6" },
@@ -70,12 +70,23 @@ export async function migrateDealStages() {
     }
   }
 
+  // Ensure deal_splits table exists (idempotent DDL).
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS deal_splits (
+      id text PRIMARY KEY,
+      deal_id text NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
+      user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      percentage double precision NOT NULL DEFAULT 0,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE(deal_id, user_id)
+    )
+  `);
+
   console.log("Deal stages migrated to PRD pipeline.");
 }
 
-const isMain =
-  process.argv[1] && import.meta.url === `file://${process.argv[1]}`;
-if (isMain) {
+if (process.argv[1]?.includes("migrate-deal-stages")) {
   migrateDealStages()
     .then(() => process.exit(0))
     .catch((err) => {
