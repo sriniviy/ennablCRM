@@ -382,7 +382,7 @@ export function SettingsTeamPage() {
     if (editTarget) {
       editMutation.mutate({ id: editTarget.id, f: form });
     } else {
-      if (!form.email.trim() || !form.password.trim()) return;
+      if (!form.email.trim()) return;
       addMutation.mutate(form);
     }
   };

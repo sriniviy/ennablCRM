@@ -179,13 +179,13 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[620px] max-h-[85vh] overflow-hidden !flex !flex-col p-0">
+          <DialogHeader className="px-6 pt-6 shrink-0">
             <DialogTitle>{isEdit ? "Edit Deal" : "New Deal"}</DialogTitle>
           </DialogHeader>
           {isEdit ? (
-            <Tabs defaultValue="details" className="pt-1">
-              <TabsList className="w-full justify-start border-b rounded-none bg-transparent h-auto p-0 mb-4">
+            <Tabs defaultValue="details" className="flex flex-col flex-1 min-h-0 px-6">
+              <TabsList className="w-full justify-start border-b rounded-none bg-transparent h-auto p-0 mb-0 shrink-0 overflow-x-auto">
                 <TabsTrigger value="details" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-2 pt-1">
                   Details
                 </TabsTrigger>
@@ -208,6 +208,7 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
                   Deal Split
                 </TabsTrigger>
               </TabsList>
+              <div className="flex-1 overflow-y-auto pb-6">
               <TabsContent value="details">
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="space-y-1.5">
@@ -434,9 +435,10 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
                   );
                 })()}
               </TabsContent>
+              </div>
             </Tabs>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+            <form onSubmit={handleSubmit} className="space-y-4 px-6 pb-6 overflow-y-auto flex-1">
               <div className="space-y-1.5">
                 <Label htmlFor="d-title">Deal Title *</Label>
                 <Input id="d-title" value={title} onChange={e => setTitle(e.target.value)} required />
