@@ -349,7 +349,7 @@ export function DealsPage() {
             <DragDropContext onDragEnd={handleDragEnd}>
               <div
                 className="grid gap-2 items-start min-h-[400px]"
-                style={{ gridTemplateColumns: `repeat(${(columns ?? []).length || 1}, minmax(160px, 1fr))` }}
+                style={{ gridTemplateColumns: `repeat(${(columns ?? []).length || 1}, minmax(185px, 1fr))` }}
               >
                 {(columns ?? []).map(column => (
                   <div key={column.stage.id} className="min-w-0 flex flex-col">
@@ -358,16 +358,16 @@ export function DealsPage() {
                       className="flex items-center justify-between px-2.5 py-2 mb-2 border border-border bg-card"
                       style={{ borderBottomWidth: 2, borderBottomColor: column.stage.color || "var(--color-primary)" }}
                     >
-                      <div>
-                        <div className="flex items-center gap-1.5 mb-0.5">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1 mb-0.5 min-w-0">
                           <span
                             className="w-2 h-2 rounded-full shrink-0 inline-block"
                             style={{ backgroundColor: column.stage.color || "var(--color-primary)" }}
                           />
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-foreground">
+                          <span className="text-[10px] font-bold uppercase tracking-tight text-foreground whitespace-nowrap overflow-hidden text-ellipsis">
                             {column.stage.name}
                           </span>
-                          <span className="text-[10px] text-muted-foreground">({column.deals.length})</span>
+                          <span className="text-[10px] text-muted-foreground shrink-0">({column.deals.length})</span>
                         </div>
                         <div
                           className="text-xs font-bold pl-3.5"
