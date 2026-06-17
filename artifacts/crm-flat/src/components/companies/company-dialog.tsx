@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Check, ChevronsUpDown, X, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -236,35 +235,32 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
               </div>
               <div className="space-y-1.5">
                 <Label>Member Of</Label>
-                <Popover open={memberOfOpen} onOpenChange={setMemberOfOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      role="combobox"
-                      className="w-full justify-between font-normal"
-                    >
-                      {memberOf.length > 0
-                        ? `${memberOf.length} selected`
-                        : "Select networks…"}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Button
+                  type="button"
+                  variant="outline"
+                  role="combobox"
+                  className="w-full justify-between font-normal"
+                  onClick={() => setMemberOfOpen(o => !o)}
+                >
+                  {memberOf.length > 0 ? `${memberOf.length} selected` : "Select networks…"}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+                {memberOfOpen && (
+                  <div className="rounded-md border bg-popover shadow-sm">
                     <Command>
-                      <CommandInput placeholder="Search or type new…" />
-                      <CommandList className="max-h-60 overflow-y-auto">
+                      <CommandInput placeholder="Search networks…" />
+                      <CommandList>
                         <CommandEmpty className="py-2 px-3 text-sm text-muted-foreground">No matches.</CommandEmpty>
                         <CommandGroup>
                           {memberOfOptions.map(opt => (
                             <CommandItem
                               key={opt}
                               value={opt}
-                              onSelect={() => {
+                              onSelect={() =>
                                 setMemberOf(prev =>
                                   prev.includes(opt) ? prev.filter(v => v !== opt) : [...prev, opt]
-                                );
-                              }}
+                                )
+                              }
                             >
                               <Check className={`mr-2 h-4 w-4 ${memberOf.includes(opt) ? "opacity-100" : "opacity-0"}`} />
                               {opt}
@@ -273,8 +269,8 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
                         </CommandGroup>
                       </CommandList>
                     </Command>
-                  </PopoverContent>
-                </Popover>
+                  </div>
+                )}
                 {memberOf.length > 0 && (
                   <div className="flex flex-wrap gap-1 pt-1">
                     {memberOf.map(m => (

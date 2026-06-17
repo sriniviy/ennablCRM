@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { db, workspaceSettingsTable } from "@workspace/db";
+import { db, workspaceSettingsTable, companiesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 
@@ -44,14 +44,16 @@ const DEFAULT_MEMBER_OF: string[] = [
 ];
 
 router.get("/member-of", async (_req: Request, res: Response) => {
-  const row = await db
-    .select()
-    .from(workspaceSettingsTable)
-    .where(eq(workspaceSettingsTable.key, MEMBER_OF_KEY))
-    .then((r) => r[0]);
+  const [row, companies] = await Promise.all([
+    db.select().from(workspaceSettingsTable).where(eq(workspaceSettingsTable.key, MEMBER_OF_KEY)).then((r) => r[0]),
+    db.select({ memberOf: companiesTable.memberOf }).from(companiesTable),
+  ]);
 
-  const options: string[] = row ? (row.value as { options: string[] }).options ?? DEFAULT_MEMBER_OF : DEFAULT_MEMBER_OF;
-  res.json({ options });
+  const saved: string[] = row ? (row.value as { options: string[] }).options ?? [] : [];
+  const fromCompanies: string[] = companies.flatMap((c) => c.memberOf ?? []).filter(Boolean);
+
+  const merged = Array.from(new Set([...DEFAULT_MEMBER_OF, ...saved, ...fromCompanies])).sort();
+  res.json({ options: merged });
 });
 
 router.put("/member-of", async (req: Request, res: Response) => {
