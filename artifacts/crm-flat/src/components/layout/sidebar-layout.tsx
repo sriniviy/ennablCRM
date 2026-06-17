@@ -43,6 +43,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { EnnablLogo, EnnablMark } from "@/components/brand/ennabl-logo";
 import { useState, useEffect } from "react";
 import { useTheme } from "@/hooks/use-theme";
 import { useMyAssignments } from "@/hooks/use-my-assignments";
@@ -273,10 +274,8 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
           <div className="flex h-full flex-col border-r border-sidebar-border bg-sidebar">
             {/* Brand */}
             <div className="flex items-center gap-2 px-4 py-3 border-b border-sidebar-border">
-              <div className="flex h-6 w-6 items-center justify-center rounded bg-primary text-primary-foreground font-bold text-xs shrink-0">
-                M
-              </div>
-              <span className="text-sm font-bold tracking-tight">MyCRM</span>
+              <EnnablMark className="h-6 w-6 shrink-0" />
+              <EnnablLogo className="h-5 w-auto" />
             </div>
             {/* Search */}
             <div className="px-3 py-2 border-b border-sidebar-border">
@@ -318,12 +317,10 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       >
         {/* Brand row */}
         <div className={`flex items-center border-b border-sidebar-border ${collapsed ? "px-2 py-3 flex-col gap-1" : "px-4 py-3 gap-2"}`}>
-          <div className="flex h-6 w-6 items-center justify-center rounded bg-primary text-primary-foreground font-bold text-xs shrink-0">
-            M
-          </div>
+          <EnnablMark className="h-6 w-6 shrink-0" />
           {!collapsed && (
             <>
-              <span className="text-sm font-bold tracking-tight flex-1 min-w-0">MyCRM</span>
+              <EnnablLogo className="h-5 w-auto flex-1 min-w-0" />
               <Tooltip delayDuration={0}>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon" onClick={toggleTheme} className="h-6 w-6 shrink-0">
