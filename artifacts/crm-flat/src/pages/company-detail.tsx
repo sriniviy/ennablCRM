@@ -209,22 +209,22 @@ export function CompanyDetailPage() {
 
           {/* Right Column - Tabs */}
           <div className="md:col-span-2">
-            <Tabs defaultValue="contacts">
+            <Tabs defaultValue="history">
               <TabsList className="w-full justify-start border-b rounded-none bg-transparent h-auto p-0 flex-wrap">
-                <TabsTrigger value="contacts" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
-                  Contacts ({company.contacts?.length || 0})
+                <TabsTrigger value="history" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
+                  Activities
                 </TabsTrigger>
                 <TabsTrigger value="deals" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   Deals ({company.deals?.length || 0})
                 </TabsTrigger>
+                <TabsTrigger value="files" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
+                  Files
+                </TabsTrigger>
                 <TabsTrigger value="notes" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   <NotesTabLabel entityType="company" entityId={id} />
                 </TabsTrigger>
-                <TabsTrigger value="history" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
-                  Activities
-                </TabsTrigger>
-                <TabsTrigger value="files" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
-                  Files
+                <TabsTrigger value="contacts" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
+                  Contacts ({company.contacts?.length || 0})
                 </TabsTrigger>
               </TabsList>
               
