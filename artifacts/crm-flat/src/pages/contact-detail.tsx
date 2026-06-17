@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Mail, Phone, Building2, Calendar, MessageSquare, Linkedin, CheckSquare, Pencil, CopyCheck, Send, Eye, MousePointerClick, BellOff, RefreshCw } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Building2, Calendar, MessageSquare, Linkedin, CheckSquare, Pencil, CopyCheck, Send, Eye, MousePointerClick, BellOff, RefreshCw, Sparkles } from "lucide-react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { NotesFeed } from "@/components/notes/notes-feed";
@@ -475,6 +475,78 @@ export function ContactDetailPage() {
         <div className="grid gap-6 md:grid-cols-3">
           {/* Left Column - Info */}
           <div className="space-y-6 md:col-span-1">
+
+            {/* 1 — Latest Summary */}
+            {(() => {
+              const acts = contact.activities ?? [];
+              const counts: Record<string, number> = {};
+              acts.forEach((a: any) => {
+                const label = a.type === 'NOTE' ? 'Notes' : a.type === 'CALL' ? 'Calls' : a.type.startsWith('EMAIL') ? 'Emails' : a.type === 'MEETING' ? 'Meetings' : 'Other';
+                counts[label] = (counts[label] || 0) + 1;
+              });
+              const last = [...acts].sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+              return (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
+                      <Sparkles className="h-4 w-4 text-primary" />
+                      Latest Summary
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm space-y-2">
+                    {acts.length === 0 ? (
+                      <p className="text-muted-foreground text-xs">No activities recorded yet.</p>
+                    ) : (
+                      <>
+                        <div className="flex flex-wrap gap-2">
+                          {Object.entries(counts).map(([label, n]) => (
+                            <span key={label} className="inline-flex items-center gap-1 text-xs bg-muted rounded-full px-2 py-0.5">
+                              <span className="font-semibold">{n}</span> {label}
+                            </span>
+                          ))}
+                        </div>
+                        {last && (
+                          <p className="text-xs text-muted-foreground pt-1 border-t">
+                            Last: <span className="text-foreground font-medium">{last.title}</span>
+                            {" · "}{new Date(last.createdAt).toLocaleDateString()}
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
+            {/* 2 — Pipeline Snapshot */}
+            {(contact.deals ?? []).length > 0 && (() => {
+              const deals = contact.deals ?? [];
+              const totalValue = deals.reduce((s: number, d: any) => s + (d.value || 0), 0);
+              const openDeals = deals.filter((d: any) => d.stage?.name !== 'Won' && d.stage?.name !== 'Lost');
+              return (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Pipeline Snapshot</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-primary">{formatCurrency(totalValue)}</div>
+                    <p className="text-xs text-muted-foreground mt-1">Total deal value</p>
+                    <div className="mt-3 pt-3 border-t grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <p className="text-muted-foreground text-xs">Open deals</p>
+                        <p className="font-semibold">{openDeals.length}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-xs">Total deals</p>
+                        <p className="font-semibold">{deals.length}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
+            {/* 3 — Contact Info */}
             <CollapsibleCard title="Contact Info" previewHeight={120} contentClassName="space-y-4">
               {contact.email && (
                 <div className="flex items-center gap-3 text-sm">
@@ -520,15 +592,15 @@ export function ContactDetailPage() {
                   <CardTitle className="text-lg">Tags</CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-wrap gap-2">
-                  {contact.tags.map(tag => (
+                  {contact.tags.map((tag: string) => (
                     <Badge key={tag} variant="secondary">{tag}</Badge>
                   ))}
                 </CardContent>
               </Card>
             )}
 
-            <CustomFieldsSection objectType="contact" recordId={id} />
             <AiSuggestions objectType="contact" recordId={id} contactId={id} />
+            <CustomFieldsSection objectType="contact" recordId={id} />
           </div>
 
           {/* Right Column - Tabs */}

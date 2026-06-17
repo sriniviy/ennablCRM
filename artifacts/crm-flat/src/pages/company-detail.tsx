@@ -239,6 +239,70 @@ export function CompanyDetailPage() {
         <div className="grid gap-6 md:grid-cols-3">
           {/* Left Column - Info */}
           <div className="space-y-6 md:col-span-1">
+
+            {/* 1 — Latest Summary */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  Latest Summary
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm space-y-2">
+                {companyActivities.length === 0 ? (
+                  <p className="text-muted-foreground text-xs">No activities recorded yet.</p>
+                ) : (() => {
+                  const counts: Record<string, number> = {};
+                  companyActivities.forEach(a => {
+                    const label = a.type === 'NOTE' ? 'Notes' : a.type === 'CALL' ? 'Calls' : a.type.startsWith('EMAIL') ? 'Emails' : a.type === 'MEETING' ? 'Meetings' : 'Other';
+                    counts[label] = (counts[label] || 0) + 1;
+                  });
+                  const last = companyActivities[0];
+                  return (
+                    <>
+                      <div className="flex flex-wrap gap-2">
+                        {Object.entries(counts).map(([label, n]) => (
+                          <span key={label} className="inline-flex items-center gap-1 text-xs bg-muted rounded-full px-2 py-0.5">
+                            <span className="font-semibold">{n}</span> {label}
+                          </span>
+                        ))}
+                      </div>
+                      {last && (
+                        <p className="text-xs text-muted-foreground pt-1 border-t">
+                          Last: <span className="text-foreground font-medium">{last.title}</span>
+                          {" · "}{new Date(last.createdAt).toLocaleDateString()}
+                        </p>
+                      )}
+                    </>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+
+            {/* 2 — Pipeline Snapshot */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Pipeline Snapshot</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-primary">
+                  {formatCurrency(company.openPipelineValue)}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">Open pipeline value</p>
+                <div className="mt-3 pt-3 border-t grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <p className="text-muted-foreground text-xs">Open deals</p>
+                    <p className="font-semibold">{company.openDeals ?? 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground text-xs">Total deals</p>
+                    <p className="font-semibold">{company.deals?.length ?? 0}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* 3 — Company Info */}
             <CollapsibleCard title="Company Info" previewHeight={160} contentClassName="space-y-4">
               <div className="flex items-center gap-3 text-sm">
                 <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -317,68 +381,7 @@ export function CompanyDetailPage() {
               ) : null}
             </CollapsibleCard>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Pipeline Snapshot</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-primary">
-                  {formatCurrency(company.openPipelineValue)}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">Open pipeline value</p>
-                <div className="mt-3 pt-3 border-t grid grid-cols-2 gap-2 text-sm">
-                  <div>
-                    <p className="text-muted-foreground text-xs">Open deals</p>
-                    <p className="font-semibold">{company.openDeals ?? 0}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground text-xs">Total deals</p>
-                    <p className="font-semibold">{company.deals?.length ?? 0}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* AI Summary — derived from activity data */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
-                  <Sparkles className="h-4 w-4 text-primary" />
-                  Activity Summary
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm space-y-2">
-                {companyActivities.length === 0 ? (
-                  <p className="text-muted-foreground text-xs">No activities recorded yet.</p>
-                ) : (() => {
-                  const counts: Record<string, number> = {};
-                  companyActivities.forEach(a => {
-                    const label = a.type === 'NOTE' ? 'Notes' : a.type === 'CALL' ? 'Calls' : a.type.startsWith('EMAIL') ? 'Emails' : a.type === 'MEETING' ? 'Meetings' : 'Other';
-                    counts[label] = (counts[label] || 0) + 1;
-                  });
-                  const last = companyActivities[0];
-                  return (
-                    <>
-                      <div className="flex flex-wrap gap-2">
-                        {Object.entries(counts).map(([label, n]) => (
-                          <span key={label} className="inline-flex items-center gap-1 text-xs bg-muted rounded-full px-2 py-0.5">
-                            <span className="font-semibold">{n}</span> {label}
-                          </span>
-                        ))}
-                      </div>
-                      {last && (
-                        <p className="text-xs text-muted-foreground pt-1 border-t">
-                          Last activity: <span className="text-foreground font-medium">{last.title}</span>
-                          {" · "}{new Date(last.createdAt).toLocaleDateString()}
-                        </p>
-                      )}
-                    </>
-                  );
-                })()}
-              </CardContent>
-            </Card>
-
-            {/* Contacts in left panel */}
+            {/* 4 — Contacts in left panel */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
