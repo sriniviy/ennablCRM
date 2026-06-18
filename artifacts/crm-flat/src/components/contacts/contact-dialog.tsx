@@ -14,7 +14,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { Trash2 } from "lucide-react";
+import { Trash2, HelpCircle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { CustomFieldsForm } from "@/components/custom-fields/custom-fields-form";
 import { useCustomFieldValues, useSaveCustomFieldValuesForRecord } from "@/hooks/use-custom-fields";
@@ -212,16 +213,38 @@ export function ContactDialog({ open, onOpenChange, contact }: ContactDialogProp
 
               {/* Preferences */}
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide border-t border-border pt-3">Preferences</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex items-center justify-between rounded-md border px-3 py-2">
-                  <Label htmlFor="c-ennabl" className="cursor-pointer">Ennabl User</Label>
-                  <Switch id="c-ennabl" checked={ennablUser} onCheckedChange={setEnnablUser} />
+              <TooltipProvider>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                    <div className="flex items-center gap-1.5">
+                      <Label htmlFor="c-ennabl" className="cursor-pointer">Ennabl User</Label>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-[220px] text-xs">
+                          Flags contacts who are actual users of the Ennabl platform (e.g. your own team or clients who log into Ennabl). Distinguishes internal/product users from regular CRM contacts.
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                    <Switch id="c-ennabl" checked={ennablUser} onCheckedChange={setEnnablUser} />
+                  </div>
+                  <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                    <div className="flex items-center gap-1.5">
+                      <Label htmlFor="c-marketing" className="cursor-pointer text-xs leading-tight">Email Marketing</Label>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-[220px] text-xs">
+                          Marks whether this person should receive marketing campaign emails. Acts as an opt-in/consent flag so campaigns only target contacts with this enabled.
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                    <Switch id="c-marketing" checked={emailMarketingContact} onCheckedChange={setEmailMarketingContact} />
+                  </div>
                 </div>
-                <div className="flex items-center justify-between rounded-md border px-3 py-2">
-                  <Label htmlFor="c-marketing" className="cursor-pointer text-xs leading-tight">Email Marketing</Label>
-                  <Switch id="c-marketing" checked={emailMarketingContact} onCheckedChange={setEmailMarketingContact} />
-                </div>
-              </div>
+              </TooltipProvider>
 
               {/* Notes */}
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide border-t border-border pt-3">Notes</p>
