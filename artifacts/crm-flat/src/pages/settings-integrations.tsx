@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   Plug2, Sparkles, Mail, TrendingUp, ChevronDown, ChevronUp,
-  Eye, EyeOff, Check,
+  Eye, EyeOff, Check, RefreshCw, Unplug,
 } from "lucide-react";
 
 // ── AI provider / model catalogue ─────────────────────────────────────────────
@@ -48,6 +48,7 @@ const AI_PROVIDERS = [
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ApolloConfig = { enabled: boolean; apiKey: string };
 type GmailConfig = { enabled: boolean; emailLogging: boolean; campaignSending: boolean };
+type GmailStatus = { connected: boolean; email?: string; connected_at?: string; last_sync?: string | null };
 type AiProviderConfig = { id: string; name: string; apiKey: string; enabled: boolean };
 type AiConfig = {
   enabled: boolean;
@@ -210,6 +211,56 @@ export function SettingsIntegrationsPage() {
     setTimeout(() => setApolloKeySaved(false), 2500);
   }
 
+  // ── Gmail status + sync ───────────────────────────────────────────────────
+  const { data: gmailStatus, refetch: refetchGmailStatus } = useQuery<GmailStatus>({
+    queryKey: ["gmail-status"],
+    queryFn: () => apiFetch("/gmail/status"),
+    refetchOnWindowFocus: true,
+  });
+
+  const [gmailSyncing, setGmailSyncing] = useState(false);
+  const [gmailDisconnecting, setGmailDisconnecting] = useState(false);
+
+  async function connectGmail() {
+    const win = window.open("/api/gmail/auth", "gmail_oauth", "width=600,height=700");
+    const handler = (e: MessageEvent) => {
+      if (e.data === "gmail_connected") {
+        window.removeEventListener("message", handler);
+        win?.close();
+        refetchGmailStatus();
+        qc.invalidateQueries({ queryKey: ["integrations"] });
+        toast({ title: "Gmail connected" });
+      }
+    };
+    window.addEventListener("message", handler);
+  }
+
+  async function syncGmail() {
+    setGmailSyncing(true);
+    try {
+      const result = await apiFetch("/gmail/sync", { method: "POST", body: JSON.stringify({ maxMessages: 100 }) });
+      refetchGmailStatus();
+      toast({ title: `Sync complete — ${result.synced} emails imported, ${result.skipped} skipped` });
+    } catch (err) {
+      toast({ title: "Sync failed", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setGmailSyncing(false);
+    }
+  }
+
+  async function disconnectGmail() {
+    setGmailDisconnecting(true);
+    try {
+      await apiFetch("/gmail/disconnect", { method: "DELETE" });
+      refetchGmailStatus();
+      toast({ title: "Gmail disconnected" });
+    } catch {
+      toast({ title: "Failed to disconnect", variant: "destructive" });
+    } finally {
+      setGmailDisconnecting(false);
+    }
+  }
+
   // ── AI local state ─────────────────────────────────────────────────────────
   const aiCfg: AiConfig = data?.ai ?? {
     enabled: true,
@@ -342,21 +393,55 @@ export function SettingsIntegrationsPage() {
           saving={patch.isPending}
         >
           <div className="space-y-4">
-            {/* Connect placeholder */}
+            {/* Connect / Status */}
             <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
               <div>
                 <p className="text-xs font-medium">Google Account</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  Connect a Gmail account to enable email features.
-                </p>
+                {gmailStatus?.connected ? (
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Connected as <span className="font-medium text-foreground">{gmailStatus.email}</span>
+                    {gmailStatus.last_sync && (
+                      <> · Last sync {new Date(gmailStatus.last_sync).toLocaleString()}</>
+                    )}
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Connect a Gmail account to enable email logging.
+                  </p>
+                )}
               </div>
-              <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" disabled>
-                Connect Gmail
-              </Button>
+              <div className="flex items-center gap-1.5">
+                {gmailStatus?.connected ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs gap-1.5"
+                      onClick={syncGmail}
+                      disabled={gmailSyncing}
+                    >
+                      <RefreshCw className={`h-3 w-3 ${gmailSyncing ? "animate-spin" : ""}`} />
+                      {gmailSyncing ? "Syncing…" : "Sync now"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs gap-1.5 text-destructive hover:text-destructive"
+                      onClick={disconnectGmail}
+                      disabled={gmailDisconnecting}
+                    >
+                      <Unplug className="h-3 w-3" />
+                      Disconnect
+                    </Button>
+                  </>
+                ) : (
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={connectGmail}>
+                    <Mail className="h-3 w-3" />
+                    Connect Gmail
+                  </Button>
+                )}
+              </div>
             </div>
-            <p className="text-[11px] text-muted-foreground -mt-1">
-              OAuth Gmail connection coming soon. Toggle controls will take effect once connected.
-            </p>
 
             {/* Sub-toggles */}
             <div className="space-y-2.5 pt-1">
