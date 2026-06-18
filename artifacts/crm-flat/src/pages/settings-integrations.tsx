@@ -222,14 +222,17 @@ export function SettingsIntegrationsPage() {
   const [gmailDisconnecting, setGmailDisconnecting] = useState(false);
 
   async function connectGmail() {
-    const win = window.open("/api/gmail/auth", "gmail_oauth", "width=600,height=700");
+    // Pass auth token as query param so the server can identify the user
+    const sessionToken = await getToken();
+    const url = `/api/gmail/auth?token=${encodeURIComponent(sessionToken)}`;
+    const win = window.open(url, "gmail_oauth", "width=600,height=700");
     const handler = (e: MessageEvent) => {
       if (e.data === "gmail_connected") {
         window.removeEventListener("message", handler);
         win?.close();
         refetchGmailStatus();
-        qc.invalidateQueries({ queryKey: ["integrations"] });
-        toast({ title: "Gmail connected" });
+        qc.invalidateQueries({ queryKey: ["gmail-all-status"] });
+        toast({ title: "Gmail connected — emails will sync every 5 minutes automatically" });
       }
     };
     window.addEventListener("message", handler);
@@ -260,6 +263,14 @@ export function SettingsIntegrationsPage() {
       setGmailDisconnecting(false);
     }
   }
+
+  // ── Gmail all-team status (admin) ────────────────────────────────────────
+  type TeamGmailStatus = { userId: string; email: string; connectedAt: string; lastSync: string | null };
+  const { data: teamGmailStatus } = useQuery<TeamGmailStatus[]>({
+    queryKey: ["gmail-all-status"],
+    queryFn: () => apiFetch("/gmail/all-status"),
+    retry: false, // fails silently for non-admins
+  });
 
   // ── AI local state ─────────────────────────────────────────────────────────
   const aiCfg: AiConfig = data?.ai ?? {
@@ -393,75 +404,85 @@ export function SettingsIntegrationsPage() {
           saving={patch.isPending}
         >
           <div className="space-y-4">
-            {/* Connect / Status */}
-            <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
-              <div>
-                <p className="text-xs font-medium">Google Account</p>
-                {gmailStatus?.connected ? (
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Connected as <span className="font-medium text-foreground">{gmailStatus.email}</span>
-                    {gmailStatus.last_sync && (
-                      <> · Last sync {new Date(gmailStatus.last_sync).toLocaleString()}</>
-                    )}
-                  </p>
-                ) : (
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Connect a Gmail account to enable email logging.
-                  </p>
-                )}
-              </div>
-              <div className="flex items-center gap-1.5">
-                {gmailStatus?.connected ? (
-                  <>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 text-xs gap-1.5"
-                      onClick={syncGmail}
-                      disabled={gmailSyncing}
-                    >
-                      <RefreshCw className={`h-3 w-3 ${gmailSyncing ? "animate-spin" : ""}`} />
-                      {gmailSyncing ? "Syncing…" : "Sync now"}
+            {/* Your Gmail account */}
+            <div>
+              <p className="text-xs font-medium mb-2">Your Gmail account</p>
+              <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+                <div>
+                  {gmailStatus?.connected ? (
+                    <div>
+                      <p className="text-xs font-medium flex items-center gap-1.5">
+                        <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
+                        {gmailStatus.email}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        Connected · {gmailStatus.lastSync
+                          ? `Last sync ${new Date(gmailStatus.lastSync).toLocaleString()}`
+                          : "Not synced yet — emails sync automatically every 5 minutes"}
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-xs font-medium">Not connected</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        Connect your Gmail to automatically log emails with CRM contacts.
+                      </p>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {gmailStatus?.connected ? (
+                    <>
+                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={syncGmail} disabled={gmailSyncing}>
+                        <RefreshCw className={`h-3 w-3 ${gmailSyncing ? "animate-spin" : ""}`} />
+                        {gmailSyncing ? "Syncing…" : "Sync now"}
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 text-destructive hover:text-destructive" onClick={disconnectGmail} disabled={gmailDisconnecting}>
+                        <Unplug className="h-3 w-3" />
+                        Disconnect
+                      </Button>
+                    </>
+                  ) : (
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={connectGmail}>
+                      <Mail className="h-3 w-3" />
+                      Connect Gmail
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 text-xs gap-1.5 text-destructive hover:text-destructive"
-                      onClick={disconnectGmail}
-                      disabled={gmailDisconnecting}
-                    >
-                      <Unplug className="h-3 w-3" />
-                      Disconnect
-                    </Button>
-                  </>
-                ) : (
-                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={connectGmail}>
-                    <Mail className="h-3 w-3" />
-                    Connect Gmail
-                  </Button>
-                )}
+                  )}
+                </div>
               </div>
             </div>
 
+            {/* Team connections (admin only) */}
+            {teamGmailStatus && teamGmailStatus.length > 0 && (
+              <div>
+                <p className="text-xs font-medium mb-2">Team connections</p>
+                <div className="space-y-1.5">
+                  {teamGmailStatus.map((u) => (
+                    <div key={u.userId} className="flex items-center justify-between px-3 py-2 rounded-md border text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-block h-2 w-2 rounded-full bg-green-500 shrink-0" />
+                        <span className="font-medium">{u.email}</span>
+                      </div>
+                      <span className="text-muted-foreground">
+                        {u.lastSync ? `Synced ${new Date(u.lastSync).toLocaleString()}` : "No sync yet"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Sub-toggles */}
-            <div className="space-y-2.5 pt-1">
+            <div className="space-y-2.5 pt-1 border-t">
               {[
-                {
-                  field: "emailLogging" as const,
-                  label: "Email logging",
-                  desc: "Automatically log inbound and outbound Gmail emails to contact timelines",
-                },
-                {
-                  field: "campaignSending" as const,
-                  label: "Campaign & sequence sending",
-                  desc: "Route campaign and sequence emails through Gmail instead of the default mailer",
-                },
+                { field: "emailLogging" as const, label: "Email logging", desc: "Automatically log inbound and outbound Gmail emails to contact timelines" },
+                { field: "campaignSending" as const, label: "Campaign & sequence sending", desc: "Route campaign and sequence emails through Gmail instead of the default mailer" },
               ].map(({ field, label, desc }) => (
-                <div key={field} className="flex items-start gap-3 py-2 border-t first:border-t-0">
+                <div key={field} className="flex items-start gap-3 py-2 border-b last:border-b-0">
                   <Switch
                     checked={data?.gmail[field] ?? true}
                     onCheckedChange={(v) => patch.mutate({ key: "gmail", payload: { [field]: v } })}
-                    disabled={patch.isPending || !(data?.gmail.enabled)}
+                    disabled={patch.isPending}
                     className="mt-0.5 shrink-0"
                   />
                   <div>

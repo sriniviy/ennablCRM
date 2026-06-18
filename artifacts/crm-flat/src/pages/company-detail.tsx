@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   ArrowLeft, Globe, MapPin, Phone, Pencil, CopyCheck,
   Mail, MessageSquare, Calendar, CheckSquare, Sparkles, Users, ChevronDown, ChevronUp,
+  Paperclip, ArrowUpRight, ArrowDownLeft,
 } from "lucide-react";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { NotesFeed } from "@/components/notes/notes-feed";
@@ -156,7 +157,9 @@ export function CompanyDetailPage() {
   const companyActivities = [...(activitiesData?.data ?? [])].sort((a, b) =>
     new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
-  const emailActivities = companyActivities.filter(a => a.type.startsWith("EMAIL"));
+  const emailActivities = [...companyActivities]
+    .filter(a => a.type.startsWith("EMAIL"))
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   // Log Activity form state
   const [actType, setActType] = useState("NOTE");
@@ -527,32 +530,51 @@ export function CompanyDetailPage() {
                     <Mail className="h-8 w-8 mx-auto mb-3 opacity-30" />
                     <p className="font-medium">No emails synced yet</p>
                     <p>Emails will appear here automatically once Gmail sync is active.</p>
+                    <p className="text-[11px] pt-1">Connect Gmail in <strong>Settings → Integrations</strong> to get started.</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {emailActivities.map(activity => (
-                      <div key={activity.id} className="p-4 border rounded-lg bg-card space-y-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <Mail className="h-4 w-4 text-purple-500 shrink-0" />
-                            <p className="font-medium truncate">{activity.emailSubject || activity.title}</p>
+                  <div className="space-y-3">
+                    {emailActivities.map(activity => {
+                      const meta = activity.metadata as { direction?: string; from?: string; to?: string; attachmentCount?: number } | null;
+                      const isSent = meta?.direction === "sent";
+                      const hasAttachments = (meta?.attachmentCount ?? 0) > 0;
+                      return (
+                        <div key={activity.id} className="p-4 border rounded-lg bg-card space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className={`shrink-0 rounded-full p-1 ${isSent ? "bg-blue-50 text-blue-500" : "bg-green-50 text-green-600"}`}>
+                                {isSent ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownLeft className="h-3 w-3" />}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-medium truncate text-sm">{activity.emailSubject || activity.title || "(no subject)"}</p>
+                                <p className="text-[11px] text-muted-foreground truncate">
+                                  {isSent ? `To: ${meta?.to ?? ""}` : `From: ${meta?.from ?? ""}`}
+                                  {activity.contact && ` · ${activity.contact.firstName} ${activity.contact.lastName}`}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {hasAttachments && (
+                                <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground">
+                                  <Paperclip className="h-3 w-3" />
+                                  {meta?.attachmentCount}
+                                </span>
+                              )}
+                              <p className="text-xs text-muted-foreground">{new Date(activity.createdAt).toLocaleString()}</p>
+                            </div>
                           </div>
-                          <p className="text-xs text-muted-foreground shrink-0">{new Date(activity.createdAt).toLocaleString()}</p>
+                          {(activity.emailBody || activity.description) && (
+                            <p className="text-sm text-muted-foreground pl-7 line-clamp-3">{activity.emailBody || activity.description}</p>
+                          )}
+                          <ActivitySummary
+                            activityId={activity.id}
+                            type={activity.type}
+                            summary={activity.aiSummary}
+                            onUpdated={() => queryClient.invalidateQueries({ queryKey: ["listActivities"] })}
+                          />
                         </div>
-                        {activity.emailBody && (
-                          <p className="text-sm text-muted-foreground whitespace-pre-wrap pl-6 line-clamp-4">{activity.emailBody}</p>
-                        )}
-                        {activity.description && !activity.emailBody && (
-                          <p className="text-sm text-muted-foreground pl-6">{activity.description}</p>
-                        )}
-                        <ActivitySummary
-                          activityId={activity.id}
-                          type={activity.type}
-                          summary={activity.aiSummary}
-                          onUpdated={() => queryClient.invalidateQueries({ queryKey: ["listActivities"] })}
-                        />
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </TabsContent>

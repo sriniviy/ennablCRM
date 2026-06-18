@@ -21,3 +21,4 @@ export * from "./ai_presets";
 export * from "./workspace_settings";
 export * from "./background_jobs";
 export * from "./deal_splits";
+export * from "./user_gmail_tokens";
