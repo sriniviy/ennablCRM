@@ -2,7 +2,8 @@ import { useSessionToken } from "@/hooks/use-session-token";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 
-import { useListCompanies, CompanyStatus, useGetMe, type Company } from "@workspace/api-client-react";
+import { useListCompanies, useUpdateCompany, CompanyStatus, useGetMe, getListCompaniesQueryKey, type Company } from "@workspace/api-client-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTeamMembers } from "@/hooks/use-team-members";
 import { formatCurrency } from "@/lib/utils";
 import { Link } from "wouter";
@@ -14,7 +15,9 @@ import {
 } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Plus, Globe, Building2, Download, CopyCheck, Share2 } from "lucide-react";
+import { Search, Plus, Globe, Building2, Download, CopyCheck, Share2, Pencil, Check } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useSharedTags } from "@/hooks/use-shared-tags";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useUrlFilters } from "@/hooks/use-url-filters";
@@ -136,6 +139,153 @@ const buildCompanyCardFields = (ownerName: (id: string | null | undefined) => st
   { label: "ID", render: c => dash(c.id) },
 ];
 
+const DEFAULT_MEMBER_OF = [
+  "Acrisure","Afore","ALKEME","Alera","Alliant","Applied Reference Client",
+  "Association of Risk Managers Northwest","Assurex","BIGN","BroadStreet","CIAB",
+  "Fortified","Gallagher","HUB","HighStreet","InCite","Insurors Group","Intersure",
+  "Iroquois Group","ISU","Keystone","Marsh/MMA","MarshBerry Connect",
+  "New Demos Challenge 26","Outmarket Customer","PacWest","Patriot","Reagan Survey",
+  "RiskProNet","Top 100 Target List","USI","Vertafore Reference Customer",
+];
+
+function InlineOwnerCell({ company, members, onSaved }: {
+  company: Company;
+  members: Array<{ id: string; name?: string | null; email: string }>;
+  onSaved: () => void;
+}) {
+  const update = useUpdateCompany();
+  return (
+    <div onClick={e => e.stopPropagation()}>
+      <Select
+        value={company.assignedCsmId ?? "none"}
+        onValueChange={val =>
+          update.mutate({ id: company.id, data: { assignedCsmId: val === "none" ? null : val } }, { onSuccess: onSaved })
+        }
+      >
+        <SelectTrigger className="h-8 w-full border-transparent bg-transparent shadow-none text-sm text-muted-foreground hover:border-border hover:bg-muted/40 focus:ring-1 px-2">
+          <SelectValue placeholder="Unassigned" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">Unassigned</SelectItem>
+          {members.map(m => <SelectItem key={m.id} value={m.id}>{m.name || m.email}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function InlineWebsiteCell({ company, onSaved }: { company: Company; onSaved: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(company.website ?? "");
+  const update = useUpdateCompany();
+
+  const save = () => {
+    const trimmed = value.trim();
+    if (trimmed === (company.website ?? "")) { setEditing(false); return; }
+    update.mutate(
+      { id: company.id, data: { website: trimmed || undefined } },
+      { onSuccess: () => { onSaved(); setEditing(false); } }
+    );
+  };
+
+  if (editing) {
+    return (
+      <div onClick={e => e.stopPropagation()}>
+        <Input
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          onBlur={save}
+          onKeyDown={e => { if (e.key === "Enter") save(); if (e.key === "Escape") { setValue(company.website ?? ""); setEditing(false); } }}
+          autoFocus
+          className="h-7 text-sm px-2"
+          placeholder="https://…"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1 group/web" onClick={e => e.stopPropagation()}>
+      {company.website ? (
+        <a
+          href={company.website.startsWith("http") ? company.website : `https://${company.website}`}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-1 hover:text-primary truncate min-w-0"
+          onClick={e => e.stopPropagation()}
+        >
+          <Globe className="h-3 w-3 shrink-0 text-muted-foreground" />
+          <span className="truncate text-muted-foreground">{company.website.replace(/^https?:\/\//, "")}</span>
+        </a>
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      )}
+      <button
+        onClick={e => { e.stopPropagation(); setValue(company.website ?? ""); setEditing(true); }}
+        className="opacity-0 group-hover/web:opacity-100 transition-opacity ml-1 text-muted-foreground hover:text-foreground shrink-0"
+      >
+        <Pencil className="h-3 w-3" />
+      </button>
+    </div>
+  );
+}
+
+function InlineMemberOfCell({ company, options, onSaved }: { company: Company; options: string[]; onSaved: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<string[] | null>(null);
+  const update = useUpdateCompany();
+  const current = company.memberOf ?? [];
+  const displayed = editing ?? current;
+
+  const handleOpenChange = (o: boolean) => {
+    if (o) {
+      setEditing([...current]);
+    } else if (editing !== null) {
+      if (JSON.stringify([...editing].sort()) !== JSON.stringify([...current].sort())) {
+        update.mutate({ id: company.id, data: { memberOf: editing } }, { onSuccess: onSaved });
+      }
+      setEditing(null);
+    }
+    setOpen(o);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>
+        <button
+          className="text-sm text-muted-foreground hover:text-foreground text-left truncate w-full"
+          onClick={e => e.stopPropagation()}
+        >
+          {current.length === 0 ? "—" : current.length === 1 ? current[0] : `${current.length} groups`}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-0" onClick={e => e.stopPropagation()}>
+        <Command>
+          <CommandInput placeholder="Search networks…" />
+          <CommandList className="max-h-52">
+            <CommandEmpty className="py-2 px-3 text-sm text-muted-foreground">No matches.</CommandEmpty>
+            <CommandGroup>
+              {options.map(opt => (
+                <CommandItem
+                  key={opt}
+                  value={opt}
+                  onSelect={() => setEditing(prev => {
+                    const base = prev ?? current;
+                    return base.includes(opt) ? base.filter(v => v !== opt) : [...base, opt];
+                  })}
+                >
+                  <Check className={`mr-2 h-4 w-4 shrink-0 ${displayed.includes(opt) ? "opacity-100" : "opacity-0"}`} />
+                  {opt}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function CompaniesPage() {
   const getToken = useSessionToken();
   const { toast } = useToast();
@@ -164,6 +314,19 @@ export function CompaniesPage() {
   const [duplicatesOpen, setDuplicatesOpen] = useState(false);
   const [shareCompany, setShareCompany] = useState<Company | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+
+  const qc = useQueryClient();
+  const { data: memberOfData } = useQuery<{ options: string[] }>({
+    queryKey: ["settings", "member-of"],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch("/api/settings/member-of", { headers: { Authorization: `Bearer ${token}` } });
+      return res.json();
+    },
+    staleTime: 60_000,
+  });
+  const memberOfOptions = memberOfData?.options ?? DEFAULT_MEMBER_OF;
+  const invalidate = useCallback(() => qc.invalidateQueries({ queryKey: getListCompaniesQueryKey() }), [qc]);
 
   useEffect(() => {
     set({
@@ -323,10 +486,6 @@ export function CompaniesPage() {
                   ))
                 ) : companies.length > 0 ? (
                   companies.map(company => {
-                    const ownerName = company.assignedCsmId
-                      ? (members ?? []).find(m => m.id === company.assignedCsmId)?.name ?? "—"
-                      : "—";
-                    const memberOfStr = company.memberOf?.length ? company.memberOf.join(", ") : "—";
                     return (
                       <TableRow key={company.id} className="cursor-pointer hover:bg-muted/40" onClick={() => openEdit(company)}>
                         <TableCell className="font-medium">
@@ -346,7 +505,7 @@ export function CompaniesPage() {
                             </p>
                           )}
                         </TableCell>
-                        <TableCell className="text-muted-foreground truncate">{ownerName}</TableCell>
+                        <TableCell className="truncate p-0 pl-4"><InlineOwnerCell company={company} members={members ?? []} onSaved={invalidate} /></TableCell>
                         <TableCell className="text-muted-foreground text-sm tabular-nums">
                           {company.createdAt ? new Date(company.createdAt).toLocaleDateString() : "—"}
                         </TableCell>
@@ -357,21 +516,8 @@ export function CompaniesPage() {
                             </a>
                           ) : "—"}
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {company.website ? (
-                            <a
-                              href={company.website.startsWith("http") ? company.website : `https://${company.website}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="flex items-center gap-1 hover:text-primary truncate"
-                              onClick={e => e.stopPropagation()}
-                            >
-                              <Globe className="h-3 w-3 shrink-0" />
-                              <span className="truncate">{company.website.replace(/^https?:\/\//, "")}</span>
-                            </a>
-                          ) : "—"}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground truncate">{memberOfStr}</TableCell>
+                        <TableCell><InlineWebsiteCell company={company} onSaved={invalidate} /></TableCell>
+                        <TableCell className="truncate"><InlineMemberOfCell company={company} options={memberOfOptions} onSaved={invalidate} /></TableCell>
                         <TableCell className="text-right tabular-nums text-sm">
                           {(company as any).totalDealsValue > 0 ? (
                             <span className="font-medium text-primary">{formatCurrency((company as any).totalDealsValue)}</span>

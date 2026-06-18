@@ -1,9 +1,9 @@
 import { useSessionToken } from "@/hooks/use-session-token";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
-import { useListContacts, ContactStatus, ReviewStatus, useGetMe, type ContactWithRelations } from "@workspace/api-client-react";
-import { useQuery } from "@tanstack/react-query";
+import { useListContacts, useUpdateContact, ContactStatus, ReviewStatus, useGetMe, getListContactsQueryKey, type ContactWithRelations } from "@workspace/api-client-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,8 @@ import {
 } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Plus, Upload, Download, CopyCheck, Mail, Zap, Share2 } from "lucide-react";
+import { Search, Plus, Upload, Download, CopyCheck, Mail, Zap, Share2, X } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useSharedTags } from "@/hooks/use-shared-tags";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useUrlFilters } from "@/hooks/use-url-filters";
@@ -110,6 +111,108 @@ const CARD_FIELDS: CardField<ContactWithRelations>[] = [
   { label: "ID", render: c => dash(c.id) },
 ];
 
+const toLabel = (s: string) => s.replace(/_/g, " ").toLowerCase().replace(/^\w/, c => c.toUpperCase());
+
+function InlineStatusCell({ contact, onSaved }: { contact: ContactWithRelations; onSaved: () => void }) {
+  const [open, setOpen] = useState(false);
+  const update = useUpdateContact();
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button className="block" onClick={e => e.stopPropagation()}>
+          <Badge variant="outline" className={`font-normal border-0 cursor-pointer hover:opacity-75 ${STATUS_COLORS[contact.status] ?? ""}`}>
+            {toLabel(contact.status)}
+          </Badge>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-40 p-1" onClick={e => e.stopPropagation()}>
+        <div className="flex flex-col gap-0.5">
+          {Object.values(ContactStatus).map(s => (
+            <button
+              key={s}
+              className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-muted text-left w-full ${contact.status === s ? "font-semibold" : ""}`}
+              onClick={() => update.mutate(
+                { id: contact.id, data: { status: s } },
+                { onSuccess: () => { onSaved(); setOpen(false); } }
+              )}
+            >
+              <span className={`w-2 h-2 rounded-full shrink-0 ${STATUS_COLORS[s]?.split(" ")[0] ?? "bg-gray-200"}`} />
+              {toLabel(s)}
+            </button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function InlineTagsCell({ contact, onSaved }: { contact: ContactWithRelations; onSaved: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<string[] | null>(null);
+  const [input, setInput] = useState("");
+  const update = useUpdateContact();
+  const current = contact.tags ?? [];
+  const displayed = editing ?? current;
+
+  const handleOpenChange = (o: boolean) => {
+    if (o) {
+      setEditing([...current]);
+    } else if (editing !== null) {
+      if (JSON.stringify([...editing].sort()) !== JSON.stringify([...current].sort())) {
+        update.mutate({ id: contact.id, data: { tags: editing } }, { onSuccess: onSaved });
+      }
+      setEditing(null);
+      setInput("");
+    }
+    setOpen(o);
+  };
+
+  const addTag = () => {
+    const trimmed = input.trim().toLowerCase();
+    if (trimmed && !displayed.includes(trimmed)) {
+      setEditing(prev => [...(prev ?? current), trimmed]);
+    }
+    setInput("");
+  };
+
+  const removeTag = (tag: string) => setEditing(prev => (prev ?? current).filter(t => t !== tag));
+
+  return (
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>
+        <div className="flex flex-wrap gap-1 cursor-pointer min-h-[20px]" onClick={e => e.stopPropagation()}>
+          {current.slice(0, 3).map(tag => <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>)}
+          {current.length === 0 && <span className="text-muted-foreground text-xs">—</span>}
+          {current.length > 3 && <Badge variant="secondary" className="text-xs">+{current.length - 3}</Badge>}
+        </div>
+      </PopoverTrigger>
+      <PopoverContent className="w-56 p-3" onClick={e => e.stopPropagation()}>
+        <p className="text-xs font-semibold text-muted-foreground mb-2">Tags</p>
+        {displayed.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {displayed.map(tag => (
+              <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-secondary text-secondary-foreground px-2 py-0.5 text-xs">
+                {tag}
+                <button type="button" onClick={() => removeTag(tag)} className="hover:text-destructive"><X className="h-3 w-3" /></button>
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-1">
+          <Input
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
+            placeholder="Add tag…"
+            className="h-7 text-sm"
+          />
+          <Button size="sm" variant="outline" onClick={addTag} className="h-7 px-2 shrink-0">Add</Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function ContactsPage() {
   const getToken = useSessionToken();
   const { toast } = useToast();
@@ -135,6 +238,9 @@ export function ContactsPage() {
   const [duplicatesOpen, setDuplicatesOpen] = useState(false);
   const [shareContact, setShareContact] = useState<ContactWithRelations | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+
+  const qc = useQueryClient();
+  const invalidate = useCallback(() => qc.invalidateQueries({ queryKey: getListContactsQueryKey() }), [qc]);
 
   useEffect(() => {
     set({
@@ -355,18 +461,8 @@ export function ContactsPage() {
                           </Link>
                         ) : <span className="text-muted-foreground">—</span>}
                       </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={`font-normal border-0 ${STATUS_COLORS[contact.status] ?? ""}`}>
-                          {contact.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {(contact.tags ?? []).slice(0, 3).map(tag => (
-                            <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
-                          ))}
-                        </div>
-                      </TableCell>
+                      <TableCell><InlineStatusCell contact={contact} onSaved={invalidate} /></TableCell>
+                      <TableCell><InlineTagsCell contact={contact} onSaved={invalidate} /></TableCell>
                       <TableCell className="text-muted-foreground text-sm tabular-nums">
                         {(contact as any).lastActivityDate
                           ? new Date((contact as any).lastActivityDate).toLocaleDateString()
