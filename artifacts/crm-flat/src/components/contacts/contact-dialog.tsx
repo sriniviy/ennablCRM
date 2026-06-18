@@ -19,6 +19,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useToast } from "@/hooks/use-toast";
 import { CustomFieldsForm } from "@/components/custom-fields/custom-fields-form";
 import { useCustomFieldValues, useSaveCustomFieldValuesForRecord } from "@/hooks/use-custom-fields";
+import { toLabel } from "@/lib/fmt";
 
 interface ContactDialogProps {
   open: boolean;
@@ -28,7 +29,6 @@ interface ContactDialogProps {
 
 const STATUSES = Object.values(ContactStatus);
 const REVIEW_STATUSES = Object.values(ReviewStatus);
-const toLabel = (s: string) => s.replace(/_/g, " ").toLowerCase().replace(/^\w/, c => c.toUpperCase());
 
 export function ContactDialog({ open, onOpenChange, contact }: ContactDialogProps) {
   const qc = useQueryClient();

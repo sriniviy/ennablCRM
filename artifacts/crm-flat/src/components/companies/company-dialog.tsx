@@ -18,6 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTeamMembers } from "@/hooks/use-team-members";
 import { CustomFieldsForm } from "@/components/custom-fields/custom-fields-form";
 import { useCustomFieldValues, useSaveCustomFieldValuesForRecord } from "@/hooks/use-custom-fields";
+import { toLabel } from "@/lib/fmt";
 
 const STATUSES = Object.values(CompanyStatus);
 const toList = (s: string) => s.split(",").map(v => v.trim()).filter(Boolean);
@@ -213,7 +214,7 @@ export function CompanyDialog({ open, onOpenChange, company }: CompanyDialogProp
                     <SelectTrigger><SelectValue placeholder="No status" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">No status</SelectItem>
-                      {STATUSES.map(s => <SelectItem key={s} value={s}>{s.replace(/_/g, " ")}</SelectItem>)}
+                      {STATUSES.map(s => <SelectItem key={s} value={s}>{toLabel(s)}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>

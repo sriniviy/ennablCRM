@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { toLabel } from "@/lib/fmt";
 
 interface TaskDialogProps {
   open: boolean;
@@ -122,7 +123,7 @@ export function TaskDialog({ open, onOpenChange, task, defaultContactId, default
                 <Select value={priority} onValueChange={setPriority}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {Object.values(Priority).map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                    {Object.values(Priority).map(p => <SelectItem key={p} value={p}>{toLabel(p)}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -132,7 +133,7 @@ export function TaskDialog({ open, onOpenChange, task, defaultContactId, default
               <Select value={type} onValueChange={setType}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {Object.values(TaskType).map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  {Object.values(TaskType).map(t => <SelectItem key={t} value={t}>{toLabel(t)}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

@@ -28,6 +28,7 @@ import { ExportColumnsDialog, type ColumnDef } from "@/components/export-columns
 import { ViewToggle, type ViewMode } from "@/components/view-toggle";
 import { RecordCardGrid, type CardField } from "@/components/record-card-grid";
 import { ShareDialog } from "@/components/contacts/share-dialog";
+import { toLabel } from "@/lib/fmt";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -93,7 +94,7 @@ const CARD_FIELDS: CardField<ContactWithRelations>[] = [
   { label: "Title", render: c => dash(c.title) },
   { label: "Status", render: c => dash(c.status) },
   { label: "Engagement", render: c => <EngagementBadge opens={c.engagementOpens} clicks={c.engagementClicks} /> },
-  { label: "Review status", render: c => (c.reviewStatus ? c.reviewStatus.replace(/_/g, " ") : "—") },
+  { label: "Review status", render: c => (c.reviewStatus ? toLabel(c.reviewStatus) : "—") },
   { label: "Company", render: c => dash(c.company?.name) },
   { label: "Owner", render: c => dash(c.assignee?.name) },
   { label: "Ennabl user", render: c => (c.ennablUser ? "Yes" : "No") },
@@ -111,7 +112,6 @@ const CARD_FIELDS: CardField<ContactWithRelations>[] = [
   { label: "ID", render: c => dash(c.id) },
 ];
 
-const toLabel = (s: string) => s.replace(/_/g, " ").toLowerCase().replace(/^\w/, c => c.toUpperCase());
 
 function InlineStatusCell({ contact, onSaved }: { contact: ContactWithRelations; onSaved: () => void }) {
   const [open, setOpen] = useState(false);
@@ -357,13 +357,13 @@ export function ContactsPage() {
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-36" data-testid="select-contact-status"><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
-              {STATUSES.map(s => <SelectItem key={s} value={s}>{s === "ALL" ? "All statuses" : s}</SelectItem>)}
+              {STATUSES.map(s => <SelectItem key={s} value={s}>{s === "ALL" ? "All statuses" : toLabel(s)}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={reviewFilter} onValueChange={setReviewFilter}>
             <SelectTrigger className="w-40" data-testid="select-contact-review"><SelectValue placeholder="Review" /></SelectTrigger>
             <SelectContent>
-              {REVIEW_STATUSES.map(s => <SelectItem key={s} value={s}>{s === "ALL" ? "All reviews" : s.replace(/_/g, " ")}</SelectItem>)}
+              {REVIEW_STATUSES.map(s => <SelectItem key={s} value={s}>{s === "ALL" ? "All reviews" : toLabel(s)}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={ownerFilter} onValueChange={setOwnerFilter}>

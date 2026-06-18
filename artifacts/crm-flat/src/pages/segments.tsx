@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { authClient } from "@/lib/auth-client";
+import { toLabel } from "@/lib/fmt";
 import { Users, Pencil, Trash2, Plus, Filter, Tag, Building2, UserCheck, Mail, ChevronRight, Megaphone, TriangleAlert } from "lucide-react";
 
 interface SegmentCampaign {
@@ -110,7 +111,7 @@ function FilterEditor({
             className="w-full mt-1 h-9 rounded-md border bg-background px-3 text-sm"
           >
             <option value="">Any status</option>
-            {CONTACT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+            {CONTACT_STATUSES.map(s => <option key={s} value={s}>{toLabel(s)}</option>)}
           </select>
         </div>
         <div>

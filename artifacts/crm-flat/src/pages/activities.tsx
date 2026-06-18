@@ -17,7 +17,7 @@ import { RecordCardGrid, type CardField } from "@/components/record-card-grid";
 const TYPES = ["ALL", ...Object.values(ActivityType)];
 
 const dash = (v: unknown) => (v === null || v === undefined || v === "" ? "—" : String(v));
-const fmtType = (t: string) => t.replace(/_/g, " ");
+const fmtType = (t: string) => t.replace(/_/g, " ").toLowerCase().replace(/^\w/, c => c.toUpperCase());
 
 const contactName = (a: ActivityWithRelations) =>
   a.contact ? `${a.contact.firstName ?? ""} ${a.contact.lastName ?? ""}`.trim() || "—" : "—";

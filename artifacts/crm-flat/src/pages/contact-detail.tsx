@@ -17,6 +17,7 @@ import { NotesFeed } from "@/components/notes/notes-feed";
 import { useNotesCount } from "@/hooks/use-notes-count";
 import { AuditHistory } from "@/components/audit/audit-history";
 import { formatCurrency } from "@/lib/utils";
+import { toLabel } from "@/lib/fmt";
 import { useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -592,7 +593,7 @@ export function ContactDetailPage() {
               )}
               <div className="flex items-center justify-between text-sm pt-3 border-t">
                 <span className="text-muted-foreground">Review status</span>
-                <Badge variant="outline" className="font-normal">{(contact.reviewStatus ?? "REVIEWED").replace(/_/g, " ")}</Badge>
+                <Badge variant="outline" className="font-normal">{toLabel(contact.reviewStatus ?? "REVIEWED")}</Badge>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Ennabl user</span>

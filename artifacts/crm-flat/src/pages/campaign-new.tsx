@@ -21,6 +21,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { RichEmailEditor } from "@/components/rich-email-editor";
 import { useToast } from "@/hooks/use-toast";
 import { authClient } from "@/lib/auth-client";
+import { toLabel } from "@/lib/fmt";
 import {
   ArrowLeft, ArrowRight, Check, Trash2, Type, AlignLeft, MousePointer,
   Minus, Image, Share2, Maximize2, Users, Calendar, Send, Save,
@@ -1276,7 +1277,7 @@ export function CampaignNewPage() {
                         <Label className="text-xs">Contact Status</Label>
                         <select value={segmentFilter.status ?? ""} onChange={e => setSegmentFilter(p => ({ ...p, status: e.target.value || undefined }))} className="w-full mt-1 h-9 rounded-md border bg-background px-3 text-sm">
                           <option value="">Any status</option>
-                          {CONTACT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                          {CONTACT_STATUSES.map(s => <option key={s} value={s}>{toLabel(s)}</option>)}
                         </select>
                       </div>
                       <div>

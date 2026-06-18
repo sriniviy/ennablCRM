@@ -29,6 +29,7 @@ import { ViewToggle, type ViewMode } from "@/components/view-toggle";
 import { RecordCardGrid, type CardField } from "@/components/record-card-grid";
 import { ShareDialog } from "@/components/contacts/share-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { toLabel } from "@/lib/fmt";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -120,7 +121,7 @@ const arr = (v: string[] | null | undefined) => (v && v.length ? v.join(", ") : 
 const buildCompanyCardFields = (ownerName: (id: string | null | undefined) => string): CardField<Company>[] => [
   { label: "Domain", render: c => dash(c.domain) },
   { label: "All domains", render: c => arr(c.domains) },
-  { label: "Status", render: c => (c.status ? c.status.replace(/_/g, " ") : "—") },
+  { label: "Status", render: c => (c.status ? toLabel(c.status) : "—") },
   { label: "Industry", render: c => dash(c.industry) },
   { label: "Size", render: c => dash(c.size) },
   { label: "Member of", render: c => arr(c.memberOf) },
@@ -421,7 +422,7 @@ export function CompaniesPage() {
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-44" data-testid="select-company-status"><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
-              {STATUSES.map(s => <SelectItem key={s} value={s}>{s === "ALL" ? "All statuses" : s.replace(/_/g, " ")}</SelectItem>)}
+              {STATUSES.map(s => <SelectItem key={s} value={s}>{s === "ALL" ? "All statuses" : toLabel(s)}</SelectItem>)}
             </SelectContent>
           </Select>
           <Input
