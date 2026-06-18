@@ -3,21 +3,25 @@ import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useListActivities, ActivityType, type ActivityWithRelations } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Search } from "lucide-react";
 import { useUrlFilters } from "@/hooks/use-url-filters";
+import { useDebounce } from "@/hooks/use-debounce";
 import { ViewToggle, type ViewMode } from "@/components/view-toggle";
 import { RecordCardGrid, type CardField } from "@/components/record-card-grid";
 
-const TYPES = ["ALL", ...Object.values(ActivityType)];
-
 const dash = (v: unknown) => (v === null || v === undefined || v === "" ? "—" : String(v));
 const fmtType = (t: string) => t.replace(/_/g, " ").toLowerCase().replace(/^\w/, c => c.toUpperCase());
+
+const PAGE_TITLES: Record<string, string> = {
+  CALL: "Calls",
+  EMAIL_SENT: "Emails",
+  NOTE: "Notes",
+};
 
 const contactName = (a: ActivityWithRelations) =>
   a.contact ? `${a.contact.firstName ?? ""} ${a.contact.lastName ?? ""}`.trim() || "—" : "—";
@@ -44,60 +48,66 @@ export function ActivitiesPage() {
   const { get, set } = useUrlFilters();
 
   const typeFilter = get("type") || "ALL";
+  const search = get("search");
   const dateFrom = get("dateFrom");
   const dateTo = get("dateTo");
   const view: ViewMode = get("view") === "cards" ? "cards" : "table";
+
+  const debouncedSearch = useDebounce(search, 300);
 
   const { data, isLoading } = useListActivities({
     type: typeFilter !== "ALL" ? typeFilter as typeof ActivityType[keyof typeof ActivityType] : undefined,
     dateFrom: dateFrom || undefined,
     dateTo: dateTo || undefined,
     page: 1,
-    pageSize: 50,
+    pageSize: 100,
   });
 
-  const activities = data?.data ?? [];
+  const allActivities = data?.data ?? [];
+  const activities = debouncedSearch
+    ? allActivities.filter(a =>
+        [a.title, a.description, a.emailSubject, a.emailBody]
+          .some(f => f?.toLowerCase().includes(debouncedSearch.toLowerCase()))
+      )
+    : allActivities;
+
+  const pageTitle = PAGE_TITLES[typeFilter] ?? "Notes";
 
   return (
     <SidebarLayout>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Notes</h1>
+            <h1 className="text-3xl font-bold tracking-tight">{pageTitle}</h1>
             <p className="text-muted-foreground">A timeline of everything happening across your CRM.</p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Type</Label>
-            <Select value={typeFilter} onValueChange={val => set({ type: val })}>
-              <SelectTrigger className="w-48" data-testid="select-activity-type"><SelectValue placeholder="Type" /></SelectTrigger>
-              <SelectContent>
-                {TYPES.map(t => <SelectItem key={t} value={t}>{t === "ALL" ? "All types" : fmtType(t)}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">From</Label>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              type="date"
-              className="w-40"
-              value={dateFrom}
-              onChange={e => set({ dateFrom: e.target.value })}
-              data-testid="input-activity-from"
+              placeholder={`Search ${pageTitle.toLowerCase()}…`}
+              className="pl-8"
+              value={search}
+              onChange={e => set({ search: e.target.value })}
+              data-testid="input-search-activities"
             />
           </div>
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">To</Label>
-            <Input
-              type="date"
-              className="w-40"
-              value={dateTo}
-              onChange={e => set({ dateTo: e.target.value })}
-              data-testid="input-activity-to"
-            />
-          </div>
+          <Input
+            type="date"
+            className="w-40"
+            value={dateFrom}
+            onChange={e => set({ dateFrom: e.target.value })}
+            data-testid="input-activity-from"
+          />
+          <Input
+            type="date"
+            className="w-40"
+            value={dateTo}
+            onChange={e => set({ dateTo: e.target.value })}
+            data-testid="input-activity-to"
+          />
           <div className="ml-auto">
             <ViewToggle value={view} onChange={v => set({ view: v === "cards" ? "cards" : undefined })} />
           </div>
