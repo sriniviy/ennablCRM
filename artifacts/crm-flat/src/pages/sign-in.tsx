@@ -43,7 +43,7 @@ export function SignInPage() {
         <Card className="shadow-xl">
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl font-semibold">Welcome back</CardTitle>
-            <CardDescription>Sign in to Ennabl</CardDescription>
+            <CardDescription>Sign in to ennablCRM</CardDescription>
           </CardHeader>
 
           <CardContent>
