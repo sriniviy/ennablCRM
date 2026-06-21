@@ -74,7 +74,7 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
     meetingDate?: string;
   };
 
-  const user = (req as AuthRequest).user;
+  const { dbUser } = req as AuthRequest;
 
   if (!transcript?.trim()) {
     res.status(400).json({ error: "transcript is required" });
@@ -95,7 +95,7 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
         contactId: contactId || undefined,
         dealId: dealId || undefined,
         companyId: companyId || undefined,
-        userId: user?.id || undefined,
+        userId: dbUser?.id || undefined,
         endDate: meetingDate ? new Date(meetingDate) : undefined,
         metadata: { attendees: result.attendees },
       })
