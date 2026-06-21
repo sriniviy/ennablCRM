@@ -186,7 +186,8 @@ export function CompanyDetailPage() {
   const canLog = actType.length > 0;
 
   // Edit activity dialog
-  const [editingActivity, setEditingActivity] = useState<null | { id: string; type: string; title: string; description: string; endDate: string }>(null);
+  const [activityTab, setActivityTab] = useState<"open" | "closed">("open");
+  const [editingActivity, setEditingActivity] = useState<null | { id: string; type: string; title: string; description: string; endDate: string; isClosed: boolean; closureComment: string }>(null);
   const [editDueTime, setEditDueTime] = useState("09:00");
   const [editDueDateOpen, setEditDueDateOpen] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
@@ -477,62 +478,94 @@ export function CompanyDetailPage() {
 
               {/* ACTIVITIES — company timeline + audit trail */}
               <TabsContent value="history" className="pt-6">
-                <div className="space-y-4">
-                  {companyActivities.length > 0 ? (
-                    <div className="space-y-3">
-                      {companyActivities.map(activity => {
-                        const isClosed = (activity.metadata as any)?.status === "closed";
-                        const closureNote = (activity.metadata as any)?.closureComment as string | undefined;
-                        return (
-                          <div key={activity.id} className={`flex items-start gap-3 p-4 border rounded-lg bg-card transition-opacity ${isClosed ? "opacity-60" : ""}`}>
-                            <button
-                              className="mt-0.5 shrink-0 text-muted-foreground hover:text-primary transition-colors"
-                              title={isClosed ? "Closed" : "Close activity"}
-                              onClick={() => {
-                                if (!isClosed) { setClosingActivity({ id: activity.id, title: activity.title }); setClosureComment(""); }
-                              }}
-                            >
-                              {isClosed ? <CheckCircle2 className="h-5 w-5 text-green-500" /> : <Circle className="h-5 w-5" />}
-                            </button>
-                            <div className="mt-0.5 shrink-0">
-                              {activity.type === "NOTE" ? <MessageSquare className="h-5 w-5 text-blue-500" /> :
-                               activity.type === "CALL" ? <Phone className="h-5 w-5 text-green-500" /> :
-                               activity.type.startsWith("EMAIL") ? <Mail className="h-5 w-5 text-purple-500" /> :
-                               <CalendarIcon className="h-5 w-5 text-muted-foreground" />}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className={`font-medium ${isClosed ? "line-through text-muted-foreground" : ""}`}>{activity.title}</p>
-                              {activity.emailSubject && <p className="text-sm mt-1"><span className="text-muted-foreground">Subject: </span>{activity.emailSubject}</p>}
-                              {activity.description && <p className="text-sm mt-1 text-muted-foreground">{activity.description}</p>}
-                              {activity.emailBody && <p className="text-sm mt-1 text-muted-foreground whitespace-pre-wrap">{activity.emailBody}</p>}
-                              {isClosed && closureNote && <p className="text-xs mt-1 text-muted-foreground italic">Closed: {closureNote}</p>}
-                              <p className="text-xs text-muted-foreground mt-2">
-                                {new Date(activity.createdAt).toLocaleString()}
-                                {activity.endDate ? ` · due ${new Date(activity.endDate).toLocaleString()}` : ""}
-                              </p>
-                            </div>
-                            {!isClosed && (
-                              <button
-                                className="shrink-0 text-muted-foreground hover:text-foreground transition-colors mt-0.5"
-                                title="Edit activity"
-                                onClick={() => {
-                                  const ed = activity.endDate ? new Date(activity.endDate) : null;
-                                  setEditingActivity({ id: activity.id, type: activity.type, title: activity.title, description: (activity as any).description ?? "", endDate: ed ? ed.toISOString() : "" });
-                                  setEditDueTime(ed ? `${String(ed.getHours()).padStart(2, "0")}:${String(ed.getMinutes()).padStart(2, "0")}` : "09:00");
-                                  setEditDueDateOpen(false);
-                                }}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-muted-foreground text-sm">No activities recorded yet.</p>
-                  )}
-                </div>
+                {(() => {
+                  const openActs = companyActivities.filter(a => (a.metadata as any)?.status !== "closed");
+                  const closedActs = companyActivities.filter(a => (a.metadata as any)?.status === "closed");
+                  const displayActs = activityTab === "open" ? openActs : closedActs;
+
+                  const openEditActivity = (activity: typeof companyActivities[0]) => {
+                    const ed = activity.endDate ? new Date(activity.endDate) : null;
+                    setEditingActivity({
+                      id: activity.id, type: activity.type, title: activity.title,
+                      description: (activity as any).description ?? "",
+                      endDate: ed ? ed.toISOString() : "",
+                      isClosed: (activity.metadata as any)?.status === "closed",
+                      closureComment: (activity.metadata as any)?.closureComment ?? "",
+                    });
+                    setEditDueTime(ed ? `${String(ed.getHours()).padStart(2, "0")}:${String(ed.getMinutes()).padStart(2, "0")}` : "09:00");
+                    setEditDueDateOpen(false);
+                  };
+
+                  return (
+                    <>
+                      <div className="flex border-b mb-5">
+                        {(["open", "closed"] as const).map(tab => (
+                          <button
+                            key={tab}
+                            onClick={() => setActivityTab(tab)}
+                            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                              activityTab === tab
+                                ? "border-primary text-primary"
+                                : "border-transparent text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {tab === "open" ? "Open" : "Closed"} ({tab === "open" ? openActs.length : closedActs.length})
+                          </button>
+                        ))}
+                      </div>
+
+                      {displayActs.length > 0 ? (
+                        <div className="space-y-3">
+                          {displayActs.map(activity => {
+                            const isClosed = (activity.metadata as any)?.status === "closed";
+                            const closureNote = (activity.metadata as any)?.closureComment as string | undefined;
+                            return (
+                              <div key={activity.id} className={`flex items-start gap-3 p-4 border rounded-lg bg-card ${isClosed ? "opacity-70" : ""}`}>
+                                <button
+                                  className="mt-0.5 shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                                  title={isClosed ? "Closed" : "Close activity"}
+                                  onClick={() => { if (!isClosed) { setClosingActivity({ id: activity.id, title: activity.title }); setClosureComment(""); } }}
+                                >
+                                  {isClosed ? <CheckCircle2 className="h-5 w-5 text-green-500" /> : <Circle className="h-5 w-5" />}
+                                </button>
+                                <div className="mt-0.5 shrink-0">
+                                  {activity.type === "NOTE" ? <MessageSquare className="h-5 w-5 text-blue-500" /> :
+                                   activity.type === "CALL" ? <Phone className="h-5 w-5 text-green-500" /> :
+                                   activity.type.startsWith("EMAIL") ? <Mail className="h-5 w-5 text-purple-500" /> :
+                                   <CalendarIcon className="h-5 w-5 text-muted-foreground" />}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className={`font-medium ${isClosed ? "line-through text-muted-foreground" : ""}`}>{activity.title}</p>
+                                  {activity.emailSubject && <p className="text-sm mt-1"><span className="text-muted-foreground">Subject: </span>{activity.emailSubject}</p>}
+                                  {(activity as any).description && <p className="text-sm mt-1 text-muted-foreground">{(activity as any).description}</p>}
+                                  {activity.emailBody && <p className="text-sm mt-1 text-muted-foreground whitespace-pre-wrap">{activity.emailBody}</p>}
+                                  {closureNote && (
+                                    <p className="text-xs mt-2 text-muted-foreground italic border-l-2 border-muted pl-2">Note: {closureNote}</p>
+                                  )}
+                                  <p className="text-xs text-muted-foreground mt-2">
+                                    {new Date(activity.createdAt).toLocaleString()}
+                                    {activity.endDate ? ` · due ${new Date(activity.endDate).toLocaleString()}` : ""}
+                                  </p>
+                                </div>
+                                <button
+                                  className="shrink-0 text-muted-foreground hover:text-foreground transition-colors mt-0.5"
+                                  title="Edit activity"
+                                  onClick={() => openEditActivity(activity)}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground text-sm">
+                          {activityTab === "open" ? "No open activities." : "No closed activities yet."}
+                        </p>
+                      )}
+                    </>
+                  );
+                })()}
 
                 {/* Edit Activity Dialog */}
                 {editingActivity && (
@@ -540,59 +573,72 @@ export function CompanyDetailPage() {
                     <DialogContent className="sm:max-w-md">
                       <DialogHeader><DialogTitle>Edit Activity</DialogTitle></DialogHeader>
                       <div className="space-y-4 py-2">
-                        <div className="space-y-1.5">
-                          <Label>Type</Label>
-                          <Select value={editingActivity.type} onValueChange={v => setEditingActivity(p => p ? { ...p, type: v } : null)}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              {["NOTE", "CALL", "MEETING"].map(t => (
-                                <SelectItem key={t} value={t}>{t.replace(/_/g, " ").toLowerCase().replace(/^./, c => c.toUpperCase())}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label>Title</Label>
-                          <Input value={editingActivity.title} onChange={e => setEditingActivity(p => p ? { ...p, title: e.target.value } : null)} />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label>Notes</Label>
-                          <Textarea className="resize-none" rows={3} value={editingActivity.description} onChange={e => setEditingActivity(p => p ? { ...p, description: e.target.value } : null)} />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label>Due by</Label>
-                          <Button type="button" variant="outline" className="w-full justify-start font-normal text-left" onClick={() => setEditDueDateOpen(v => !v)}>
-                            <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
-                            {editingActivity.endDate ? format(new Date(editingActivity.endDate), "MMM d, yyyy 'at' h:mm a") : <span className="text-muted-foreground">Pick a date &amp; time</span>}
-                          </Button>
-                          {editDueDateOpen && (
-                            <div className="border rounded-md overflow-hidden bg-background shadow-sm">
-                              <Calendar mode="single" className="w-full" classNames={{ root: "w-full" }}
-                                selected={editingActivity.endDate ? new Date(editingActivity.endDate) : undefined}
-                                onSelect={date => {
-                                  if (!date) { setEditingActivity(p => p ? { ...p, endDate: "" } : null); return; }
-                                  const [h, m] = editDueTime.split(":").map(Number);
-                                  date.setHours(h ?? 9, m ?? 0, 0, 0);
-                                  setEditingActivity(p => p ? { ...p, endDate: date.toISOString() } : null);
-                                }}
-                              />
-                              <div className="border-t px-3 py-2.5 flex items-center gap-2 bg-muted/30">
-                                <span className="text-xs text-muted-foreground font-medium">Time</span>
-                                <input type="time" value={editDueTime} className="text-sm border rounded px-2 py-1 flex-1 bg-background"
-                                  onChange={e => {
-                                    setEditDueTime(e.target.value);
-                                    if (editingActivity.endDate) {
-                                      const d = new Date(editingActivity.endDate);
-                                      const [h, m] = e.target.value.split(":").map(Number);
-                                      d.setHours(h ?? 9, m ?? 0, 0, 0);
-                                      setEditingActivity(p => p ? { ...p, endDate: d.toISOString() } : null);
-                                    }
-                                  }}
-                                />
-                                <Button size="sm" type="button" onClick={() => setEditDueDateOpen(false)}>Done</Button>
-                              </div>
+                        {!editingActivity.isClosed && (
+                          <>
+                            <div className="space-y-1.5">
+                              <Label>Type</Label>
+                              <Select value={editingActivity.type} onValueChange={v => setEditingActivity(p => p ? { ...p, type: v } : null)}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  {["NOTE", "CALL", "MEETING"].map(t => (
+                                    <SelectItem key={t} value={t}>{t.replace(/_/g, " ").toLowerCase().replace(/^./, c => c.toUpperCase())}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </div>
-                          )}
+                            <div className="space-y-1.5">
+                              <Label>Title</Label>
+                              <Input value={editingActivity.title} onChange={e => setEditingActivity(p => p ? { ...p, title: e.target.value } : null)} />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label>Notes</Label>
+                              <Textarea className="resize-none" rows={3} value={editingActivity.description} onChange={e => setEditingActivity(p => p ? { ...p, description: e.target.value } : null)} />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label>Due by</Label>
+                              <Button type="button" variant="outline" className="w-full justify-start font-normal text-left" onClick={() => setEditDueDateOpen(v => !v)}>
+                                <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
+                                {editingActivity.endDate ? format(new Date(editingActivity.endDate), "MMM d, yyyy 'at' h:mm a") : <span className="text-muted-foreground">Pick a date &amp; time</span>}
+                              </Button>
+                              {editDueDateOpen && (
+                                <div className="border rounded-md overflow-hidden bg-background shadow-sm">
+                                  <Calendar mode="single" className="w-full" classNames={{ root: "w-full" }}
+                                    selected={editingActivity.endDate ? new Date(editingActivity.endDate) : undefined}
+                                    onSelect={date => {
+                                      if (!date) { setEditingActivity(p => p ? { ...p, endDate: "" } : null); return; }
+                                      const [h, m] = editDueTime.split(":").map(Number);
+                                      date.setHours(h ?? 9, m ?? 0, 0, 0);
+                                      setEditingActivity(p => p ? { ...p, endDate: date.toISOString() } : null);
+                                    }}
+                                  />
+                                  <div className="border-t px-3 py-2.5 flex items-center gap-2 bg-muted/30">
+                                    <span className="text-xs text-muted-foreground font-medium">Time</span>
+                                    <input type="time" value={editDueTime} className="text-sm border rounded px-2 py-1 flex-1 bg-background"
+                                      onChange={e => {
+                                        setEditDueTime(e.target.value);
+                                        if (editingActivity.endDate) {
+                                          const d = new Date(editingActivity.endDate);
+                                          const [h, m] = e.target.value.split(":").map(Number);
+                                          d.setHours(h ?? 9, m ?? 0, 0, 0);
+                                          setEditingActivity(p => p ? { ...p, endDate: d.toISOString() } : null);
+                                        }
+                                      }}
+                                    />
+                                    <Button size="sm" type="button" onClick={() => setEditDueDateOpen(false)}>Done</Button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </>
+                        )}
+                        <div className="space-y-1.5">
+                          <Label>{editingActivity.isClosed ? "Closing comment" : "Closing comment (if closed)"}</Label>
+                          <Textarea
+                            className="resize-none" rows={3}
+                            placeholder="Notes on how this was resolved…"
+                            value={editingActivity.closureComment}
+                            onChange={e => setEditingActivity(p => p ? { ...p, closureComment: e.target.value } : null)}
+                          />
                         </div>
                       </div>
                       <DialogFooter>
@@ -601,7 +647,11 @@ export function CompanyDetailPage() {
                           if (!editingActivity) return;
                           setEditSaving(true);
                           try {
-                            await patchActivity(editingActivity.id, { title: editingActivity.title, description: editingActivity.description, type: editingActivity.type, endDate: editingActivity.endDate || null });
+                            const patch: Record<string, unknown> = { closureComment: editingActivity.closureComment };
+                            if (!editingActivity.isClosed) {
+                              Object.assign(patch, { title: editingActivity.title, description: editingActivity.description, type: editingActivity.type, endDate: editingActivity.endDate || null });
+                            }
+                            await patchActivity(editingActivity.id, patch);
                             queryClient.invalidateQueries({ queryKey: getGetCompanyQueryKey(id) });
                             queryClient.invalidateQueries({ queryKey: ["listActivities"] });
                             toast({ title: "Activity updated" });
@@ -623,8 +673,7 @@ export function CompanyDetailPage() {
                         <p className="text-sm text-muted-foreground">Add a closing comment for <span className="font-medium text-foreground">"{closingActivity.title}"</span>.</p>
                         <Textarea
                           placeholder="e.g. Follow-up completed, deal moved to next stage…"
-                          className="resize-none"
-                          rows={3}
+                          className="resize-none" rows={3}
                           value={closureComment}
                           onChange={e => setClosureComment(e.target.value)}
                         />
