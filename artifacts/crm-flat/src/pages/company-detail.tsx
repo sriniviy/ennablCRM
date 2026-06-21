@@ -209,6 +209,17 @@ export function CompanyDetailPage() {
     return res.json();
   };
 
+  const createNote = async (noteBody: string) => {
+    const token = document.cookie.match(/(?:^|;\s*)better-auth\.session_token=([^;]+)/)?.[1]
+      ?? localStorage.getItem("better-auth.session_token") ?? "";
+    await fetch("/api/notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      credentials: "include",
+      body: JSON.stringify({ body: noteBody, entityType: "company", entityId: id }),
+    });
+  };
+
   const handleLogActivity = async () => {
     if (!canLog) return;
     try {
@@ -625,9 +636,10 @@ export function CompanyDetailPage() {
                           setClosingSaving(true);
                           try {
                             await patchActivity(closingActivity.id, { status: "closed", closureComment: closureComment.trim() });
+                            await createNote(`Closed activity "${closingActivity.title}": ${closureComment.trim()}`);
                             queryClient.invalidateQueries({ queryKey: getGetCompanyQueryKey(id) });
                             queryClient.invalidateQueries({ queryKey: ["listActivities"] });
-                            toast({ title: "Activity closed" });
+                            toast({ title: "Activity closed", description: "Comment saved to Notes." });
                             setClosingActivity(null); setClosureComment("");
                           } catch { toast({ title: "Failed to close", variant: "destructive" }); }
                           finally { setClosingSaving(false); }
