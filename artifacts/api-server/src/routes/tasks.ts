@@ -218,7 +218,7 @@ router.patch("/:id/complete", requireAuth, async (req: Request, res: Response) =
   try {
     const id = req.params.id as string;
     const { dbUser } = req as AuthRequest;
-    const { completed } = req.body as { completed: boolean };
+    const { completed, completionNote } = req.body as { completed: boolean; completionNote?: string };
 
     const [existing] = await db.select().from(tasksTable).where(eq(tasksTable.id, id)).limit(1);
     if (!existing) {
@@ -231,6 +231,7 @@ router.patch("/:id/complete", requireAuth, async (req: Request, res: Response) =
       .set({
         completed,
         completedAt: completed ? new Date() : null,
+        completionNote: completed ? (completionNote?.trim() ?? null) : null,
         updatedAt: new Date(),
       })
       .where(eq(tasksTable.id, id))

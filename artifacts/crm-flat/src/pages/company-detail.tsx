@@ -95,26 +95,101 @@ function NotesTabLabel({ entityType, entityId }: { entityType: string; entityId:
 }
 
 function ContactTaskRows({ contactId, contactName }: { contactId: string; contactName: string }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
   const results = useQueries({
     queries: [getListTasksQueryOptions({ contactId, pageSize: 50 })],
   });
   const tasks = results[0]?.data?.data ?? [];
+  const [taskTab, setTaskTab] = useState<"open" | "closed">("open");
+  const [closingTask, setClosingTask] = useState<null | { id: string; title: string }>(null);
+  const [taskCloseComment, setTaskCloseComment] = useState("");
+  const [taskCloseSaving, setTaskCloseSaving] = useState(false);
+
   if (tasks.length === 0) return null;
+
+  const sorted = [...tasks].sort((a, b) => a.title.localeCompare(b.title));
+  const openTasks = sorted.filter(t => !t.completed);
+  const closedTasks = sorted.filter(t => t.completed);
+  const displayTasks = taskTab === "open" ? openTasks : closedTasks;
+
   return (
-    <div className="space-y-2">
-      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mt-4 mb-2">{contactName}</p>
-      {tasks.sort((a, b) => a.title.localeCompare(b.title)).map(task => (
-        <div key={task.id} className="flex items-center gap-3 p-3 border rounded-lg">
-          <CheckSquare className={`h-5 w-5 shrink-0 ${task.completed ? 'text-green-500' : 'text-muted-foreground'}`} />
-          <div className="flex-1 min-w-0">
-            <p className={`font-medium truncate ${task.completed ? 'line-through text-muted-foreground' : ''}`}>{task.title}</p>
-            {task.dueDate && <p className="text-xs text-muted-foreground">Due: {new Date(task.dueDate).toLocaleDateString()}</p>}
-          </div>
-          <Link href={`/contacts/${contactId}`} className="text-xs text-primary hover:underline shrink-0">
-            View contact
-          </Link>
+    <div className="mt-4">
+      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{contactName}</p>
+      <div className="flex border-b mb-3">
+        {(["open", "closed"] as const).map(tab => (
+          <button key={tab} onClick={() => setTaskTab(tab)}
+            className={`px-3 py-1.5 text-xs font-medium border-b-2 -mb-px transition-colors ${taskTab === tab ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+            {tab === "open" ? "Open" : "Closed"} ({tab === "open" ? openTasks.length : closedTasks.length})
+          </button>
+        ))}
+      </div>
+      {displayTasks.length > 0 ? (
+        <div className="space-y-2">
+          {displayTasks.map(task => (
+            <div key={task.id} className={`flex items-center gap-3 p-3 border rounded-lg transition-opacity ${task.completed ? "opacity-60" : ""}`}>
+              <button
+                className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                onClick={async () => {
+                  if (task.completed) {
+                    const token = document.cookie.match(/(?:^|;\s*)better-auth\.session_token=([^;]+)/)?.[1] ?? localStorage.getItem("better-auth.session_token") ?? "";
+                    await fetch(`/api/tasks/${task.id}/complete`, { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, credentials: "include", body: JSON.stringify({ completed: false }) });
+                    qc.setQueryData(getListTasksQueryOptions({ contactId, pageSize: 50 }).queryKey, (old: any) => { if (!old) return old; return { ...old, data: (old.data ?? []).map((t: any) => t.id === task.id ? { ...t, completed: false, completionNote: null, completedAt: null } : t) }; });
+                  } else { setClosingTask({ id: task.id, title: task.title }); setTaskCloseComment(""); }
+                }}
+              >
+                {task.completed ? <CheckCircle2 className="h-5 w-5 text-green-500" /> : <Circle className="h-5 w-5" />}
+              </button>
+              <div className="flex-1 min-w-0">
+                <p className={`font-medium truncate ${task.completed ? "line-through text-muted-foreground" : ""}`}>{task.title}</p>
+                {task.dueDate && <p className="text-xs text-muted-foreground">Due: {new Date(task.dueDate).toLocaleDateString()}</p>}
+                {task.completed && (task as any).completionNote && (
+                  <p className="text-xs mt-1 text-muted-foreground italic border-l-2 border-muted pl-2">Note: {(task as any).completionNote}</p>
+                )}
+              </div>
+              <Link href={`/contacts/${contactId}`} className="text-xs text-primary hover:underline shrink-0">View</Link>
+            </div>
+          ))}
         </div>
-      ))}
+      ) : (
+        <p className="text-muted-foreground text-xs">{taskTab === "open" ? "No open tasks." : "No completed tasks yet."}</p>
+      )}
+
+      {closingTask && (
+        <Dialog open onOpenChange={() => setClosingTask(null)}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader><DialogTitle>Complete Task</DialogTitle></DialogHeader>
+            <div className="space-y-3 py-2">
+              <p className="text-sm text-muted-foreground">Add a note for <span className="font-medium text-foreground">"{closingTask.title}"</span>.</p>
+              <Textarea placeholder="e.g. Sent proposal, waiting on response…" className="resize-none" rows={3}
+                value={taskCloseComment} onChange={e => setTaskCloseComment(e.target.value)} />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setClosingTask(null)}>Cancel</Button>
+              <Button disabled={taskCloseSaving || !taskCloseComment.trim()} onClick={async () => {
+                if (!closingTask) return;
+                setTaskCloseSaving(true);
+                try {
+                  const token = document.cookie.match(/(?:^|;\s*)better-auth\.session_token=([^;]+)/)?.[1] ?? localStorage.getItem("better-auth.session_token") ?? "";
+                  await fetch(`/api/tasks/${closingTask.id}/complete`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                    credentials: "include",
+                    body: JSON.stringify({ completed: true, completionNote: taskCloseComment.trim() }),
+                  });
+                  qc.setQueryData(getListTasksQueryOptions({ contactId, pageSize: 50 }).queryKey, (old: any) => {
+                    if (!old) return old;
+                    return { ...old, data: (old.data ?? []).map((t: any) => t.id === closingTask.id ? { ...t, completed: true, completionNote: taskCloseComment.trim(), completedAt: new Date().toISOString() } : t) };
+                  });
+                  toast({ title: "Task completed" });
+                  setClosingTask(null); setTaskCloseComment("");
+                } catch { toast({ title: "Failed to complete task", variant: "destructive" }); }
+                finally { setTaskCloseSaving(false); }
+              }}>{taskCloseSaving ? "Saving…" : "Mark Complete"}</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
@@ -210,14 +285,14 @@ export function CompanyDetailPage() {
     return res.json();
   };
 
-  const createNote = async (noteBody: string) => {
+  const createNote = async (noteBody: string, status = "open") => {
     const token = document.cookie.match(/(?:^|;\s*)better-auth\.session_token=([^;]+)/)?.[1]
       ?? localStorage.getItem("better-auth.session_token") ?? "";
     await fetch("/api/notes", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       credentials: "include",
-      body: JSON.stringify({ body: noteBody, entityType: "company", entityId: id }),
+      body: JSON.stringify({ body: noteBody, entityType: "company", entityId: id, status }),
     });
   };
 
@@ -469,7 +544,7 @@ export function CompanyDetailPage() {
                   Files
                 </TabsTrigger>
                 <TabsTrigger value="notes" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
-                  <NotesTabLabel entityType="company" entityId={id} />
+                  Notes
                 </TabsTrigger>
                 <TabsTrigger value="tasks" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   Tasks
@@ -523,8 +598,16 @@ export function CompanyDetailPage() {
                               <div key={activity.id} className={`flex items-start gap-3 p-4 border rounded-lg bg-card ${isClosed ? "opacity-70" : ""}`}>
                                 <button
                                   className="mt-0.5 shrink-0 text-muted-foreground hover:text-primary transition-colors"
-                                  title={isClosed ? "Closed" : "Close activity"}
-                                  onClick={() => { if (!isClosed) { setClosingActivity({ id: activity.id, title: activity.title }); setClosureComment(""); } }}
+                                  title={isClosed ? "Reopen activity" : "Close activity"}
+                                  onClick={async () => {
+                                    if (isClosed) {
+                                      await patchActivity(activity.id, { status: "open" });
+                                      queryClient.setQueryData(getGetCompanyQueryKey(id), (old: any) => {
+                                        if (!old) return old;
+                                        return { ...old, contacts: (old.contacts ?? []).map((c: any) => ({ ...c, activities: (c.activities ?? []).map((a: any) => a.id === activity.id ? { ...a, metadata: { ...(a.metadata ?? {}), status: "open" } } : a) })) };
+                                      });
+                                    } else { setClosingActivity({ id: activity.id, title: activity.title }); setClosureComment(""); }
+                                  }}
                                 >
                                   {isClosed ? <CheckCircle2 className="h-5 w-5 text-green-500" /> : <Circle className="h-5 w-5" />}
                                 </button>
@@ -652,8 +735,11 @@ export function CompanyDetailPage() {
                               Object.assign(patch, { title: editingActivity.title, description: editingActivity.description, type: editingActivity.type, endDate: editingActivity.endDate || null });
                             }
                             await patchActivity(editingActivity.id, patch);
-                            queryClient.invalidateQueries({ queryKey: getGetCompanyQueryKey(id) });
-                            queryClient.invalidateQueries({ queryKey: ["listActivities"] });
+                            queryClient.setQueryData(getGetCompanyQueryKey(id), (old: any) => {
+                              if (!old) return old;
+                              const updateAct = (a: any) => a.id !== editingActivity.id ? a : { ...a, ...(!editingActivity.isClosed ? { title: editingActivity.title, description: editingActivity.description, type: editingActivity.type } : {}), metadata: { ...(a.metadata ?? {}), closureComment: editingActivity.closureComment } };
+                              return { ...old, contacts: (old.contacts ?? []).map((c: any) => ({ ...c, activities: (c.activities ?? []).map(updateAct) })) };
+                            });
                             toast({ title: "Activity updated" });
                             setEditingActivity(null);
                           } catch { toast({ title: "Failed to update", variant: "destructive" }); }
@@ -685,9 +771,12 @@ export function CompanyDetailPage() {
                           setClosingSaving(true);
                           try {
                             await patchActivity(closingActivity.id, { status: "closed", closureComment: closureComment.trim() });
-                            await createNote(`Closed activity "${closingActivity.title}": ${closureComment.trim()}`);
-                            queryClient.invalidateQueries({ queryKey: getGetCompanyQueryKey(id) });
-                            queryClient.invalidateQueries({ queryKey: ["listActivities"] });
+                            await createNote(`Closed activity "${closingActivity.title}": ${closureComment.trim()}`, "closed");
+                            queryClient.setQueryData(getGetCompanyQueryKey(id), (old: any) => {
+                              if (!old) return old;
+                              const companyContacts = old.contacts ?? [];
+                              return { ...old, contacts: companyContacts.map((c: any) => ({ ...c, activities: (c.activities ?? []).map((a: any) => a.id === closingActivity.id ? { ...a, metadata: { ...(a.metadata ?? {}), status: "closed", closureComment: closureComment.trim(), closedAt: new Date().toISOString() } } : a) })) };
+                            });
                             toast({ title: "Activity closed", description: "Comment saved to Notes." });
                             setClosingActivity(null); setClosureComment("");
                           } catch { toast({ title: "Failed to close", variant: "destructive" }); }

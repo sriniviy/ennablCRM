@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MessageSquare, Trash2, User, Download, Loader2, Pencil, X, Check } from "lucide-react";
+import { MessageSquare, Trash2, User, Download, Loader2, Pencil, X, Check, Circle, CheckCircle2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
@@ -15,6 +15,7 @@ interface Note {
   body: string;
   entityType: string;
   entityId: string;
+  status: string;
   createdAt: string;
   authorId: string | null;
   authorName: string | null;
@@ -24,8 +25,6 @@ interface NotesFeedProps {
   entityType: "contact" | "company" | "deal";
   entityId: string;
 }
-
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 function notesQueryKey(entityType: string, entityId: string) {
   return ["notes", entityType, entityId];
@@ -41,6 +40,7 @@ export function NotesFeed({ entityType, entityId }: NotesFeedProps) {
   const [exportingNotes, setExportingNotes] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
+  const [noteTab, setNoteTab] = useState<"open" | "closed">("open");
 
   const handleExportNotes = async () => {
     setExportingNotes(true);
@@ -117,10 +117,10 @@ export function NotesFeed({ entityType, entityId }: NotesFeedProps) {
   });
 
   const updateNote = useMutation({
-    mutationFn: async ({ id, body }: { id: string; body: string }) => {
+    mutationFn: async ({ id, body, status }: { id: string; body?: string; status?: string }) => {
       const res = await authFetch(`/api/notes/${id}`, {
         method: "PATCH",
-        body: JSON.stringify({ body }),
+        body: JSON.stringify({ body, status }),
       });
       if (!res.ok) throw new Error("Failed to update note");
       return res.json() as Promise<Note>;
@@ -128,7 +128,7 @@ export function NotesFeed({ entityType, entityId }: NotesFeedProps) {
     onSuccess: (updated) => {
       qc.setQueryData<Note[]>(
         notesQueryKey(entityType, entityId),
-        (old) => (old ?? []).map((n) => (n.id === updated.id ? { ...n, body: updated.body } : n)),
+        (old) => (old ?? []).map((n) => (n.id === updated.id ? { ...n, ...updated } : n)),
       );
       setEditingId(null);
       setEditDraft("");
@@ -195,106 +195,145 @@ export function NotesFeed({ entityType, entityId }: NotesFeedProps) {
         </div>
       </div>
 
+      {/* Open / Closed sub-tabs */}
+      <div className="flex border-b">
+        {(["open", "closed"] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setNoteTab(tab)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              noteTab === tab
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {tab === "open" ? "Open" : "Closed"} (
+            {isLoading ? "…" : tab === "open"
+              ? (notes ?? []).filter((n) => n.status !== "closed").length
+              : (notes ?? []).filter((n) => n.status === "closed").length})
+          </button>
+        ))}
+      </div>
+
       {isLoading ? (
         <div className="space-y-3">
           {[0, 1].map((i) => (
             <Skeleton key={i} className="h-20 w-full" />
           ))}
         </div>
-      ) : notes && notes.length > 0 ? (
-        <div className="space-y-3">
-          {notes.map((note) => {
-            const canEdit = isAdmin || note.authorId === me?.id;
-            const canDelete = isAdmin || note.authorId === me?.id;
-            const isEditing = editingId === note.id;
+      ) : (() => {
+        const displayNotes = (notes ?? []).filter((n) =>
+          noteTab === "open" ? n.status !== "closed" : n.status === "closed"
+        );
+        return displayNotes.length > 0 ? (
+          <div className="space-y-3">
+            {displayNotes.map((note) => {
+              const isClosed = note.status === "closed";
+              const canEdit = isAdmin || note.authorId === me?.id;
+              const canDelete = isAdmin || note.authorId === me?.id;
+              const isEditing = editingId === note.id;
 
-            return (
-              <div
-                key={note.id}
-                className="flex gap-3 p-4 border rounded-lg bg-card group"
-              >
-                <div className="shrink-0 mt-0.5">
-                  <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="font-medium">
-                        {note.authorName ?? "Unknown"}
-                      </span>
-                      <span className="text-muted-foreground">·</span>
-                      <span className="text-muted-foreground">
-                        {formatDistanceToNow(new Date(note.createdAt), { addSuffix: true })}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {canEdit && !isEditing && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                          onClick={() => startEdit(note)}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                      {canDelete && !isEditing && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                          onClick={() => deleteNote.mutate(note.id)}
-                          disabled={deleteNote.isPending}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
+              return (
+                <div
+                  key={note.id}
+                  className={`flex gap-3 p-4 border rounded-lg bg-card group ${isClosed ? "opacity-70" : ""}`}
+                >
+                  {/* Close / reopen button */}
+                  <button
+                    className="shrink-0 mt-1 text-muted-foreground hover:text-primary transition-colors"
+                    title={isClosed ? "Reopen note" : "Close note"}
+                    onClick={() => updateNote.mutate({ id: note.id, status: isClosed ? "open" : "closed" })}
+                  >
+                    {isClosed
+                      ? <CheckCircle2 className="h-5 w-5 text-green-500" />
+                      : <Circle className="h-5 w-5" />}
+                  </button>
+
+                  <div className="shrink-0 mt-0.5">
+                    <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+                      <User className="h-4 w-4 text-muted-foreground" />
                     </div>
                   </div>
-
-                  {isEditing ? (
-                    <div className="mt-2 space-y-2">
-                      <Textarea
-                        value={editDraft}
-                        onChange={(e) => setEditDraft(e.target.value)}
-                        className="resize-none min-h-[80px] text-sm"
-                        autoFocus
-                      />
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          disabled={!editDraft.trim() || updateNote.isPending || editDraft === note.body}
-                          onClick={() => updateNote.mutate({ id: note.id, body: editDraft })}
-                        >
-                          {updateNote.isPending ? (
-                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Check className="mr-1.5 h-3.5 w-3.5" />
-                          )}
-                          Save
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={cancelEdit}>
-                          <X className="mr-1.5 h-3.5 w-3.5" />
-                          Cancel
-                        </Button>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="font-medium">{note.authorName ?? "Unknown"}</span>
+                        <span className="text-muted-foreground">·</span>
+                        <span className="text-muted-foreground">
+                          {formatDistanceToNow(new Date(note.createdAt), { addSuffix: true })}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {canEdit && !isEditing && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                            onClick={() => startEdit(note)}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        {canDelete && !isEditing && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            onClick={() => deleteNote.mutate(note.id)}
+                            disabled={deleteNote.isPending}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                       </div>
                     </div>
-                  ) : (
-                    <p className="text-sm mt-1 whitespace-pre-wrap">{note.body}</p>
-                  )}
+
+                    {isEditing ? (
+                      <div className="mt-2 space-y-2">
+                        <Textarea
+                          value={editDraft}
+                          onChange={(e) => setEditDraft(e.target.value)}
+                          className="resize-none min-h-[80px] text-sm"
+                          autoFocus
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            disabled={!editDraft.trim() || updateNote.isPending || editDraft === note.body}
+                            onClick={() => updateNote.mutate({ id: note.id, body: editDraft })}
+                          >
+                            {updateNote.isPending ? (
+                              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Check className="mr-1.5 h-3.5 w-3.5" />
+                            )}
+                            Save
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={cancelEdit}>
+                            <X className="mr-1.5 h-3.5 w-3.5" />
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className={`text-sm mt-1 whitespace-pre-wrap ${isClosed ? "line-through text-muted-foreground" : ""}`}>
+                        {note.body}
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
-          <MessageSquare className="h-8 w-8 mb-2 opacity-40" />
-          <p className="text-sm">No notes yet. Add the first one above.</p>
-        </div>
-      )}
+              );
+            })}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
+            <MessageSquare className="h-8 w-8 mb-2 opacity-40" />
+            <p className="text-sm">
+              {noteTab === "open" ? "No open notes. Add one above." : "No closed notes yet."}
+            </p>
+          </div>
+        );
+      })()}
     </div>
   );
 }

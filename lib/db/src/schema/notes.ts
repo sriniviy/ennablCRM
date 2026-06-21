@@ -15,6 +15,7 @@ export const notesTable = pgTable(
     }),
     entityType: text("entity_type").notNull(),
     entityId: text("entity_id").notNull(),
+    status: text("status").notNull().default("open"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

@@ -23,6 +23,7 @@ export const tasksTable = pgTable(
     dueDate: timestamp("due_date", { withTimezone: true }),
     completed: boolean("completed").notNull().default(false),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    completionNote: text("completion_note"),
     priority: priorityEnum("priority").notNull().default("MEDIUM"),
     type: taskTypeEnum("type").notNull().default("TODO"),
     contactId: text("contact_id").references(() => contactsTable.id),
