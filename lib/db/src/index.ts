@@ -15,4 +15,4 @@ export const db = drizzle(pool, { schema });
 
 export * from "./schema";
 export { migrateDealStages } from "./migrate-deal-stages";
-export { migrateGmail } from "./migrate-gmail";
+export { migrateGmail, migrateMeeting } from "./migrate-gmail";

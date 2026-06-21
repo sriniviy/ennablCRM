@@ -2,7 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startCampaignScheduler } from "./routes/campaigns";
 import { startGmailSyncScheduler } from "./routes/gmail";
-import { migrateDealStages, migrateGmail } from "@workspace/db";
+import { migrateDealStages, migrateGmail, migrateMeeting } from "@workspace/db";
 
 const rawPort = process.env["PORT"];
 
@@ -28,5 +28,6 @@ app.listen(port, (err) => {
   startCampaignScheduler();
   migrateDealStages().catch(err => logger.error({ err }, "Deal stage migration failed"));
   migrateGmail().catch(err => logger.error({ err }, "Gmail migration failed"));
+  migrateMeeting().catch(err => logger.error({ err }, "Meeting migration failed"));
   startGmailSyncScheduler();
 });

@@ -31,6 +31,7 @@ import automationsRouter from "./automations";
 import settingsRouter from "./settings";
 import gmailRouter from "./gmail";
 import emailInboundRouter from "./email-inbound";
+import meetingSummaryRouter from "./meeting-summary";
 
 const router: IRouter = Router();
 
@@ -66,5 +67,6 @@ router.use("/automations", automationsRouter);
 router.use("/settings", settingsRouter);
 router.use("/gmail", gmailRouter);
 router.use("/email/inbound", emailInboundRouter);
+router.use("/ai/meeting-summary", meetingSummaryRouter);
 
 export default router;
