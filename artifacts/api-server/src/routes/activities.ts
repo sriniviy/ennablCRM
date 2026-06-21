@@ -252,11 +252,38 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
 
   const [updated] = await db.update(activitiesTable).set(updates).where(eq(activitiesTable.id, id)).returning();
 
+  // Log to the activity itself
   await logAudit({
     action: "UPDATE", objectType: "activity", objectId: updated.id,
     objectLabel: updated.title, actorId: dbUser.id, actorName: dbUser.name,
     before: existing, after: updated,
   });
+
+  // Also surface the event in the parent contact / company audit trail
+  const parentEntries: Array<{ objectType: string; objectId: string }> = [];
+  if (existing.contactId) parentEntries.push({ objectType: "contact", objectId: existing.contactId });
+  if (existing.companyId) parentEntries.push({ objectType: "company", objectId: existing.companyId });
+
+  for (const parent of parentEntries) {
+    await logAudit({
+      action: "UPDATE",
+      objectType: parent.objectType,
+      objectId: parent.objectId,
+      objectLabel: `Activity: ${updated.title}`,
+      actorId: dbUser.id,
+      actorName: dbUser.name,
+      before: {
+        activityStatus: (existing.metadata as Record<string, unknown>)?.status ?? "open",
+        activityTitle: existing.title,
+        activityNotes: (existing.metadata as Record<string, unknown>)?.closureComment ?? null,
+      },
+      after: {
+        activityStatus: (updated.metadata as Record<string, unknown>)?.status ?? "open",
+        activityTitle: updated.title,
+        activityNotes: (updated.metadata as Record<string, unknown>)?.closureComment ?? null,
+      },
+    });
+  }
 
   res.json(updated);
 });
