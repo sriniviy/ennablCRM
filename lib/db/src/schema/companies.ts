@@ -5,6 +5,7 @@ import {
   index,
   integer,
   doublePrecision,
+  boolean,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
@@ -41,8 +42,28 @@ export const companiesTable = pgTable(
     website: text("website"),
     phone: text("phone"),
     address: text("address"),
+    addressLine2: text("address_line_2"),
     city: text("city"),
+    state: text("state"),
+    postalCode: text("postal_code"),
     country: text("country"),
+    hubspotId: text("hubspot_id"),
+    tags: text("tags")
+      .array()
+      .notNull()
+      .default(sql`ARRAY[]::text[]`),
+    linkedinUrl: text("linkedin_url"),
+    logoUrl: text("logo_url"),
+    amsCrmSystems: text("ams_crm_systems")
+      .array()
+      .notNull()
+      .default(sql`ARRAY[]::text[]`),
+    amsCrm: text("ams_crm"),
+    amsCrmInstanceCount: integer("ams_crm_instance_count"),
+    prospectTier: text("prospect_tier"),
+    accountType: text("account_type"),
+    contractType: text("contract_type"),
+    bdeVpnInPlace: boolean("bde_vpn_in_place"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -53,6 +74,7 @@ export const companiesTable = pgTable(
   (t) => [
     index("companies_domain_idx").on(t.domain),
     index("companies_status_idx").on(t.status),
+    index("companies_hubspot_id_idx").on(t.hubspotId),
   ],
 );
 

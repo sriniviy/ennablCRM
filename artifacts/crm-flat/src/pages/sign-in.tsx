@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +8,6 @@ import { EnnablLogo } from "@/components/brand/ennabl-logo";
 import { Link } from "wouter";
 
 export function SignInPage() {
-  const [, setLocation] = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -29,7 +27,8 @@ export function SignInPage() {
       setError(signInError.message ?? "Sign in failed. Please check your credentials.");
       setLoading(false);
     } else {
-      setLocation("/dashboard");
+      const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+      window.location.href = base + "/dashboard";
     }
   };
 
@@ -43,7 +42,7 @@ export function SignInPage() {
         <Card className="shadow-xl">
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl font-semibold">Welcome back</CardTitle>
-            <CardDescription>Sign in to Ennabl</CardDescription>
+            <CardDescription>Sign in to ennablCRM</CardDescription>
           </CardHeader>
 
           <CardContent>
