@@ -61,6 +61,7 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
         body: notesTable.body,
         entityType: notesTable.entityType,
         entityId: notesTable.entityId,
+        status: notesTable.status,
         createdAt: notesTable.createdAt,
         authorId: notesTable.authorId,
         authorName: usersTable.name,
@@ -136,16 +137,19 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
     const dbUser = (req as AuthRequest).dbUser;
     const id = req.params.id as string;
-    const { body } = req.body as { body?: string };
-    if (!body?.trim()) { res.status(400).json({ error: "body is required" }); return; }
+    const { body, status } = req.body as { body?: string; status?: string };
+    if (!body?.trim() && !status) { res.status(400).json({ error: "body or status is required" }); return; }
     const [note] = await db.select().from(notesTable).where(eq(notesTable.id, id)).limit(1);
     if (!note) { res.status(404).json({ error: "Note not found" }); return; }
     if (note.authorId !== dbUser.id && dbUser.role !== "ADMIN") {
       res.status(403).json({ error: "You can only edit your own notes" }); return;
     }
+    const updates: Partial<typeof notesTable.$inferInsert> = {};
+    if (body?.trim()) updates.body = body.trim();
+    if (status) updates.status = status;
     const [updated] = await db
       .update(notesTable)
-      .set({ body: body.trim() })
+      .set(updates)
       .where(eq(notesTable.id, id))
       .returning();
     res.json({ ...updated, authorName: dbUser.name });
