@@ -27,7 +27,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { MoreVertical, Plus, Pencil, Trash2, ArrowLeft, ArrowRight, Info, LayoutGrid } from "lucide-react";
+import { MoreVertical, Plus, Pencil, Trash2, ArrowLeft, ArrowRight, Info, LayoutGrid, GripVertical } from "lucide-react";
+import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 import { CardRenderer } from "./card-renderer";
 import { CardBuilderDialog } from "./card-builder-dialog";
 import { BASE, type DashboardCard, type VizType, type Dataset, type CardConfig } from "./types";
@@ -120,7 +121,23 @@ export function DashboardView({ dashboardId }: { dashboardId: string }) {
         method: "POST",
         body: JSON.stringify({ order }),
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: cardsKey }),
+    onMutate: async (order: string[]) => {
+      await qc.cancelQueries({ queryKey: cardsKey });
+      const previous = qc.getQueryData<DashboardCard[]>(cardsKey);
+      if (previous) {
+        const byId = new Map(previous.map((c) => [c.id, c]));
+        const next = order
+          .map((id) => byId.get(id))
+          .filter((c): c is DashboardCard => !!c);
+        qc.setQueryData<DashboardCard[]>(cardsKey, next);
+      }
+      return { previous };
+    },
+    onError: (_err, _order, ctx) => {
+      if (ctx?.previous) qc.setQueryData(cardsKey, ctx.previous);
+      toast({ title: "Couldn't reorder cards", variant: "destructive" });
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: cardsKey }),
   });
 
   const move = (card: DashboardCard, dir: -1 | 1) => {
@@ -130,6 +147,16 @@ export function DashboardView({ dashboardId }: { dashboardId: string }) {
     if (swap < 0 || swap >= cards.length) return;
     const next = [...cards];
     [next[idx], next[swap]] = [next[swap], next[idx]];
+    reorder.mutate(next.map((c) => c.id));
+  };
+
+  const handleDragEnd = (result: DropResult) => {
+    if (!cards) return;
+    const { source, destination } = result;
+    if (!destination || destination.index === source.index) return;
+    const next = [...cards];
+    const [moved] = next.splice(source.index, 1);
+    next.splice(destination.index, 0, moved);
     reorder.mutate(next.map((c) => c.id));
   };
 
@@ -163,53 +190,82 @@ export function DashboardView({ dashboardId }: { dashboardId: string }) {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-4">
-          {cards.map((card, i) => (
-            <Card key={card.id} className={`${SIZE_CLASS[card.size] ?? SIZE_CLASS.md} flex flex-col`}>
-              <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2 gap-2">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <CardTitle className="text-sm font-medium truncate">{card.title}</CardTitle>
-                  {card.config.info && (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Info className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-[240px] text-xs">
-                          {card.config.info}
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  )}
-                </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => { setEditing(card); setBuilderOpen(true); }}>
-                      <Pencil className="h-4 w-4 mr-2" /> Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem disabled={i === 0} onClick={() => move(card, -1)}>
-                      <ArrowLeft className="h-4 w-4 mr-2" /> Move left
-                    </DropdownMenuItem>
-                    <DropdownMenuItem disabled={i === cards.length - 1} onClick={() => move(card, 1)}>
-                      <ArrowRight className="h-4 w-4 mr-2" /> Move right
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget(card)}>
-                      <Trash2 className="h-4 w-4 mr-2" /> Remove
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </CardHeader>
-              <CardContent className="flex-1">
-                <CardRenderer card={card} height={chartHeight(card.size)} />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <DragDropContext onDragEnd={handleDragEnd}>
+          <Droppable droppableId="dashboard-cards" direction="horizontal">
+            {(dropProvided) => (
+              <div
+                ref={dropProvided.innerRef}
+                {...dropProvided.droppableProps}
+                className="grid gap-4 md:grid-cols-4"
+              >
+                {cards.map((card, i) => (
+                  <Draggable key={card.id} draggableId={card.id} index={i}>
+                    {(dragProvided, dragSnapshot) => (
+                      <Card
+                        ref={dragProvided.innerRef}
+                        {...dragProvided.draggableProps}
+                        style={dragProvided.draggableProps.style}
+                        className={`${SIZE_CLASS[card.size] ?? SIZE_CLASS.md} flex flex-col ${
+                          dragSnapshot.isDragging ? "shadow-lg border-primary/40" : ""
+                        }`}
+                      >
+                        <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2 gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <button
+                              {...dragProvided.dragHandleProps}
+                              className="shrink-0 -ml-1 cursor-grab text-muted-foreground/50 hover:text-muted-foreground active:cursor-grabbing"
+                              aria-label="Drag to reorder"
+                            >
+                              <GripVertical className="h-4 w-4" />
+                            </button>
+                            <CardTitle className="text-sm font-medium truncate">{card.title}</CardTitle>
+                            {card.config.info && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Info className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                  </TooltipTrigger>
+                                  <TooltipContent className="max-w-[240px] text-xs">
+                                    {card.config.info}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => { setEditing(card); setBuilderOpen(true); }}>
+                                <Pencil className="h-4 w-4 mr-2" /> Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem disabled={i === 0} onClick={() => move(card, -1)}>
+                                <ArrowLeft className="h-4 w-4 mr-2" /> Move left
+                              </DropdownMenuItem>
+                              <DropdownMenuItem disabled={i === cards.length - 1} onClick={() => move(card, 1)}>
+                                <ArrowRight className="h-4 w-4 mr-2" /> Move right
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget(card)}>
+                                <Trash2 className="h-4 w-4 mr-2" /> Remove
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </CardHeader>
+                        <CardContent className="flex-1">
+                          <CardRenderer card={card} height={chartHeight(card.size)} />
+                        </CardContent>
+                      </Card>
+                    )}
+                  </Draggable>
+                ))}
+                {dropProvided.placeholder}
+              </div>
+            )}
+          </Droppable>
+        </DragDropContext>
       )}
 
       <CardBuilderDialog
