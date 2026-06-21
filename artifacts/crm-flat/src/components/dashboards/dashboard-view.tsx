@@ -39,6 +39,17 @@ const SIZE_CLASS: Record<string, string> = {
   lg: "md:col-span-4",
 };
 
+type CardSize = "sm" | "md" | "lg";
+
+const SIZE_SPAN: Record<CardSize, number> = { sm: 1, md: 2, lg: 4 };
+const ALLOWED_SPANS: Array<{ span: number; size: CardSize }> = [
+  { span: 1, size: "sm" },
+  { span: 2, size: "md" },
+  { span: 4, size: "lg" },
+];
+const GRID_GAP = 16;
+const GRID_COLS = 4;
+
 export function DashboardView({ dashboardId }: { dashboardId: string }) {
   const getToken = useSessionToken();
   const qc = useQueryClient();
@@ -46,6 +57,7 @@ export function DashboardView({ dashboardId }: { dashboardId: string }) {
   const [builderOpen, setBuilderOpen] = useState(false);
   const [editing, setEditing] = useState<DashboardCard | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DashboardCard | null>(null);
+  const [resizing, setResizing] = useState<{ id: string; size: CardSize } | null>(null);
 
   const authFetch = useCallback(
     async (url: string, init?: RequestInit) => {
@@ -140,6 +152,83 @@ export function DashboardView({ dashboardId }: { dashboardId: string }) {
     onSettled: () => qc.invalidateQueries({ queryKey: cardsKey }),
   });
 
+  const resizeCard = useMutation({
+    mutationFn: ({ id, size }: { id: string; size: CardSize }) =>
+      authFetch(`${BASE}/api/dashboards/cards/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ size }),
+      }),
+    onMutate: async ({ id, size }: { id: string; size: CardSize }) => {
+      await qc.cancelQueries({ queryKey: cardsKey });
+      const previous = qc.getQueryData<DashboardCard[]>(cardsKey);
+      if (previous) {
+        qc.setQueryData<DashboardCard[]>(
+          cardsKey,
+          previous.map((c) => (c.id === id ? { ...c, size } : c)),
+        );
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) qc.setQueryData(cardsKey, ctx.previous);
+      toast({ title: "Couldn't resize card", variant: "destructive" });
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: cardsKey }),
+  });
+
+  const startResize = (e: React.PointerEvent, card: DashboardCard) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const cardEl = (e.currentTarget as HTMLElement).closest<HTMLElement>(
+      "[data-card-id]",
+    );
+    if (!cardEl) return;
+    const gridEl = cardEl.parentElement;
+    const gridWidth = gridEl?.clientWidth ?? cardEl.offsetWidth;
+    const colWidth = (gridWidth - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
+    const startX = e.clientX;
+    const startWidth = cardEl.offsetWidth;
+    let latestSize: CardSize = card.size;
+    setResizing({ id: card.id, size: card.size });
+
+    const prevUserSelect = document.body.style.userSelect;
+    const prevCursor = document.body.style.cursor;
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+
+    const onMove = (ev: PointerEvent) => {
+      const targetWidth = startWidth + (ev.clientX - startX);
+      const rawSpan = (targetWidth + GRID_GAP) / (colWidth + GRID_GAP);
+      let best = ALLOWED_SPANS[0];
+      let bestDist = Infinity;
+      for (const opt of ALLOWED_SPANS) {
+        const d = Math.abs(opt.span - rawSpan);
+        if (d < bestDist) {
+          bestDist = d;
+          best = opt;
+        }
+      }
+      if (best.size !== latestSize) {
+        latestSize = best.size;
+        setResizing({ id: card.id, size: best.size });
+      }
+    };
+
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.style.userSelect = prevUserSelect;
+      document.body.style.cursor = prevCursor;
+      setResizing(null);
+      if (latestSize !== card.size) {
+        resizeCard.mutate({ id: card.id, size: latestSize });
+      }
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
   const move = (card: DashboardCard, dir: -1 | 1) => {
     if (!cards) return;
     const idx = cards.findIndex((c) => c.id === card.id);
@@ -198,16 +287,20 @@ export function DashboardView({ dashboardId }: { dashboardId: string }) {
                 {...dropProvided.droppableProps}
                 className="grid gap-4 md:grid-cols-4"
               >
-                {cards.map((card, i) => (
+                {cards.map((card, i) => {
+                  const displaySize =
+                    resizing?.id === card.id ? resizing.size : card.size;
+                  return (
                   <Draggable key={card.id} draggableId={card.id} index={i}>
                     {(dragProvided, dragSnapshot) => (
                       <Card
                         ref={dragProvided.innerRef}
                         {...dragProvided.draggableProps}
                         style={dragProvided.draggableProps.style}
-                        className={`${SIZE_CLASS[card.size] ?? SIZE_CLASS.md} flex flex-col ${
+                        data-card-id={card.id}
+                        className={`${SIZE_CLASS[displaySize] ?? SIZE_CLASS.md} relative flex flex-col ${
                           dragSnapshot.isDragging ? "shadow-lg border-primary/40" : ""
-                        }`}
+                        } ${resizing?.id === card.id ? "border-primary/40 ring-1 ring-primary/30" : ""}`}
                       >
                         <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2 gap-2">
                           <div className="flex items-center gap-1.5 min-w-0">
@@ -255,12 +348,24 @@ export function DashboardView({ dashboardId }: { dashboardId: string }) {
                           </DropdownMenu>
                         </CardHeader>
                         <CardContent className="flex-1">
-                          <CardRenderer card={card} height={chartHeight(card.size)} />
+                          <CardRenderer card={card} height={chartHeight(displaySize)} />
                         </CardContent>
+                        <div
+                          onPointerDown={(e) => startResize(e, card)}
+                          onClick={(e) => e.stopPropagation()}
+                          role="separator"
+                          aria-orientation="vertical"
+                          aria-label="Drag to resize card"
+                          title="Drag to resize"
+                          className="group absolute right-0 top-0 bottom-0 hidden w-2.5 cursor-col-resize touch-none items-center justify-center md:flex"
+                        >
+                          <div className="h-10 w-1 rounded-full bg-border transition-colors group-hover:bg-primary/60" />
+                        </div>
                       </Card>
                     )}
                   </Draggable>
-                ))}
+                  );
+                })}
                 {dropProvided.placeholder}
               </div>
             )}
