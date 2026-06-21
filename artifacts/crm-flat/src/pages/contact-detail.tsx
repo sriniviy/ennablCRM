@@ -717,12 +717,6 @@ export function ContactDetailPage() {
                             {activity.emailBody && (
                               <p className="text-sm mt-1 text-muted-foreground whitespace-pre-wrap">{activity.emailBody}</p>
                             )}
-                            <ActivitySummary
-                              activityId={activity.id}
-                              type={activity.type}
-                              summary={activity.aiSummary}
-                              onUpdated={() => queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) })}
-                            />
                             <p className="text-xs text-muted-foreground mt-2">
                               {new Date(activity.createdAt).toLocaleString()}
                               {activity.endDate ? ` · ends ${new Date(activity.endDate).toLocaleString()}` : ""}
