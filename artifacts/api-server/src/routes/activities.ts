@@ -223,6 +223,44 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
   }
 });
 
+router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const { dbUser } = req as AuthRequest;
+  const { title, description, type, endDate, status, closureComment } = req.body as {
+    title?: string; description?: string; type?: string;
+    endDate?: string | null; status?: string; closureComment?: string;
+  };
+
+  const [existing] = await db.select().from(activitiesTable).where(eq(activitiesTable.id, id)).limit(1);
+  if (!existing) { res.status(404).json({ error: "Activity not found" }); return; }
+
+  const updates: Partial<typeof activitiesTable.$inferInsert> = {};
+  if (title !== undefined) updates.title = title;
+  if (description !== undefined) updates.description = description ?? null;
+  if (type !== undefined) updates.type = type as typeof activitiesTable.$inferSelect["type"];
+  if (endDate !== undefined) updates.endDate = endDate ? new Date(endDate) : null;
+
+  if (status !== undefined || closureComment !== undefined) {
+    const meta = (existing.metadata as Record<string, unknown>) ?? {};
+    updates.metadata = {
+      ...meta,
+      ...(status !== undefined ? { status } : {}),
+      ...(closureComment !== undefined ? { closureComment } : {}),
+      ...(status === "closed" ? { closedAt: new Date().toISOString() } : {}),
+    };
+  }
+
+  const [updated] = await db.update(activitiesTable).set(updates).where(eq(activitiesTable.id, id)).returning();
+
+  await logAudit({
+    action: "UPDATE", objectType: "activity", objectId: updated.id,
+    objectLabel: updated.title, actorId: dbUser.id, actorName: dbUser.name,
+    before: existing, after: updated,
+  });
+
+  res.json(updated);
+});
+
 router.post("/:id/summarize", requireAuth, async (req: Request, res: Response) => {
   try {
     const id = req.params.id as string;

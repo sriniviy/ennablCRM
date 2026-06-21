@@ -28,3 +28,13 @@ export async function migrateGmail() {
     DELETE FROM oauth_states WHERE expires_at < now()
   `);
 }
+
+export async function migrateMeeting() {
+  // Ensure MEETING exists in the activity_type enum (idempotent)
+  await db.execute(sql`
+    DO $$ BEGIN
+      ALTER TYPE activity_type ADD VALUE IF NOT EXISTS 'MEETING';
+    EXCEPTION WHEN duplicate_object THEN null;
+    END $$
+  `);
+}

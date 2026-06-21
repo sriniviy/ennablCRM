@@ -10,7 +10,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Mail, Phone, Building2, Calendar, MessageSquare, Linkedin, CheckSquare, Pencil, CopyCheck, Send, Eye, MousePointerClick, BellOff, RefreshCw, Sparkles, Paperclip, ArrowUpRight, ArrowDownLeft } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Building2, Calendar as CalendarIcon, MessageSquare, Linkedin, CheckSquare, Pencil, CopyCheck, Send, Eye, MousePointerClick, BellOff, RefreshCw, Sparkles, Paperclip, ArrowUpRight, ArrowDownLeft, Video, ChevronDown, ChevronUp, CheckCircle2, Circle } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { format } from "date-fns";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { NotesFeed } from "@/components/notes/notes-feed";
@@ -396,6 +400,46 @@ export function ContactDetailPage() {
   const [emailBody, setEmailBody] = useState("");
   const [aiSummary, setAiSummary] = useState("");
   const [actCfValues, setActCfValues] = useState<Record<string, string | null>>({});
+  const [meetingSummaryLoading, setMeetingSummaryLoading] = useState(false);
+  const [expandedTranscripts, setExpandedTranscripts] = useState<Record<string, boolean>>({});
+  const [dueDateOpen, setDueDateOpen] = useState(false);
+  const [dueTime, setDueTime] = useState("09:00");
+
+  // Edit activity dialog
+  const [editingActivity, setEditingActivity] = useState<null | { id: string; type: string; title: string; description: string; endDate: string }>(null);
+  const [editDueTime, setEditDueTime] = useState("09:00");
+  const [editDueDateOpen, setEditDueDateOpen] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+
+  // Close activity dialog
+  const [closingActivity, setClosingActivity] = useState<null | { id: string; title: string }>(null);
+  const [closureComment, setClosureComment] = useState("");
+  const [closingSaving, setClosingSaving] = useState(false);
+
+  const patchActivity = async (actId: string, body: Record<string, unknown>) => {
+    const token = document.cookie.match(/(?:^|;\s*)better-auth\.session_token=([^;]+)/)?.[1]
+      ?? localStorage.getItem("better-auth.session_token") ?? "";
+    const res = await fetch(`/api/activities/${actId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      credentials: "include",
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  };
+
+  const createNote = async (noteBody: string) => {
+    const token = document.cookie.match(/(?:^|;\s*)better-auth\.session_token=([^;]+)/)?.[1]
+      ?? localStorage.getItem("better-auth.session_token") ?? "";
+    await fetch("/api/notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      credentials: "include",
+      body: JSON.stringify({ body: noteBody, entityType: "contact", entityId: id }),
+    });
+  };
+
   const createActivity = useCreateActivity();
   const saveActivityCf = useSaveCustomFieldValuesForRecord("activity");
   const queryClient = useQueryClient();
@@ -409,6 +453,7 @@ export function ContactDetailPage() {
   const resetActivityForm = () => {
     setActType("NOTE"); setActTitle(""); setNote(""); setEndDate("");
     setEmailSubject(""); setEmailBody(""); setAiSummary(""); setActCfValues({});
+    setDueTime("09:00");
   };
 
   const canLog = !!(note.trim() || actTitle.trim() || emailSubject.trim());
@@ -420,6 +465,34 @@ export function ContactDetailPage() {
       (isEmailType ? emailSubject.trim() : "") ||
       note.trim().slice(0, 60) ||
       "Activity logged";
+
+    // MEETING: use the AI meeting summary endpoint to auto-generate structured summary
+    if (actType === "MEETING" && note.trim()) {
+      setMeetingSummaryLoading(true);
+      try {
+        const res = await fetch("/api/ai/meeting-summary", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: title || "Meeting",
+            transcript: note.trim(),
+            contactId: id,
+            meetingDate: endDate || undefined,
+          }),
+        });
+        if (!res.ok) throw new Error("Summary failed");
+        resetActivityForm();
+        queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) });
+        queryClient.invalidateQueries({ queryKey: ["ai-suggestions", "contact", id] });
+        toast({ title: "Meeting logged", description: "AI summary generated automatically." });
+      } catch {
+        toast({ title: "Error", description: "Could not save meeting", variant: "destructive" });
+      } finally {
+        setMeetingSummaryLoading(false);
+      }
+      return;
+    }
+
     try {
       const created = await createActivityMutate.current({
         data: {
@@ -515,13 +588,20 @@ export function ContactDetailPage() {
           {/* Left Column - Info */}
           <div className="space-y-6 md:col-span-1">
 
-            {/* 1 — Latest Summary */}
-            <Card>
+            {/* 1 — Latest Summary — re-keys on activity count so it visually updates */}
+            <Card key={`summary-${(contact.activities ?? []).length}`}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
                   <Sparkles className="h-4 w-4 text-primary" />
                   Latest Summary
                 </CardTitle>
+                {(contact.activities ?? []).length > 0 && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Updated · {new Date(
+                      [...(contact.activities ?? [])].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]?.createdAt
+                    ).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                )}
               </CardHeader>
               <CardContent>
                 <p className="text-sm leading-relaxed text-muted-foreground">
@@ -641,6 +721,9 @@ export function ContactDetailPage() {
                 <TabsTrigger value="files" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   Files
                 </TabsTrigger>
+                <TabsTrigger value="meetings" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
+                  Meetings ({(contact.activities ?? []).filter(a => a.type === "MEETING").length})
+                </TabsTrigger>
                 <TabsTrigger value="notes" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 pt-2">
                   <NotesTabLabel entityType="contact" entityId={id} />
                 </TabsTrigger>
@@ -653,47 +736,274 @@ export function ContactDetailPage() {
               <TabsContent value="history" className="pt-6">
                 <div className="space-y-4">
                   {contact.activities && contact.activities.length > 0 ? (
-                    <div className="space-y-4">
-                      {[...contact.activities].sort((a, b) => (a.title || '').localeCompare(b.title || '')).map(activity => (
-                        <div key={activity.id} className="flex gap-4 p-4 border rounded-lg bg-card">
-                          <div className="mt-1">
-                            {activity.type === 'NOTE' ? <MessageSquare className="h-5 w-5 text-blue-500" /> :
-                             activity.type === 'CALL' ? <Phone className="h-5 w-5 text-green-500" /> :
-                             activity.type.startsWith('EMAIL') ? <Mail className="h-5 w-5 text-purple-500" /> :
-                             <Calendar className="h-5 w-5 text-muted-foreground" />}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="font-medium">{activity.title}</p>
-                            {activity.emailSubject && (
-                              <p className="text-sm mt-1"><span className="text-muted-foreground">Subject: </span>{activity.emailSubject}</p>
+                    <div className="space-y-3">
+                      {[...contact.activities].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map(activity => {
+                        const isClosed = (activity.metadata as any)?.status === "closed";
+                        const closureNote = (activity.metadata as any)?.closureComment as string | undefined;
+                        return (
+                          <div key={activity.id} className={`flex items-start gap-3 p-4 border rounded-lg bg-card transition-opacity ${isClosed ? "opacity-60" : ""}`}>
+                            {/* Close radio */}
+                            <button
+                              className="mt-0.5 shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                              title={isClosed ? "Closed" : "Close activity"}
+                              onClick={() => {
+                                if (!isClosed) { setClosingActivity({ id: activity.id, title: activity.title }); setClosureComment(""); }
+                              }}
+                            >
+                              {isClosed
+                                ? <CheckCircle2 className="h-5 w-5 text-green-500" />
+                                : <Circle className="h-5 w-5" />}
+                            </button>
+                            {/* Type icon */}
+                            <div className="mt-0.5 shrink-0">
+                              {activity.type === "NOTE" ? <MessageSquare className="h-5 w-5 text-blue-500" /> :
+                               activity.type === "CALL" ? <Phone className="h-5 w-5 text-green-500" /> :
+                               activity.type.startsWith("EMAIL") ? <Mail className="h-5 w-5 text-purple-500" /> :
+                               <CalendarIcon className="h-5 w-5 text-muted-foreground" />}
+                            </div>
+                            {/* Content */}
+                            <div className="min-w-0 flex-1">
+                              <p className={`font-medium ${isClosed ? "line-through text-muted-foreground" : ""}`}>{activity.title}</p>
+                              {activity.emailSubject && <p className="text-sm mt-1"><span className="text-muted-foreground">Subject: </span>{activity.emailSubject}</p>}
+                              {activity.description && <p className="text-sm mt-1 text-muted-foreground">{activity.description}</p>}
+                              {activity.emailBody && <p className="text-sm mt-1 text-muted-foreground whitespace-pre-wrap">{activity.emailBody}</p>}
+                              {isClosed && closureNote && (
+                                <p className="text-xs mt-1 text-muted-foreground italic">Closed: {closureNote}</p>
+                              )}
+                              <p className="text-xs text-muted-foreground mt-2">
+                                {new Date(activity.createdAt).toLocaleString()}
+                                {activity.endDate ? ` · due ${new Date(activity.endDate).toLocaleString()}` : ""}
+                              </p>
+                            </div>
+                            {/* Edit pencil */}
+                            {!isClosed && (
+                              <button
+                                className="shrink-0 text-muted-foreground hover:text-foreground transition-colors mt-0.5"
+                                title="Edit activity"
+                                onClick={() => {
+                                  const ed = activity.endDate ? new Date(activity.endDate) : null;
+                                  setEditingActivity({ id: activity.id, type: activity.type, title: activity.title, description: activity.description ?? "", endDate: ed ? ed.toISOString() : "" });
+                                  setEditDueTime(ed ? `${String(ed.getHours()).padStart(2, "0")}:${String(ed.getMinutes()).padStart(2, "0")}` : "09:00");
+                                  setEditDueDateOpen(false);
+                                }}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
                             )}
-                            {activity.description && <p className="text-sm mt-1 text-muted-foreground">{activity.description}</p>}
-                            {activity.emailBody && (
-                              <p className="text-sm mt-1 text-muted-foreground whitespace-pre-wrap">{activity.emailBody}</p>
-                            )}
-                            <ActivitySummary
-                              activityId={activity.id}
-                              type={activity.type}
-                              summary={activity.aiSummary}
-                              onUpdated={() => queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) })}
-                            />
-                            <p className="text-xs text-muted-foreground mt-2">
-                              {new Date(activity.createdAt).toLocaleString()}
-                              {activity.endDate ? ` · ends ${new Date(activity.endDate).toLocaleString()}` : ""}
-                            </p>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <p className="text-muted-foreground text-sm">No activities recorded yet.</p>
                   )}
                 </div>
 
+                {/* Edit Activity Dialog */}
+                {editingActivity && (
+                  <Dialog open onOpenChange={() => setEditingActivity(null)}>
+                    <DialogContent className="sm:max-w-md">
+                      <DialogHeader><DialogTitle>Edit Activity</DialogTitle></DialogHeader>
+                      <div className="space-y-4 py-2">
+                        <div className="space-y-1.5">
+                          <Label>Type</Label>
+                          <Select value={editingActivity.type} onValueChange={v => setEditingActivity(p => p ? { ...p, type: v } : null)}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {["NOTE", "CALL", "MEETING"].map(t => (
+                                <SelectItem key={t} value={t}>{t.replace(/_/g, " ").toLowerCase().replace(/^./, c => c.toUpperCase())}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label>Title</Label>
+                          <Input value={editingActivity.title} onChange={e => setEditingActivity(p => p ? { ...p, title: e.target.value } : null)} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label>Notes</Label>
+                          <Textarea className="resize-none" rows={3} value={editingActivity.description} onChange={e => setEditingActivity(p => p ? { ...p, description: e.target.value } : null)} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label>Due by</Label>
+                          <Button type="button" variant="outline" className="w-full justify-start font-normal text-left" onClick={() => setEditDueDateOpen(v => !v)}>
+                            <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
+                            {editingActivity.endDate ? format(new Date(editingActivity.endDate), "MMM d, yyyy 'at' h:mm a") : <span className="text-muted-foreground">Pick a date &amp; time</span>}
+                          </Button>
+                          {editDueDateOpen && (
+                            <div className="border rounded-md overflow-hidden bg-background shadow-sm">
+                              <Calendar mode="single" className="w-full" classNames={{ root: "w-full" }}
+                                selected={editingActivity.endDate ? new Date(editingActivity.endDate) : undefined}
+                                onSelect={date => {
+                                  if (!date) { setEditingActivity(p => p ? { ...p, endDate: "" } : null); return; }
+                                  const [h, m] = editDueTime.split(":").map(Number);
+                                  date.setHours(h ?? 9, m ?? 0, 0, 0);
+                                  setEditingActivity(p => p ? { ...p, endDate: date.toISOString() } : null);
+                                }}
+                              />
+                              <div className="border-t px-3 py-2.5 flex items-center gap-2 bg-muted/30">
+                                <span className="text-xs text-muted-foreground font-medium">Time</span>
+                                <input type="time" value={editDueTime} className="text-sm border rounded px-2 py-1 flex-1 bg-background"
+                                  onChange={e => {
+                                    setEditDueTime(e.target.value);
+                                    if (editingActivity.endDate) {
+                                      const d = new Date(editingActivity.endDate);
+                                      const [h, m] = e.target.value.split(":").map(Number);
+                                      d.setHours(h ?? 9, m ?? 0, 0, 0);
+                                      setEditingActivity(p => p ? { ...p, endDate: d.toISOString() } : null);
+                                    }
+                                  }}
+                                />
+                                <Button size="sm" type="button" onClick={() => setEditDueDateOpen(false)}>Done</Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setEditingActivity(null)}>Cancel</Button>
+                        <Button disabled={editSaving} onClick={async () => {
+                          if (!editingActivity) return;
+                          setEditSaving(true);
+                          try {
+                            await patchActivity(editingActivity.id, { title: editingActivity.title, description: editingActivity.description, type: editingActivity.type, endDate: editingActivity.endDate || null });
+                            queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) });
+                            toast({ title: "Activity updated" });
+                            setEditingActivity(null);
+                          } catch { toast({ title: "Failed to update", variant: "destructive" }); }
+                          finally { setEditSaving(false); }
+                        }}>{editSaving ? "Saving…" : "Save changes"}</Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                )}
+
+                {/* Close Activity Dialog */}
+                {closingActivity && (
+                  <Dialog open onOpenChange={() => setClosingActivity(null)}>
+                    <DialogContent className="sm:max-w-sm">
+                      <DialogHeader><DialogTitle>Close Activity</DialogTitle></DialogHeader>
+                      <div className="space-y-3 py-2">
+                        <p className="text-sm text-muted-foreground">Add a closing comment for <span className="font-medium text-foreground">"{closingActivity.title}"</span>.</p>
+                        <Textarea
+                          placeholder="e.g. Spoke with client, follow-up scheduled for next week…"
+                          className="resize-none"
+                          rows={3}
+                          value={closureComment}
+                          onChange={e => setClosureComment(e.target.value)}
+                        />
+                      </div>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setClosingActivity(null)}>Cancel</Button>
+                        <Button disabled={closingSaving || !closureComment.trim()} onClick={async () => {
+                          if (!closingActivity) return;
+                          setClosingSaving(true);
+                          try {
+                            await patchActivity(closingActivity.id, { status: "closed", closureComment: closureComment.trim() });
+                            await createNote(`Closed activity "${closingActivity.title}": ${closureComment.trim()}`);
+                            queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) });
+                            toast({ title: "Activity closed", description: "Comment saved to Notes." });
+                            setClosingActivity(null); setClosureComment("");
+                          } catch { toast({ title: "Failed to close", variant: "destructive" }); }
+                          finally { setClosingSaving(false); }
+                        }}>{closingSaving ? "Closing…" : "Close Activity"}</Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                )}
+
                 <div className="mt-10 pt-8 border-t">
                   <h3 className="text-lg font-semibold mb-4">Audit Trail</h3>
                   <AuditHistory objectType="contact" objectId={contact.id} />
                 </div>
+              </TabsContent>
+
+              {/* MEETINGS */}
+              <TabsContent value="meetings" className="pt-6">
+                {(() => {
+                  const meetings = [...(contact.activities ?? [])]
+                    .filter(a => a.type === "MEETING")
+                    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+                  if (meetings.length === 0) {
+                    return (
+                      <div className="text-center py-12 text-muted-foreground text-sm space-y-1">
+                        <Video className="h-8 w-8 mx-auto mb-3 opacity-30" />
+                        <p className="font-medium">No meetings logged yet</p>
+                        <p>Log a meeting from the Tasks tab — AI will auto-generate a structured summary.</p>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="space-y-4">
+                      {meetings.map(activity => {
+                        const summary = activity.aiSummary ?? "";
+                        const lines = summary.split("\n");
+                        const twoSentences = lines[0] ?? "";
+                        const decisionsStart = lines.findIndex(l => l.startsWith("Key decisions:"));
+                        const actionsStart = lines.findIndex(l => l.startsWith("Action items:"));
+                        const decisions = decisionsStart >= 0
+                          ? lines.slice(decisionsStart + 1, actionsStart > decisionsStart ? actionsStart : undefined).filter(l => l.startsWith("- ")).map(l => l.slice(2))
+                          : [];
+                        const actionItems = actionsStart >= 0
+                          ? lines.slice(actionsStart + 1).filter(l => l.startsWith("- ")).map(l => l.slice(2))
+                          : [];
+                        const isExpanded = expandedTranscripts[activity.id] ?? false;
+                        const meta = activity.metadata as { attendees?: string[] } | null;
+                        const attendees = meta?.attendees ?? [];
+                        return (
+                          <div key={activity.id} className="border rounded-lg bg-card overflow-hidden">
+                            <div className="p-4 space-y-3">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <Video className="h-4 w-4 text-orange-500 shrink-0" />
+                                  <p className="font-medium">{activity.title}</p>
+                                </div>
+                                <p className="text-xs text-muted-foreground shrink-0">{new Date(activity.createdAt).toLocaleDateString()}</p>
+                              </div>
+                              {attendees.length > 0 && (
+                                <p className="text-xs text-muted-foreground">Attendees: {attendees.join(", ")}</p>
+                              )}
+                              {twoSentences && (
+                                <p className="text-sm">{twoSentences}</p>
+                              )}
+                              {decisions.length > 0 && (
+                                <div>
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Key decisions</p>
+                                  <ul className="space-y-1">
+                                    {decisions.map((d, i) => <li key={i} className="text-sm flex gap-2"><span className="text-muted-foreground">•</span>{d}</li>)}
+                                  </ul>
+                                </div>
+                              )}
+                              {actionItems.length > 0 && (
+                                <div>
+                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Action items</p>
+                                  <ul className="space-y-1">
+                                    {actionItems.map((a, i) => <li key={i} className="text-sm flex gap-2"><span className="text-orange-500">→</span>{a}</li>)}
+                                  </ul>
+                                </div>
+                              )}
+                              {!summary && activity.description && (
+                                <p className="text-sm text-muted-foreground">{activity.description.slice(0, 200)}</p>
+                              )}
+                              {activity.description && (
+                                <button
+                                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                                  onClick={() => setExpandedTranscripts(p => ({ ...p, [activity.id]: !isExpanded }))}
+                                >
+                                  {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                                  {isExpanded ? "Hide" : "Show"} transcript
+                                </button>
+                              )}
+                              {isExpanded && activity.description && (
+                                <p className="text-xs text-muted-foreground whitespace-pre-wrap bg-muted/40 rounded p-3 mt-1">{activity.description}</p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </TabsContent>
 
               {/* NOTES */}
@@ -739,7 +1049,7 @@ export function ContactDetailPage() {
                           <Select value={actType} onValueChange={setActType}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              {["NOTE", "CALL", "EMAIL_SENT", "MEETING"].map(t => (
+                              {["NOTE", "CALL", "MEETING"].map(t => (
                                 <SelectItem key={t} value={t}>
                                   {t.replace(/_/g, " ").toLowerCase().replace(/^./, c => c.toUpperCase())}
                                 </SelectItem>
@@ -748,8 +1058,52 @@ export function ContactDetailPage() {
                           </Select>
                         </div>
                         <div className="space-y-1.5">
-                          <Label htmlFor="act-end">End date</Label>
-                          <Input id="act-end" type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                          <Label>Due by</Label>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full justify-start font-normal text-left"
+                            onClick={() => setDueDateOpen(v => !v)}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
+                            {endDate
+                              ? format(new Date(endDate), "MMM d, yyyy 'at' h:mm a")
+                              : <span className="text-muted-foreground">Pick a date &amp; time</span>}
+                          </Button>
+                          {dueDateOpen && (
+                            <div className="border rounded-md overflow-hidden bg-background shadow-sm">
+                              <Calendar
+                                mode="single"
+                                selected={endDate ? new Date(endDate) : undefined}
+                                onSelect={(date) => {
+                                  if (!date) { setEndDate(""); return; }
+                                  const [h, m] = dueTime.split(":").map(Number);
+                                  date.setHours(h ?? 9, m ?? 0, 0, 0);
+                                  setEndDate(date.toISOString());
+                                }}
+                                className="w-full"
+                                classNames={{ root: "w-full" }}
+                              />
+                              <div className="border-t px-3 py-2.5 flex items-center gap-2 bg-muted/30">
+                                <span className="text-xs text-muted-foreground font-medium">Time</span>
+                                <input
+                                  type="time"
+                                  value={dueTime}
+                                  className="text-sm border rounded px-2 py-1 flex-1 bg-background"
+                                  onChange={e => {
+                                    setDueTime(e.target.value);
+                                    if (endDate) {
+                                      const d = new Date(endDate);
+                                      const [h, m] = e.target.value.split(":").map(Number);
+                                      d.setHours(h ?? 9, m ?? 0, 0, 0);
+                                      setEndDate(d.toISOString());
+                                    }
+                                  }}
+                                />
+                                <Button size="sm" type="button" onClick={() => setDueDateOpen(false)}>Done</Button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div className="space-y-1.5">
@@ -769,26 +1123,28 @@ export function ContactDetailPage() {
                         </>
                       )}
                       <div className="space-y-1.5">
-                        <Label htmlFor="act-note">Notes</Label>
+                        <Label htmlFor="act-note">{actType === "MEETING" ? "Transcript / Notes" : "Notes"}</Label>
                         <Textarea
                           id="act-note"
-                          placeholder="Details about this activity..."
+                          placeholder={actType === "MEETING" ? "Paste meeting transcript or notes — AI will generate a structured summary automatically." : "Details about this activity..."}
                           value={note}
                           onChange={(e) => setNote(e.target.value)}
-                          className="resize-none"
+                          className={`resize-none ${actType === "MEETING" ? "min-h-[120px]" : ""}`}
                         />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="act-ai">AI summary</Label>
-                        <Textarea id="act-ai" placeholder="Leave blank to auto-generate for emails & meetings" value={aiSummary} onChange={e => setAiSummary(e.target.value)} className="resize-none" />
+                        {actType === "MEETING" && (
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Sparkles className="h-3 w-3 text-orange-400" />
+                            AI will extract key decisions, action items, and attendees automatically.
+                          </p>
+                        )}
                       </div>
                       <CustomFieldsForm objectType="activity" values={actCfValues} onChange={(fid, v) => setActCfValues(p => ({ ...p, [fid]: v }))} />
                       <div className="flex justify-end">
                         <Button
                           onClick={handleLogActivity}
-                          disabled={!canLog || createActivity.isPending}
+                          disabled={!canLog || createActivity.isPending || meetingSummaryLoading}
                         >
-                          {createActivity.isPending ? "Saving..." : "Log Activity"}
+                          {meetingSummaryLoading ? "Generating summary..." : createActivity.isPending ? "Saving..." : actType === "MEETING" ? "Log Meeting + Summarize" : "Log Activity"}
                         </Button>
                       </div>
                     </div>
