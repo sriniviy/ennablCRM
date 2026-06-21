@@ -22,7 +22,7 @@ async function getDashboard(id: string): Promise<DashboardRow | null> {
  * Built-in dashboards are read-only. Seeded/curated dashboards have no
  * creator and are therefore admin-only.
  */
-function authorizeMutation(
+export function authorizeMutation(
   dashboard: DashboardRow,
   user: { id: string; role: string },
 ): { ok: true } | { ok: false; status: number; error: string } {
