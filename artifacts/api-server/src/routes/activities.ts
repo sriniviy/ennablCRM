@@ -288,6 +288,31 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
   res.json(updated);
 });
 
+router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const { dbUser } = req as AuthRequest;
+    const [existing] = await db.select().from(activitiesTable).where(eq(activitiesTable.id, id)).limit(1);
+    if (!existing) { res.status(404).json({ error: "Activity not found" }); return; }
+    if (existing.userId !== dbUser.id && dbUser.role !== "ADMIN") {
+      res.status(403).json({ error: "Not authorized" }); return;
+    }
+    await db.delete(activitiesTable).where(eq(activitiesTable.id, id));
+    await logAudit({
+      action: "DELETE",
+      objectType: "activity",
+      objectId: id,
+      objectLabel: existing.title,
+      actorId: dbUser.id,
+      actorName: dbUser.name,
+      before: existing,
+    });
+    res.status(204).end();
+  } catch {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.post("/:id/summarize", requireAuth, async (req: Request, res: Response) => {
   try {
     const id = req.params.id as string;

@@ -24,7 +24,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { format } from "date-fns";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { NotesFeed } from "@/components/notes/notes-feed";
-import { useNotesCount } from "@/hooks/use-notes-count";
 import { AuditHistory } from "@/components/audit/audit-history";
 import { ActivitySummary } from "@/components/ai/activity-summary";
 import { formatCurrency } from "@/lib/utils";
@@ -79,19 +78,8 @@ function buildCompanySummary(
   return `${name} has ${contactStr} and ${pipelineStr}. ${activityStr} ${lastStr}`.trim();
 }
 
-function NotesTabLabel({ entityType, entityId }: { entityType: string; entityId: string }) {
-  const { data } = useNotesCount(entityType, entityId);
-  const count = data?.count ?? 0;
-  return (
-    <span className="flex items-center gap-1.5">
-      Notes
-      {count > 0 && (
-        <span className="inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold">
-          {count}
-        </span>
-      )}
-    </span>
-  );
+function NotesTabLabel() {
+  return <span>Notes</span>;
 }
 
 function ContactTaskRows({ contactId, contactName }: { contactId: string; contactName: string }) {
@@ -289,12 +277,19 @@ export function CompanyDetailPage() {
   const createNote = async (noteBody: string, status = "open") => {
     const token = document.cookie.match(/(?:^|;\s*)better-auth\.session_token=([^;]+)/)?.[1]
       ?? localStorage.getItem("better-auth.session_token") ?? "";
-    await fetch("/api/notes", {
+    await fetch("/api/activities", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       credentials: "include",
-      body: JSON.stringify({ body: noteBody, entityType: "company", entityId: id, status }),
+      body: JSON.stringify({
+        type: "NOTE",
+        title: noteBody.substring(0, 60) || "Note",
+        description: noteBody,
+        companyId: id,
+        ...(status !== "open" ? { metadata: { status } } : {}),
+      }),
     });
+    queryClient.invalidateQueries({ queryKey: ["activity-notes", "company", id] });
   };
 
   const handleLogActivity = async () => {
@@ -618,7 +613,7 @@ export function CompanyDetailPage() {
                                    <CalendarIcon className="h-5 w-5 text-muted-foreground" />}
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                  <p className={`font-medium ${isClosed ? "line-through text-muted-foreground" : ""}`}>{activity.title}</p>
+                                  <p className={`font-medium ${isClosed ? "text-muted-foreground" : ""}`}>{activity.title}</p>
                                   {activity.emailSubject && <p className="text-sm mt-1"><span className="text-muted-foreground">Subject: </span>{activity.emailSubject}</p>}
                                   {(activity as any).description && <p className="text-sm mt-1 text-muted-foreground">{(activity as any).description}</p>}
                                   {activity.emailBody && <p className="text-sm mt-1 text-muted-foreground whitespace-pre-wrap">{activity.emailBody}</p>}

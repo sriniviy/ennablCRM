@@ -18,7 +18,6 @@ import { format } from "date-fns";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { NotesFeed } from "@/components/notes/notes-feed";
-import { useNotesCount } from "@/hooks/use-notes-count";
 import { AuditHistory } from "@/components/audit/audit-history";
 import { formatCurrency } from "@/lib/utils";
 import { toLabel } from "@/lib/fmt";
@@ -73,18 +72,9 @@ function buildContactSummary(
   return `${name} is a ${statusStr} contact${companyStr} with ${n} interaction${n !== 1 ? 's' : ''} on record — ${breakdown}.${lastStr}${dealStr}`;
 }
 
-function NotesTabLabel({ entityType, entityId }: { entityType: string; entityId: string }) {
-  const { data } = useNotesCount(entityType, entityId);
-  const count = data?.count ?? 0;
+function NotesTabLabel() {
   return (
-    <span className="flex items-center gap-1.5">
-      Notes
-      {count > 0 && (
-        <span className="inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold">
-          {count}
-        </span>
-      )}
-    </span>
+    <span>Notes</span>
   );
 }
 
@@ -440,12 +430,19 @@ export function ContactDetailPage() {
   const createNote = async (noteBody: string, status = "open") => {
     const token = document.cookie.match(/(?:^|;\s*)better-auth\.session_token=([^;]+)/)?.[1]
       ?? localStorage.getItem("better-auth.session_token") ?? "";
-    await fetch("/api/notes", {
+    await fetch("/api/activities", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       credentials: "include",
-      body: JSON.stringify({ body: noteBody, entityType: "contact", entityId: id, status }),
+      body: JSON.stringify({
+        type: "NOTE",
+        title: noteBody.substring(0, 60) || "Note",
+        description: noteBody,
+        contactId: id,
+        ...(status !== "open" ? { metadata: { status } } : {}),
+      }),
     });
+    queryClient.invalidateQueries({ queryKey: ["activity-notes", "contact", id] });
   };
 
   const createActivity = useCreateActivity();
@@ -809,7 +806,7 @@ export function ContactDetailPage() {
                                    <CalendarIcon className="h-5 w-5 text-muted-foreground" />}
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                  <p className={`font-medium ${isClosed ? "line-through text-muted-foreground" : ""}`}>{activity.title}</p>
+                                  <p className={`font-medium ${isClosed ? "text-muted-foreground" : ""}`}>{activity.title}</p>
                                   {activity.emailSubject && <p className="text-sm mt-1"><span className="text-muted-foreground">Subject: </span>{activity.emailSubject}</p>}
                                   {(activity as any).description && <p className="text-sm mt-1 text-muted-foreground">{(activity as any).description}</p>}
                                   {activity.emailBody && <p className="text-sm mt-1 text-muted-foreground whitespace-pre-wrap">{activity.emailBody}</p>}
