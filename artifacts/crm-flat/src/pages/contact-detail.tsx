@@ -706,7 +706,7 @@ export function ContactDetailPage() {
                             {activity.type === 'NOTE' ? <MessageSquare className="h-5 w-5 text-blue-500" /> :
                              activity.type === 'CALL' ? <Phone className="h-5 w-5 text-green-500" /> :
                              activity.type.startsWith('EMAIL') ? <Mail className="h-5 w-5 text-purple-500" /> :
-                             <Calendar className="h-5 w-5 text-muted-foreground" />}
+                             <CalendarIcon className="h-5 w-5 text-muted-foreground" />}
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="font-medium">{activity.title}</p>
