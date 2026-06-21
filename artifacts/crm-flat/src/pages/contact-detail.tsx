@@ -435,14 +435,14 @@ export function ContactDetailPage() {
     return res.json();
   };
 
-  const createNote = async (noteBody: string) => {
+  const createNote = async (noteBody: string, status = "open") => {
     const token = document.cookie.match(/(?:^|;\s*)better-auth\.session_token=([^;]+)/)?.[1]
       ?? localStorage.getItem("better-auth.session_token") ?? "";
     await fetch("/api/notes", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       credentials: "include",
-      body: JSON.stringify({ body: noteBody, entityType: "contact", entityId: id }),
+      body: JSON.stringify({ body: noteBody, entityType: "contact", entityId: id, status }),
     });
   };
 
@@ -918,7 +918,11 @@ export function ContactDetailPage() {
                               Object.assign(patch, { title: editingActivity.title, description: editingActivity.description, type: editingActivity.type, endDate: editingActivity.endDate || null });
                             }
                             await patchActivity(editingActivity.id, patch);
-                            queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) });
+                            queryClient.setQueryData(getGetContactQueryKey(id), (old: any) => {
+                              if (!old) return old;
+                              const updateAct = (a: any) => a.id !== editingActivity.id ? a : { ...a, ...(!editingActivity.isClosed ? { title: editingActivity.title, description: editingActivity.description, type: editingActivity.type } : {}), metadata: { ...(a.metadata ?? {}), closureComment: editingActivity.closureComment } };
+                              return { ...old, activities: (old.activities ?? []).map(updateAct) };
+                            });
                             toast({ title: "Activity updated" });
                             setEditingActivity(null);
                           } catch { toast({ title: "Failed to update", variant: "destructive" }); }
@@ -951,8 +955,11 @@ export function ContactDetailPage() {
                           setClosingSaving(true);
                           try {
                             await patchActivity(closingActivity.id, { status: "closed", closureComment: closureComment.trim() });
-                            await createNote(`Closed activity "${closingActivity.title}": ${closureComment.trim()}`);
-                            queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) });
+                            await createNote(`Closed activity "${closingActivity.title}": ${closureComment.trim()}`, "closed");
+                            queryClient.setQueryData(getGetContactQueryKey(id), (old: any) => {
+                              if (!old) return old;
+                              return { ...old, activities: (old.activities ?? []).map((a: any) => a.id === closingActivity.id ? { ...a, metadata: { ...(a.metadata ?? {}), status: "closed", closureComment: closureComment.trim(), closedAt: new Date().toISOString() } } : a) };
+                            });
                             toast({ title: "Activity closed", description: "Comment saved to Notes." });
                             setClosingActivity(null); setClosureComment("");
                           } catch { toast({ title: "Failed to close", variant: "destructive" }); }
@@ -1276,7 +1283,10 @@ export function ContactDetailPage() {
                               credentials: "include",
                               body: JSON.stringify({ completed: true, completionNote: taskCloseComment.trim() }),
                             });
-                            queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) });
+                            queryClient.setQueryData(getGetContactQueryKey(id), (old: any) => {
+                              if (!old) return old;
+                              return { ...old, tasks: (old.tasks ?? []).map((t: any) => t.id === closingTask.id ? { ...t, completed: true, completionNote: taskCloseComment.trim(), completedAt: new Date().toISOString() } : t) };
+                            });
                             toast({ title: "Task completed" });
                             setClosingTask(null); setTaskCloseComment("");
                           } catch { toast({ title: "Failed to complete task", variant: "destructive" }); }

@@ -84,10 +84,11 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
 router.post("/", requireAuth, async (req: Request, res: Response) => {
   try {
     const dbUser = (req as AuthRequest).dbUser;
-    const { body, entityType, entityId } = req.body as {
+    const { body, entityType, entityId, status } = req.body as {
       body: string;
       entityType: string;
       entityId: string;
+      status?: string;
     };
     if (!body?.trim() || !entityType || !entityId) {
       res
@@ -97,7 +98,7 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
     }
     const [note] = await db
       .insert(notesTable)
-      .values({ body: body.trim(), entityType, entityId, authorId: dbUser.id })
+      .values({ body: body.trim(), entityType, entityId, authorId: dbUser.id, status: status ?? "open" })
       .returning();
 
     await logActivity({
