@@ -22,3 +22,4 @@ export * from "./workspace_settings";
 export * from "./background_jobs";
 export * from "./deal_splits";
 export * from "./user_gmail_tokens";
+export * from "./dashboards";

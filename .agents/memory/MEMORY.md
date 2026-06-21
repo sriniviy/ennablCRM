@@ -1,3 +1,4 @@
 - [Delete/admin permission policy](delete-permission-policy.md) — hard deletes are admin-only, but notes & attachments use author-or-admin ownership; merge endpoints are a delete-bypass that must also be admin-gated.
+- [Dashboard mutation authz](dashboard-authz.md) — dashboards/cards use author-or-admin with builtin=read-only; seeded createdBy=null is intentionally admin-only; card/reorder endpoints authorize via parent dashboard.
 - [CRM flat duplicate approach](crm-flat-duplicate.md) — `cp -r src` into an existing scaffold dir creates nested `src/src`; must flatten with `cp -r src/src/. src/ && rm -rf src/src/` before editing.
 - [api-server .env startup crash](api-server-env-file.md) — api-server start must use `--env-file-if-exists=.env`; plain `--env-file=.env` crashes (no .env in Replit) → frontend 502s look like "login broken".
