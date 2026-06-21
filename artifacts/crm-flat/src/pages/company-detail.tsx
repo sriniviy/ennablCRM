@@ -262,6 +262,7 @@ export function CompanyDetailPage() {
 
   // Edit activity dialog
   const [activityTab, setActivityTab] = useState<"open" | "closed">("open");
+  const [activityStatusOverrides, setActivityStatusOverrides] = useState<Record<string, "open" | "closed">>({});
   const [editingActivity, setEditingActivity] = useState<null | { id: string; type: string; title: string; description: string; endDate: string; isClosed: boolean; closureComment: string }>(null);
   const [editDueTime, setEditDueTime] = useState("09:00");
   const [editDueDateOpen, setEditDueDateOpen] = useState(false);
@@ -554,8 +555,9 @@ export function CompanyDetailPage() {
               {/* ACTIVITIES — company timeline + audit trail */}
               <TabsContent value="history" className="pt-6">
                 {(() => {
-                  const openActs = companyActivities.filter(a => (a.metadata as any)?.status !== "closed");
-                  const closedActs = companyActivities.filter(a => (a.metadata as any)?.status === "closed");
+                  const isActClosed = (a: any) => a.id in activityStatusOverrides ? activityStatusOverrides[a.id] === "closed" : (a.metadata as any)?.status === "closed";
+                  const openActs = companyActivities.filter(a => !isActClosed(a));
+                  const closedActs = companyActivities.filter(a => isActClosed(a));
                   const displayActs = activityTab === "open" ? openActs : closedActs;
 
                   const openEditActivity = (activity: typeof companyActivities[0]) => {
@@ -564,7 +566,7 @@ export function CompanyDetailPage() {
                       id: activity.id, type: activity.type, title: activity.title,
                       description: (activity as any).description ?? "",
                       endDate: ed ? ed.toISOString() : "",
-                      isClosed: (activity.metadata as any)?.status === "closed",
+                      isClosed: isActClosed(activity),
                       closureComment: (activity.metadata as any)?.closureComment ?? "",
                     });
                     setEditDueTime(ed ? `${String(ed.getHours()).padStart(2, "0")}:${String(ed.getMinutes()).padStart(2, "0")}` : "09:00");
@@ -592,7 +594,7 @@ export function CompanyDetailPage() {
                       {displayActs.length > 0 ? (
                         <div className="space-y-3">
                           {displayActs.map(activity => {
-                            const isClosed = (activity.metadata as any)?.status === "closed";
+                            const isClosed = isActClosed(activity);
                             const closureNote = (activity.metadata as any)?.closureComment as string | undefined;
                             return (
                               <div key={activity.id} className={`flex items-start gap-3 p-4 border rounded-lg bg-card ${isClosed ? "opacity-70" : ""}`}>
@@ -601,11 +603,9 @@ export function CompanyDetailPage() {
                                   title={isClosed ? "Reopen activity" : "Close activity"}
                                   onClick={async () => {
                                     if (isClosed) {
+                                      setActivityStatusOverrides(prev => ({ ...prev, [activity.id]: "open" }));
                                       await patchActivity(activity.id, { status: "open" });
-                                      queryClient.setQueryData(getGetCompanyQueryKey(id), (old: any) => {
-                                        if (!old) return old;
-                                        return { ...old, contacts: (old.contacts ?? []).map((c: any) => ({ ...c, activities: (c.activities ?? []).map((a: any) => a.id === activity.id ? { ...a, metadata: { ...(a.metadata ?? {}), status: "open" } } : a) })) };
-                                      });
+                                      queryClient.invalidateQueries({ queryKey: getGetCompanyQueryKey(id) });
                                     } else { setClosingActivity({ id: activity.id, title: activity.title }); setClosureComment(""); }
                                   }}
                                 >
@@ -770,15 +770,15 @@ export function CompanyDetailPage() {
                           if (!closingActivity) return;
                           setClosingSaving(true);
                           try {
-                            await patchActivity(closingActivity.id, { status: "closed", closureComment: closureComment.trim() });
-                            await createNote(`Closed activity "${closingActivity.title}": ${closureComment.trim()}`, "closed");
-                            queryClient.setQueryData(getGetCompanyQueryKey(id), (old: any) => {
-                              if (!old) return old;
-                              const companyContacts = old.contacts ?? [];
-                              return { ...old, contacts: companyContacts.map((c: any) => ({ ...c, activities: (c.activities ?? []).map((a: any) => a.id === closingActivity.id ? { ...a, metadata: { ...(a.metadata ?? {}), status: "closed", closureComment: closureComment.trim(), closedAt: new Date().toISOString() } } : a) })) };
-                            });
-                            toast({ title: "Activity closed", description: "Comment saved to Notes." });
+                            const actId = closingActivity.id;
+                            const actTitle = closingActivity.title;
+                            const comment = closureComment.trim();
+                            setActivityStatusOverrides(prev => ({ ...prev, [actId]: "closed" }));
                             setClosingActivity(null); setClosureComment("");
+                            await patchActivity(actId, { status: "closed", closureComment: comment });
+                            await createNote(`Closed activity "${actTitle}": ${comment}`, "closed");
+                            queryClient.invalidateQueries({ queryKey: getGetCompanyQueryKey(id) });
+                            toast({ title: "Activity closed", description: "Comment saved to Notes." });
                           } catch { toast({ title: "Failed to close", variant: "destructive" }); }
                           finally { setClosingSaving(false); }
                         }}>{closingSaving ? "Closing…" : "Close Activity"}</Button>

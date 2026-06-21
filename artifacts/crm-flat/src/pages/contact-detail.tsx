@@ -417,8 +417,10 @@ export function ContactDetailPage() {
   const [closingActivity, setClosingActivity] = useState<null | { id: string; title: string }>(null);
   const [closureComment, setClosureComment] = useState("");
   const [closingSaving, setClosingSaving] = useState(false);
+  const [activityStatusOverrides, setActivityStatusOverrides] = useState<Record<string, "open" | "closed">>({});
   const [taskTab, setTaskTab] = useState<"open" | "closed">("open");
   const [closingTask, setClosingTask] = useState<null | { id: string; title: string }>(null);
+  const [taskCompletedOverrides, setTaskCompletedOverrides] = useState<Record<string, boolean>>({});
   const [taskCloseComment, setTaskCloseComment] = useState("");
   const [taskCloseSaving, setTaskCloseSaving] = useState(false);
 
@@ -742,8 +744,9 @@ export function ContactDetailPage() {
               <TabsContent value="history" className="pt-6">
                 {(() => {
                   const allActs = [...(contact.activities ?? [])].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-                  const openActs = allActs.filter(a => (a.metadata as any)?.status !== "closed");
-                  const closedActs = allActs.filter(a => (a.metadata as any)?.status === "closed");
+                  const isActClosed = (a: any) => a.id in activityStatusOverrides ? activityStatusOverrides[a.id] === "closed" : (a.metadata as any)?.status === "closed";
+                  const openActs = allActs.filter(a => !isActClosed(a));
+                  const closedActs = allActs.filter(a => isActClosed(a));
                   const displayActs = activityTab === "open" ? openActs : closedActs;
 
                   const openEditActivity = (activity: typeof allActs[0]) => {
@@ -782,7 +785,7 @@ export function ContactDetailPage() {
                       {displayActs.length > 0 ? (
                         <div className="space-y-3">
                           {displayActs.map(activity => {
-                            const isClosed = (activity.metadata as any)?.status === "closed";
+                            const isClosed = isActClosed(activity);
                             const closureNote = (activity.metadata as any)?.closureComment as string | undefined;
                             return (
                               <div key={activity.id} className={`flex items-start gap-3 p-4 border rounded-lg bg-card ${isClosed ? "opacity-70" : ""}`}>
@@ -791,11 +794,9 @@ export function ContactDetailPage() {
                                   title={isClosed ? "Reopen activity" : "Close activity"}
                                   onClick={async () => {
                                     if (isClosed) {
+                                      setActivityStatusOverrides(prev => ({ ...prev, [activity.id]: "open" }));
                                       await patchActivity(activity.id, { status: "open" });
-                                      queryClient.setQueryData(getGetContactQueryKey(id), (old: any) => {
-                                        if (!old) return old;
-                                        return { ...old, activities: (old.activities ?? []).map((a: any) => a.id === activity.id ? { ...a, metadata: { ...(a.metadata ?? {}), status: "open" } } : a) };
-                                      });
+                                      queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) });
                                     } else { setClosingActivity({ id: activity.id, title: activity.title }); setClosureComment(""); }
                                   }}
                                 >
@@ -962,14 +963,15 @@ export function ContactDetailPage() {
                           if (!closingActivity) return;
                           setClosingSaving(true);
                           try {
-                            await patchActivity(closingActivity.id, { status: "closed", closureComment: closureComment.trim() });
-                            await createNote(`Closed activity "${closingActivity.title}": ${closureComment.trim()}`, "closed");
-                            queryClient.setQueryData(getGetContactQueryKey(id), (old: any) => {
-                              if (!old) return old;
-                              return { ...old, activities: (old.activities ?? []).map((a: any) => a.id === closingActivity.id ? { ...a, metadata: { ...(a.metadata ?? {}), status: "closed", closureComment: closureComment.trim(), closedAt: new Date().toISOString() } } : a) };
-                            });
-                            toast({ title: "Activity closed", description: "Comment saved to Notes." });
+                            const actId = closingActivity.id;
+                            const actTitle = closingActivity.title;
+                            const comment = closureComment.trim();
+                            setActivityStatusOverrides(prev => ({ ...prev, [actId]: "closed" }));
                             setClosingActivity(null); setClosureComment("");
+                            await patchActivity(actId, { status: "closed", closureComment: comment });
+                            await createNote(`Closed activity "${actTitle}": ${comment}`, "closed");
+                            queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) });
+                            toast({ title: "Activity closed", description: "Comment saved to Notes." });
                           } catch { toast({ title: "Failed to close", variant: "destructive" }); }
                           finally { setClosingSaving(false); }
                         }}>{closingSaving ? "Closing…" : "Close Activity"}</Button>
@@ -1219,8 +1221,9 @@ export function ContactDetailPage() {
 
                 {(() => {
                   const allTasks = [...(contact.tasks ?? [])].sort((a, b) => a.title.localeCompare(b.title));
-                  const openTasks = allTasks.filter(t => !t.completed);
-                  const closedTasks = allTasks.filter(t => t.completed);
+                  const isTaskCompleted = (t: any) => t.id in taskCompletedOverrides ? taskCompletedOverrides[t.id] : t.completed;
+                  const openTasks = allTasks.filter(t => !isTaskCompleted(t));
+                  const closedTasks = allTasks.filter(t => isTaskCompleted(t));
                   const displayTasks = taskTab === "open" ? openTasks : closedTasks;
                   return (
                     <div>
@@ -1235,26 +1238,27 @@ export function ContactDetailPage() {
                       {displayTasks.length > 0 ? (
                         <div className="space-y-3">
                           {displayTasks.map(task => (
-                            <div key={task.id} className={`flex items-center gap-3 p-3 border rounded-lg transition-opacity ${task.completed ? "opacity-60" : ""}`}>
+                            <div key={task.id} className={`flex items-center gap-3 p-3 border rounded-lg transition-opacity ${isTaskCompleted(task) ? "opacity-60" : ""}`}>
                               <button
                                 className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
-                                title={task.completed ? "Reopen task" : "Complete task"}
+                                title={isTaskCompleted(task) ? "Reopen task" : "Complete task"}
                                 onClick={async () => {
-                                  if (task.completed) {
+                                  if (isTaskCompleted(task)) {
+                                    setTaskCompletedOverrides(prev => ({ ...prev, [task.id]: false }));
                                     const token = document.cookie.match(/(?:^|;\s*)better-auth\.session_token=([^;]+)/)?.[1] ?? localStorage.getItem("better-auth.session_token") ?? "";
                                     await fetch(`/api/tasks/${task.id}/complete`, { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, credentials: "include", body: JSON.stringify({ completed: false }) });
-                                    queryClient.setQueryData(getGetContactQueryKey(id), (old: any) => { if (!old) return old; return { ...old, tasks: (old.tasks ?? []).map((t: any) => t.id === task.id ? { ...t, completed: false, completionNote: null, completedAt: null } : t) }; });
+                                    queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) });
                                   } else { setClosingTask({ id: task.id, title: task.title }); setTaskCloseComment(""); }
                                 }}
                               >
-                                {task.completed
+                                {isTaskCompleted(task)
                                   ? <CheckCircle2 className="h-5 w-5 text-green-500" />
                                   : <Circle className="h-5 w-5" />}
                               </button>
                               <div className="flex-1 min-w-0">
-                                <p className={`font-medium ${task.completed ? "line-through text-muted-foreground" : ""}`}>{task.title}</p>
+                                <p className={`font-medium ${isTaskCompleted(task) ? "line-through text-muted-foreground" : ""}`}>{task.title}</p>
                                 {task.dueDate && <p className="text-xs text-muted-foreground">Due: {new Date(task.dueDate).toLocaleDateString()}</p>}
-                                {task.completed && (task as any).completionNote && (
+                                {isTaskCompleted(task) && (task as any).completionNote && (
                                   <p className="text-xs mt-1 text-muted-foreground italic border-l-2 border-muted pl-2">Note: {(task as any).completionNote}</p>
                                 )}
                               </div>
@@ -1290,19 +1294,19 @@ export function ContactDetailPage() {
                           if (!closingTask) return;
                           setTaskCloseSaving(true);
                           try {
+                            const taskId = closingTask.id;
+                            const comment = taskCloseComment.trim();
+                            setTaskCompletedOverrides(prev => ({ ...prev, [taskId]: true }));
+                            setClosingTask(null); setTaskCloseComment("");
                             const token = document.cookie.match(/(?:^|;\s*)better-auth\.session_token=([^;]+)/)?.[1] ?? localStorage.getItem("better-auth.session_token") ?? "";
-                            await fetch(`/api/tasks/${closingTask.id}/complete`, {
+                            await fetch(`/api/tasks/${taskId}/complete`, {
                               method: "PATCH",
                               headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                               credentials: "include",
-                              body: JSON.stringify({ completed: true, completionNote: taskCloseComment.trim() }),
+                              body: JSON.stringify({ completed: true, completionNote: comment }),
                             });
-                            queryClient.setQueryData(getGetContactQueryKey(id), (old: any) => {
-                              if (!old) return old;
-                              return { ...old, tasks: (old.tasks ?? []).map((t: any) => t.id === closingTask.id ? { ...t, completed: true, completionNote: taskCloseComment.trim(), completedAt: new Date().toISOString() } : t) };
-                            });
+                            queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) });
                             toast({ title: "Task completed" });
-                            setClosingTask(null); setTaskCloseComment("");
                           } catch { toast({ title: "Failed to complete task", variant: "destructive" }); }
                           finally { setTaskCloseSaving(false); }
                         }}>{taskCloseSaving ? "Saving…" : "Mark Complete"}</Button>
