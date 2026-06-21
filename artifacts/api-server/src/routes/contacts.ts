@@ -549,6 +549,33 @@ router.post("/merge", requireAuth, requireAdmin, async (req: Request, res: Respo
   }
 });
 
+router.get("/by-email/:email", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const email = decodeURIComponent(req.params.email as string).toLowerCase();
+    const [contact] = await db
+      .select({
+        id: contactsTable.id,
+        firstName: contactsTable.firstName,
+        lastName: contactsTable.lastName,
+        email: contactsTable.email,
+        companyId: contactsTable.companyId,
+        companyName: companiesTable.name,
+      })
+      .from(contactsTable)
+      .leftJoin(companiesTable, eq(contactsTable.companyId, companiesTable.id))
+      .where(ilike(contactsTable.email, email))
+      .limit(1);
+
+    if (!contact) {
+      res.status(404).json({ error: "Contact not found" });
+      return;
+    }
+    res.json(contact);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to lookup contact" });
+  }
+});
+
 router.get("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
     const id = req.params.id as string;

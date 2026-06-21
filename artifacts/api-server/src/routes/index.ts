@@ -30,6 +30,7 @@ import integrationsRouter from "./integrations";
 import automationsRouter from "./automations";
 import settingsRouter from "./settings";
 import gmailRouter from "./gmail";
+import emailInboundRouter from "./email-inbound";
 
 const router: IRouter = Router();
 
@@ -64,5 +65,6 @@ router.use("/integrations", integrationsRouter);
 router.use("/automations", automationsRouter);
 router.use("/settings", settingsRouter);
 router.use("/gmail", gmailRouter);
+router.use("/email/inbound", emailInboundRouter);
 
 export default router;
