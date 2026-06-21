@@ -627,16 +627,19 @@ export function CompanyDetailPage() {
                         </div>
                         <div className="space-y-1.5">
                           <Label>Due by</Label>
-                          <Popover open={dueDateOpen} onOpenChange={setDueDateOpen}>
-                            <PopoverTrigger asChild>
-                              <Button variant="outline" className="w-full justify-start font-normal text-left">
-                                <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
-                                {endDate
-                                  ? format(new Date(endDate), "MMM d, yyyy 'at' h:mm a")
-                                  : <span className="text-muted-foreground">Pick a date &amp; time</span>}
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-[312px] p-0 z-[200]" align="start">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full justify-start font-normal text-left"
+                            onClick={() => setDueDateOpen(v => !v)}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
+                            {endDate
+                              ? format(new Date(endDate), "MMM d, yyyy 'at' h:mm a")
+                              : <span className="text-muted-foreground">Pick a date &amp; time</span>}
+                          </Button>
+                          {dueDateOpen && (
+                            <div className="border rounded-md overflow-hidden bg-background shadow-sm">
                               <Calendar
                                 mode="single"
                                 selected={endDate ? new Date(endDate) : undefined}
@@ -648,7 +651,6 @@ export function CompanyDetailPage() {
                                 }}
                                 className="w-full"
                                 classNames={{ root: "w-full" }}
-                                initialFocus
                               />
                               <div className="border-t px-3 py-2.5 flex items-center gap-2 bg-muted/30">
                                 <span className="text-xs text-muted-foreground font-medium">Time</span>
@@ -666,10 +668,10 @@ export function CompanyDetailPage() {
                                     }
                                   }}
                                 />
-                                <Button size="sm" onClick={() => setDueDateOpen(false)}>Done</Button>
+                                <Button size="sm" type="button" onClick={() => setDueDateOpen(false)}>Done</Button>
                               </div>
-                            </PopoverContent>
-                          </Popover>
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div className="space-y-1.5">
