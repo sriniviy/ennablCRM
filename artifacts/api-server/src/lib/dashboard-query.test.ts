@@ -81,6 +81,22 @@ async function seed() {
       ('a3', 'NOTE',       'd1', 'u_alice', '2025-02-01T12:00:00Z', null)`);
 }
 
+/* Convenience: run a deals KPI and return the kpi payload. */
+async function dealKpi(config: Record<string, unknown>) {
+  const res = await runCardQuery({ vizType: "kpi", dataset: "deals", config });
+  return res.kpi;
+}
+
+/* Convenience: count deals matching a filter set. */
+async function dealCount(filters: Record<string, unknown>) {
+  const res = await runCardQuery({
+    vizType: "kpi",
+    dataset: "deals",
+    config: { metric: "count", filters },
+  });
+  return res.kpi?.value;
+}
+
 beforeAll(async () => {
   originalUrl = process.env.DATABASE_URL;
   if (!originalUrl) throw new Error("DATABASE_URL must be set for analytics tests");
@@ -191,6 +207,138 @@ describe("runCardQuery — deals dataset", () => {
     );
     expect(byName["Alice"]).toEqual([1, 1, 0]);
     expect(byName["Bob"]).toEqual([1, 0, 1]);
+  });
+});
+
+describe("runCardQuery — remaining deal metrics", () => {
+  it("kpi: avgValue averages deal value with currency format", async () => {
+    // (100 + 200 + 300 + 400) / 4 = 250
+    expect(await dealKpi({ metric: "avgValue" })).toEqual({
+      value: 250,
+      format: "currency",
+    });
+  });
+
+  it("kpi: weightedForecast sums value × probability/100 with currency format", async () => {
+    // each deal: value × 50/100 → 50 + 100 + 150 + 200 = 500
+    expect(await dealKpi({ metric: "weightedForecast" })).toEqual({
+      value: 500,
+      format: "currency",
+    });
+  });
+
+  it("kpi: avgTimeInStage returns a positive day count with days format", async () => {
+    const kpi = await dealKpi({ metric: "avgTimeInStage" });
+    expect(kpi?.format).toBe("days");
+    // updated_at defaults to now() at seed time, so this is small but > 0.
+    expect(kpi?.value).toBeGreaterThan(0);
+  });
+
+  it("series: multi-metric grouped bar emits one series per metric by dimension", async () => {
+    const res = await runCardQuery({
+      vizType: "bar",
+      dataset: "deals",
+      config: {
+        metric: "multi",
+        metrics: ["count", "avgValue", "sumValue"],
+        dimension: "owner",
+      },
+    });
+    expect(res.kind).toBe("series");
+    expect(res.categories).toEqual(["Alice", "Bob"]);
+    const byKey = Object.fromEntries((res.series ?? []).map((s) => [s.key, s.data]));
+    // Alice: d1(100), d3(300) → count 2, avg 200, sum 400
+    // Bob:   d2(200), d4(400) → count 2, avg 300, sum 600
+    expect(byKey["count"]).toEqual([2, 2]);
+    expect(byKey["avgValue"]).toEqual([200, 300]);
+    expect(byKey["sumValue"]).toEqual([400, 600]);
+    expect(res.valueFormat).toBe("number");
+  });
+});
+
+describe("buildDealWhere — deterministic filters", () => {
+  it("status open excludes Won/Lost stages", async () => {
+    // d1, d2, d3 are in Lead; d4 is Won.
+    expect(await dealCount({ status: "open" })).toBe(3);
+  });
+
+  it("status won keeps only the Won stage", async () => {
+    expect(await dealCount({ status: "won" })).toBe(1);
+  });
+
+  it("status lost matches nothing when no Lost deals exist", async () => {
+    expect(await dealCount({ status: "lost" })).toBe(0);
+  });
+
+  it("stages filters by an explicit stage-name list", async () => {
+    expect(await dealCount({ stages: ["Won"] })).toBe(1);
+    expect(await dealCount({ stages: ["Lead"] })).toBe(3);
+    expect(await dealCount({ stages: ["Lead", "Won"] })).toBe(4);
+  });
+
+  it("dateFrom keeps deals created on/after the bound (created field)", async () => {
+    // d2 (Mar 10) and d3 (Feb 20) are on/after Feb 1; d1/d4 (Jan) are not.
+    expect(await dealCount({ dateFrom: "2025-02-01T00:00:00Z" })).toBe(2);
+  });
+
+  it("dateTo keeps deals created on/before the bound", async () => {
+    // d1 (Jan 15) and d4 (Jan 25) are on/before Feb 1.
+    expect(await dealCount({ dateTo: "2025-02-01T00:00:00Z" })).toBe(2);
+  });
+
+  it("dateFrom + dateTo bound a window", async () => {
+    // Only d3 (Feb 20) falls in [Feb 1, Mar 1).
+    expect(
+      await dealCount({
+        dateFrom: "2025-02-01T00:00:00Z",
+        dateTo: "2025-03-01T00:00:00Z",
+      }),
+    ).toBe(1);
+  });
+
+  it("owners filters by assignee id list", async () => {
+    expect(await dealCount({ owners: ["u_alice"] })).toBe(2);
+    expect(await dealCount({ owners: ["u_bob"] })).toBe(2);
+    expect(await dealCount({ owners: ["u_alice", "u_bob"] })).toBe(4);
+  });
+});
+
+describe("buildDealWhere — time-relative filters", () => {
+  // These filters compare against now(), so seed rows with dates anchored to the
+  // current clock. They are inserted only for this block and removed afterwards.
+  beforeAll(async () => {
+    // updated_at drives time-in-stage; set distinct ages so the horizon is clear.
+    await pool.query(`
+      insert into deals (id, title, value, probability, stage_id, assignee_id, created_at, updated_at, close_date) values
+        ('d_recent', 'Recent', 100, 50, 's_lead', 'u_alice', now(), now() - interval '2 days', now() + interval '5 days'),
+        ('d_old',    'Old',    100, 50, 's_lead', 'u_alice', now() - interval '400 days', now() - interval '20 days', now() + interval '100 days')`);
+  });
+
+  afterAll(async () => {
+    await pool.query(`delete from deals where id in ('d_recent', 'd_old')`);
+  });
+
+  it("period allTime applies no date bound (all deals incl. seed)", async () => {
+    // 4 seed deals + 2 inserted here = 6
+    expect(await dealCount({ period: "allTime" })).toBe(6);
+  });
+
+  it("period last30d keeps only recently-created deals", async () => {
+    // Seed deals (2025) and d_old (400d ago) fall outside the 30-day window.
+    expect(await dealCount({ period: "last30d" })).toBe(1);
+  });
+
+  it("closingWithinDays keeps deals with a close_date inside the horizon", async () => {
+    // d_recent closes in 5 days; d_old closes in 100 days; seed deals have none.
+    expect(await dealCount({ closingWithinDays: 30 })).toBe(1);
+    expect(await dealCount({ closingWithinDays: 200 })).toBe(2);
+  });
+
+  it("timeInStageMinDays keeps deals older than the threshold (by updated_at)", async () => {
+    // d_recent updated 2d ago, d_old updated 20d ago; seed deals were updated
+    // at seed time (~now), so they fall under any positive threshold.
+    expect(await dealCount({ timeInStageMinDays: 10 })).toBe(1); // only d_old
+    expect(await dealCount({ timeInStageMinDays: 1 })).toBe(2); // d_recent + d_old
   });
 });
 
