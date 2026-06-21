@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CardRenderer } from "./card-renderer";
 import {
   type DashboardCard,
@@ -40,6 +41,13 @@ const METRICS_BY_DATASET: Record<Dataset, string[]> = {
   deals: ["count", "sumValue", "avgValue", "weightedForecast", "avgTimeInStage"],
   activities: ["count"],
   dealMoves: ["count", "sumValue"],
+};
+
+// Measures the multi-measure (comparison) flow can plot together. Only the
+// deals dataset supports it server-side, and only these aggregates are
+// computed in the multi branch of the query engine.
+const MULTI_METRICS_BY_DATASET: Partial<Record<Dataset, string[]>> = {
+  deals: ["count", "sumValue", "avgValue"],
 };
 
 const DIMS_BY_DATASET: Record<Dataset, string[]> = {
@@ -87,6 +95,8 @@ export function CardBuilderDialog({ open, onOpenChange, editing, onSave, saving 
   const [vizType, setVizType] = useState<VizType>("bar");
   const [size, setSize] = useState<"sm" | "md" | "lg">("md");
   const [metric, setMetric] = useState("count");
+  const [isMulti, setIsMulti] = useState(false);
+  const [metrics, setMetrics] = useState<string[]>(["count", "sumValue"]);
   const [dimension, setDimension] = useState("owner");
   const [breakdown, setBreakdown] = useState("none");
   const [status, setStatus] = useState("open");
@@ -99,13 +109,11 @@ export function CardBuilderDialog({ open, onOpenChange, editing, onSave, saving 
   // existing/seeded cards (e.g. multi-metric cards, hand-authored tables).
   const [preserved, setPreserved] = useState<{
     info?: string;
-    metrics?: string[];
-    isMulti: boolean;
     stages?: string[];
     types?: string[];
     columns?: string[];
     sort?: { by?: string; dir?: "asc" | "desc" };
-  }>({ isMulti: false });
+  }>({});
 
   useEffect(() => {
     if (!open) return;
@@ -115,7 +123,10 @@ export function CardBuilderDialog({ open, onOpenChange, editing, onSave, saving 
       setVizType(editing.vizType);
       setSize(editing.size);
       const c = editing.config;
-      setMetric(c.metric ?? "count");
+      const cMulti = c.metric === "multi" && Array.isArray(c.metrics);
+      setIsMulti(cMulti);
+      setMetrics(cMulti ? (c.metrics as string[]) : ["count", "sumValue"]);
+      setMetric(c.metric && c.metric !== "multi" ? c.metric : "count");
       setDimension(c.dimension ?? "owner");
       setBreakdown(c.breakdown ?? "none");
       setStatus(c.filters?.status ?? "open");
@@ -126,8 +137,6 @@ export function CardBuilderDialog({ open, onOpenChange, editing, onSave, saving 
       setClosingWithinDays(c.filters?.closingWithinDays ? String(c.filters.closingWithinDays) : "");
       setPreserved({
         info: c.info,
-        metrics: Array.isArray(c.metrics) ? c.metrics : undefined,
-        isMulti: c.metric === "multi" && Array.isArray(c.metrics),
         stages: Array.isArray(c.filters?.stages) ? c.filters?.stages : undefined,
         types: Array.isArray(c.filters?.types) ? c.filters?.types : undefined,
         columns: Array.isArray(c.columns) ? c.columns : undefined,
@@ -139,6 +148,8 @@ export function CardBuilderDialog({ open, onOpenChange, editing, onSave, saving 
       setVizType("bar");
       setSize("md");
       setMetric("count");
+      setIsMulti(false);
+      setMetrics(["count", "sumValue"]);
       setDimension("owner");
       setBreakdown("none");
       setStatus("open");
@@ -147,7 +158,7 @@ export function CardBuilderDialog({ open, onOpenChange, editing, onSave, saving 
       setToStage("Discovery");
       setTimeInStageMinDays("");
       setClosingWithinDays("");
-      setPreserved({ isMulti: false });
+      setPreserved({});
     }
   }, [open, editing]);
 
@@ -157,12 +168,22 @@ export function CardBuilderDialog({ open, onOpenChange, editing, onSave, saving 
     if (!METRICS_BY_DATASET[dataset].includes(metric)) setMetric(METRICS_BY_DATASET[dataset][0]);
     if (dimension !== "none" && !DIMS_BY_DATASET[dataset].includes(dimension)) setDimension(DIMS_BY_DATASET[dataset][0]);
     if (breakdown !== "none" && !BREAKDOWNS_BY_DATASET[dataset].includes(breakdown)) setBreakdown("none");
+    if (!MULTI_METRICS_BY_DATASET[dataset]) setIsMulti(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataset]);
 
   const isKpi = vizType === "kpi" || vizType === "gauge";
   const isTable = vizType === "table";
-  const showBreakdown = !isKpi && !isTable && ["groupedBar", "stackedBar", "horizontalBar", "bar", "line"].includes(vizType);
+  // Multi-measure comparison is only available for series charts on datasets
+  // the query engine can aggregate multiple measures for (deals only).
+  const multiMetricOptions = MULTI_METRICS_BY_DATASET[dataset];
+  const canMulti = !isKpi && !isTable && !!multiMetricOptions;
+  const multiActive = canMulti && isMulti;
+  const showBreakdown =
+    !isKpi &&
+    !isTable &&
+    !multiActive &&
+    ["groupedBar", "stackedBar", "horizontalBar", "bar", "line"].includes(vizType);
 
   const config: CardConfig = useMemo(() => {
     const filters: CardConfig["filters"] = {};
@@ -195,13 +216,13 @@ export function CardBuilderDialog({ open, onOpenChange, editing, onSave, saving 
     if (isKpi) {
       return withInfo({ metric, filters });
     }
-    // Preserve multi-measure series cards (config.metric === "multi").
-    if (preserved.isMulti && preserved.metrics) {
+    // Multi-measure series cards plot several measures on one chart
+    // (config.metric === "multi"). The query engine ignores breakdown here.
+    if (multiActive) {
       return withInfo({
         metric: "multi",
-        metrics: preserved.metrics,
+        metrics,
         dimension,
-        breakdown: showBreakdown && breakdown !== "none" ? breakdown : undefined,
         filters,
       });
     }
@@ -211,7 +232,7 @@ export function CardBuilderDialog({ open, onOpenChange, editing, onSave, saving 
       breakdown: showBreakdown && breakdown !== "none" ? breakdown : undefined,
       filters,
     });
-  }, [dataset, vizType, metric, dimension, breakdown, status, period, dateField, toStage, timeInStageMinDays, closingWithinDays, isKpi, isTable, showBreakdown, preserved]);
+  }, [dataset, vizType, metric, metrics, multiActive, dimension, breakdown, status, period, dateField, toStage, timeInStageMinDays, closingWithinDays, isKpi, isTable, showBreakdown, preserved]);
 
   const previewCard = useMemo(
     () =>
@@ -230,7 +251,10 @@ export function CardBuilderDialog({ open, onOpenChange, editing, onSave, saving 
     [title, vizType, dataset, config, size],
   );
 
+  const multiInvalid = multiActive && metrics.length < 2;
+
   const handleSave = () => {
+    if (multiInvalid) return;
     onSave({ title: title.trim() || "Untitled card", vizType, dataset, config, size });
   };
 
@@ -274,19 +298,72 @@ export function CardBuilderDialog({ open, onOpenChange, editing, onSave, saving 
               </div>
             </div>
 
-            {!isTable && preserved.isMulti && !isKpi && (
-              <div className="space-y-1.5">
-                <Label className="text-xs">Measure</Label>
-                <Input value="Multiple measures" disabled />
-                <p className="text-[11px] text-muted-foreground">
-                  This card plots several measures and keeps them as-is.
-                </p>
+            {!isTable && !isKpi && multiActive && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">Measures to compare</Label>
+                  <button
+                    type="button"
+                    className="text-[11px] text-muted-foreground underline-offset-2 hover:underline"
+                    onClick={() => setIsMulti(false)}
+                  >
+                    Use a single measure
+                  </button>
+                </div>
+                <div className="space-y-2 rounded-md border p-3">
+                  {(multiMetricOptions ?? []).map((m) => (
+                    <label key={m} className="flex items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={metrics.includes(m)}
+                        onCheckedChange={(checked) =>
+                          setMetrics((prev) =>
+                            checked === true
+                              ? [...prev.filter((x) => x !== m), m]
+                              : prev.filter((x) => x !== m),
+                          )
+                        }
+                      />
+                      {METRIC_LABELS[m] ?? m}
+                    </label>
+                  ))}
+                </div>
+                {metrics.length < 2 && (
+                  <p className="text-[11px] text-destructive">
+                    Pick at least two measures to compare.
+                  </p>
+                )}
               </div>
             )}
 
-            {!isTable && !(preserved.isMulti && !isKpi) && (
+            {!isTable && !(multiActive && !isKpi) && (
               <div className="space-y-1.5">
-                <Label className="text-xs">Measure</Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">Measure</Label>
+                  {canMulti && (
+                    <button
+                      type="button"
+                      className="text-[11px] text-muted-foreground underline-offset-2 hover:underline"
+                      onClick={() => {
+                        setMetrics((prev) => {
+                          const valid = (multiMetricOptions ?? []).filter((m) =>
+                            prev.includes(m),
+                          );
+                          if (valid.length >= 2) return valid;
+                          const base = (multiMetricOptions ?? []).includes(metric)
+                            ? [metric]
+                            : [];
+                          const filler = (multiMetricOptions ?? []).filter(
+                            (m) => !base.includes(m),
+                          );
+                          return [...base, ...filler].slice(0, 2);
+                        });
+                        setIsMulti(true);
+                      }}
+                    >
+                      Compare measures
+                    </button>
+                  )}
+                </div>
                 <Select value={metric} onValueChange={setMetric}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -436,7 +513,7 @@ export function CardBuilderDialog({ open, onOpenChange, editing, onSave, saving 
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button onClick={handleSave} disabled={saving || multiInvalid}>
             {editing ? "Save changes" : "Add card"}
           </Button>
         </DialogFooter>
