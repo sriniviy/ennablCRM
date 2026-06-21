@@ -892,7 +892,7 @@ export function ContactDetailPage() {
                                   : <span className="text-muted-foreground">Pick a date &amp; time</span>}
                               </Button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
+                            <PopoverContent className="w-[312px] p-0 z-[200]" align="start">
                               <Calendar
                                 mode="single"
                                 selected={endDate ? new Date(endDate) : undefined}
@@ -902,14 +902,16 @@ export function ContactDetailPage() {
                                   date.setHours(h ?? 9, m ?? 0, 0, 0);
                                   setEndDate(date.toISOString());
                                 }}
+                                className="w-full"
+                                classNames={{ root: "w-full" }}
                                 initialFocus
                               />
-                              <div className="border-t p-3 flex items-center gap-2">
-                                <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                              <div className="border-t px-3 py-2.5 flex items-center gap-2 bg-muted/30">
+                                <span className="text-xs text-muted-foreground font-medium">Time</span>
                                 <input
                                   type="time"
                                   value={dueTime}
-                                  className="text-sm border rounded px-2 py-1 flex-1"
+                                  className="text-sm border rounded px-2 py-1 flex-1 bg-background"
                                   onChange={e => {
                                     setDueTime(e.target.value);
                                     if (endDate) {
