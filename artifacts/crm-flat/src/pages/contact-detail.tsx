@@ -788,8 +788,16 @@ export function ContactDetailPage() {
                               <div key={activity.id} className={`flex items-start gap-3 p-4 border rounded-lg bg-card ${isClosed ? "opacity-70" : ""}`}>
                                 <button
                                   className="mt-0.5 shrink-0 text-muted-foreground hover:text-primary transition-colors"
-                                  title={isClosed ? "Closed" : "Close activity"}
-                                  onClick={() => { if (!isClosed) { setClosingActivity({ id: activity.id, title: activity.title }); setClosureComment(""); } }}
+                                  title={isClosed ? "Reopen activity" : "Close activity"}
+                                  onClick={async () => {
+                                    if (isClosed) {
+                                      await patchActivity(activity.id, { status: "open" });
+                                      queryClient.setQueryData(getGetContactQueryKey(id), (old: any) => {
+                                        if (!old) return old;
+                                        return { ...old, activities: (old.activities ?? []).map((a: any) => a.id === activity.id ? { ...a, metadata: { ...(a.metadata ?? {}), status: "open" } } : a) };
+                                      });
+                                    } else { setClosingActivity({ id: activity.id, title: activity.title }); setClosureComment(""); }
+                                  }}
                                 >
                                   {isClosed ? <CheckCircle2 className="h-5 w-5 text-green-500" /> : <Circle className="h-5 w-5" />}
                                 </button>
@@ -1230,8 +1238,14 @@ export function ContactDetailPage() {
                             <div key={task.id} className={`flex items-center gap-3 p-3 border rounded-lg transition-opacity ${task.completed ? "opacity-60" : ""}`}>
                               <button
                                 className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
-                                title={task.completed ? "Completed" : "Complete task"}
-                                onClick={() => { if (!task.completed) { setClosingTask({ id: task.id, title: task.title }); setTaskCloseComment(""); } }}
+                                title={task.completed ? "Reopen task" : "Complete task"}
+                                onClick={async () => {
+                                  if (task.completed) {
+                                    const token = document.cookie.match(/(?:^|;\s*)better-auth\.session_token=([^;]+)/)?.[1] ?? localStorage.getItem("better-auth.session_token") ?? "";
+                                    await fetch(`/api/tasks/${task.id}/complete`, { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, credentials: "include", body: JSON.stringify({ completed: false }) });
+                                    queryClient.setQueryData(getGetContactQueryKey(id), (old: any) => { if (!old) return old; return { ...old, tasks: (old.tasks ?? []).map((t: any) => t.id === task.id ? { ...t, completed: false, completionNote: null, completedAt: null } : t) }; });
+                                  } else { setClosingTask({ id: task.id, title: task.title }); setTaskCloseComment(""); }
+                                }}
                               >
                                 {task.completed
                                   ? <CheckCircle2 className="h-5 w-5 text-green-500" />
