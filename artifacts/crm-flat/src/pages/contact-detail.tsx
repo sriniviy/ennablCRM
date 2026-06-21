@@ -10,7 +10,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Mail, Phone, Building2, Calendar, MessageSquare, Linkedin, CheckSquare, Pencil, CopyCheck, Send, Eye, MousePointerClick, BellOff, RefreshCw, Sparkles, Paperclip, ArrowUpRight, ArrowDownLeft, Video, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Building2, Calendar as CalendarIcon, MessageSquare, Linkedin, CheckSquare, Pencil, CopyCheck, Send, Eye, MousePointerClick, BellOff, RefreshCw, Sparkles, Paperclip, ArrowUpRight, ArrowDownLeft, Video, ChevronDown, ChevronUp } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { NotesFeed } from "@/components/notes/notes-feed";
@@ -398,6 +401,8 @@ export function ContactDetailPage() {
   const [actCfValues, setActCfValues] = useState<Record<string, string | null>>({});
   const [meetingSummaryLoading, setMeetingSummaryLoading] = useState(false);
   const [expandedTranscripts, setExpandedTranscripts] = useState<Record<string, boolean>>({});
+  const [dueDateOpen, setDueDateOpen] = useState(false);
+  const [dueTime, setDueTime] = useState("09:00");
   const createActivity = useCreateActivity();
   const saveActivityCf = useSaveCustomFieldValuesForRecord("activity");
   const queryClient = useQueryClient();
@@ -411,6 +416,7 @@ export function ContactDetailPage() {
   const resetActivityForm = () => {
     setActType("NOTE"); setActTitle(""); setNote(""); setEndDate("");
     setEmailSubject(""); setEmailBody(""); setAiSummary(""); setActCfValues({});
+    setDueTime("09:00");
   };
 
   const canLog = !!(note.trim() || actTitle.trim() || emailSubject.trim());
@@ -545,13 +551,20 @@ export function ContactDetailPage() {
           {/* Left Column - Info */}
           <div className="space-y-6 md:col-span-1">
 
-            {/* 1 — Latest Summary */}
-            <Card>
+            {/* 1 — Latest Summary — re-keys on activity count so it visually updates */}
+            <Card key={`summary-${(contact.activities ?? []).length}`}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
                   <Sparkles className="h-4 w-4 text-primary" />
                   Latest Summary
                 </CardTitle>
+                {(contact.activities ?? []).length > 0 && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Updated · {new Date(
+                      [...(contact.activities ?? [])].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]?.createdAt
+                    ).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                )}
               </CardHeader>
               <CardContent>
                 <p className="text-sm leading-relaxed text-muted-foreground">
@@ -860,7 +873,7 @@ export function ContactDetailPage() {
                           <Select value={actType} onValueChange={setActType}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              {["NOTE", "CALL", "EMAIL_SENT", "MEETING"].map(t => (
+                              {["NOTE", "CALL", "MEETING"].map(t => (
                                 <SelectItem key={t} value={t}>
                                   {t.replace(/_/g, " ").toLowerCase().replace(/^./, c => c.toUpperCase())}
                                 </SelectItem>
@@ -869,8 +882,48 @@ export function ContactDetailPage() {
                           </Select>
                         </div>
                         <div className="space-y-1.5">
-                          <Label htmlFor="act-end">End date</Label>
-                          <Input id="act-end" type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                          <Label>Due by</Label>
+                          <Popover open={dueDateOpen} onOpenChange={setDueDateOpen}>
+                            <PopoverTrigger asChild>
+                              <Button variant="outline" className="w-full justify-start font-normal text-left">
+                                <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
+                                {endDate
+                                  ? format(new Date(endDate), "MMM d, yyyy 'at' h:mm a")
+                                  : <span className="text-muted-foreground">Pick a date &amp; time</span>}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar
+                                mode="single"
+                                selected={endDate ? new Date(endDate) : undefined}
+                                onSelect={(date) => {
+                                  if (!date) { setEndDate(""); return; }
+                                  const [h, m] = dueTime.split(":").map(Number);
+                                  date.setHours(h ?? 9, m ?? 0, 0, 0);
+                                  setEndDate(date.toISOString());
+                                }}
+                                initialFocus
+                              />
+                              <div className="border-t p-3 flex items-center gap-2">
+                                <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                                <input
+                                  type="time"
+                                  value={dueTime}
+                                  className="text-sm border rounded px-2 py-1 flex-1"
+                                  onChange={e => {
+                                    setDueTime(e.target.value);
+                                    if (endDate) {
+                                      const d = new Date(endDate);
+                                      const [h, m] = e.target.value.split(":").map(Number);
+                                      d.setHours(h ?? 9, m ?? 0, 0, 0);
+                                      setEndDate(d.toISOString());
+                                    }
+                                  }}
+                                />
+                                <Button size="sm" onClick={() => setDueDateOpen(false)}>Done</Button>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
                         </div>
                       </div>
                       <div className="space-y-1.5">
@@ -905,12 +958,6 @@ export function ContactDetailPage() {
                           </p>
                         )}
                       </div>
-                      {actType !== "MEETING" && (
-                        <div className="space-y-1.5">
-                          <Label htmlFor="act-ai">AI summary</Label>
-                          <Textarea id="act-ai" placeholder="Leave blank to auto-generate for emails & meetings" value={aiSummary} onChange={e => setAiSummary(e.target.value)} className="resize-none" />
-                        </div>
-                      )}
                       <CustomFieldsForm objectType="activity" values={actCfValues} onChange={(fid, v) => setActCfValues(p => ({ ...p, [fid]: v }))} />
                       <div className="flex justify-end">
                         <Button
