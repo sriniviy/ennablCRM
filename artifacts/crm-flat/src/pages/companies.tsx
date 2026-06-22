@@ -453,6 +453,7 @@ export function CompaniesPage() {
               )}
               fields={cardFields}
               onItemClick={openEdit}
+              onShare={c => { setShareCompany(c); setShareOpen(true); }}
               emptyMessage="No companies found."
             />
           )

@@ -400,6 +400,7 @@ export function ContactsPage() {
               )}
               fields={CARD_FIELDS}
               onItemClick={openEdit}
+              onShare={c => { setShareContact(c); setShareOpen(true); }}
               emptyMessage="No contacts found."
             />
           )
