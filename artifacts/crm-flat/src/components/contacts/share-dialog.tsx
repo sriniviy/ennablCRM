@@ -5,13 +5,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Share2, CheckCircle2, User, Building2, Mail, Zap, Sparkles } from "lucide-react";
+import { Share2, CheckCircle2, User, Building2, Mail, Zap, Sparkles, BarChart2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useSessionToken } from "@/hooks/use-session-token";
 import { useTeamMembers } from "@/hooks/use-team-members";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-export type ShareRecordType = "contact" | "company" | "campaign" | "sequence" | "ai_preset";
+export type ShareRecordType = "contact" | "company" | "campaign" | "sequence" | "ai_preset" | "report";
 
 export interface ShareRecord {
   id: string;
@@ -32,6 +32,7 @@ const RECORD_ICON: Record<ShareRecordType, React.ElementType> = {
   campaign: Mail,
   sequence: Zap,
   ai_preset: Sparkles,
+  report: BarChart2,
 };
 
 const RECORD_LABEL: Record<ShareRecordType, string> = {
@@ -40,6 +41,7 @@ const RECORD_LABEL: Record<ShareRecordType, string> = {
   campaign: "campaign",
   sequence: "sequence",
   ai_preset: "AI preset",
+  report: "report",
 };
 
 export function ShareDialog({ record, open, onOpenChange }: ShareDialogProps) {

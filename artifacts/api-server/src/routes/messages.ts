@@ -27,7 +27,7 @@ export const internalMessagesTable = pgTable(
   ],
 );
 
-type RecordType = "contact" | "company" | "campaign" | "sequence" | "ai_preset";
+type RecordType = "contact" | "company" | "campaign" | "sequence" | "ai_preset" | "report";
 
 const router = Router();
 

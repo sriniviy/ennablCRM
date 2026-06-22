@@ -35,6 +35,7 @@ import { PipelineOverview } from "@/components/dashboards/pipeline-overview";
 import { DashboardView } from "@/components/dashboards/dashboard-view";
 import { BASE, type Dashboard } from "@/components/dashboards/types";
 import { useGetMe } from "@workspace/api-client-react";
+import { ShareDialog } from "@/components/contacts/share-dialog";
 
 const BUILTIN_ID = "__pipeline_overview__";
 
@@ -50,6 +51,7 @@ export function ReportsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Dashboard | null>(null);
   const [draftName, setDraftName] = useState("");
   const [draftDesc, setDraftDesc] = useState("");
+  const [shareOpen, setShareOpen] = useState(false);
 
   const canMutate = (d: Dashboard | null) => {
     if (!d || d.builtin) return false;
@@ -149,14 +151,7 @@ export function ReportsPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => {
-                const url = window.location.href;
-                navigator.clipboard.writeText(url).then(() => {
-                  toast({ title: "Link copied!", description: "Share this link with anyone on your team." });
-                }).catch(() => {
-                  toast({ title: "Couldn't copy link", variant: "destructive" });
-                });
-              }}
+              onClick={() => setShareOpen(true)}
             >
               <Share2 className="h-4 w-4 mr-1.5" />
               Share
@@ -232,6 +227,13 @@ export function ReportsPage() {
           : <DashboardView dashboardId={active.id} canEdit={canMutate(active.dashboard)} />
         }
       </div>
+
+      {/* Share dialog */}
+      <ShareDialog
+        record={{ id: activeId, name: active.name, type: "report" }}
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+      />
 
       {/* Create dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
