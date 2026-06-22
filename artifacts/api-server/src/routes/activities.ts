@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { db, activitiesTable, usersTable, contactsTable, companiesTable, dealsTable, customFieldDefinitionsTable, customFieldValuesTable } from "@workspace/db";
-import { eq, and, asc, desc, sql, gte, lte, inArray } from "drizzle-orm";
+import { eq, and, or, asc, desc, sql, gte, lte, inArray } from "drizzle-orm";
 import { requireAuth, type AuthRequest } from "../middlewares/requireAuth";
 import { logAudit } from "../lib/audit";
 import { isSummarizable, isThreadedEmail, refreshActivitySummary } from "../lib/activity-summary";
@@ -12,6 +12,21 @@ const parseValidDate = (s: string) => {
   return isNaN(d.getTime()) ? null : d;
 };
 
+// Activities on a company should roll up activities logged against that
+// company's deals and contacts, not just those tagged with companyId directly.
+const companyScopeCondition = (companyId: string) =>
+  or(
+    eq(activitiesTable.companyId, companyId),
+    inArray(
+      activitiesTable.dealId,
+      db.select({ id: dealsTable.id }).from(dealsTable).where(eq(dealsTable.companyId, companyId)),
+    ),
+    inArray(
+      activitiesTable.contactId,
+      db.select({ id: contactsTable.id }).from(contactsTable).where(eq(contactsTable.companyId, companyId)),
+    ),
+  );
+
 router.get("/export", requireAuth, async (req: Request, res: Response) => {
   try {
     const { contactId, dealId, companyId, type, assigneeId, dateFrom, dateTo } = req.query as Record<string, string>;
@@ -19,7 +34,7 @@ router.get("/export", requireAuth, async (req: Request, res: Response) => {
     const conditions = [];
     if (contactId) conditions.push(eq(activitiesTable.contactId, contactId));
     if (dealId) conditions.push(eq(activitiesTable.dealId, dealId));
-    if (companyId) conditions.push(eq(activitiesTable.companyId, companyId));
+    if (companyId) conditions.push(companyScopeCondition(companyId));
     if (type) conditions.push(eq(activitiesTable.type, type as typeof activitiesTable.$inferSelect["type"]));
     if (assigneeId) conditions.push(eq(activitiesTable.userId, assigneeId));
     if (dateFrom) {
@@ -108,7 +123,7 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
     const conditions = [];
     if (contactId) conditions.push(eq(activitiesTable.contactId, contactId));
     if (dealId) conditions.push(eq(activitiesTable.dealId, dealId));
-    if (companyId) conditions.push(eq(activitiesTable.companyId, companyId));
+    if (companyId) conditions.push(companyScopeCondition(companyId));
     if (type) conditions.push(eq(activitiesTable.type, type as typeof activitiesTable.$inferSelect["type"]));
     if (dateFrom) {
       const from = parseValidDate(dateFrom);

@@ -4,4 +4,5 @@
 - [api-server .env startup crash](api-server-env-file.md) — api-server start must use `--env-file-if-exists=.env`; plain `--env-file=.env` crashes (no .env in Replit) → frontend 502s look like "login broken".
 - [crm-flat e2e auth provisioning](crm-flat-e2e-auth-provisioning.md) — browser e2e 403s "not provisioned" unless a `users` row matches the signup email; use fixed lowercase email + [DB] insert, or skip auth and verify query SQL via executeSql.
 - [openapi codegen drift + dist staleness](codegen-drift-and-dist.md) — blind orval drops fields openapi.yaml lacks but the backend returns; and orval-alone leaves consuming apps on stale dist .d.ts (project refs), so rebuild the lib after codegen.
+- [Company activity/notes rollup](company-activity-rollup.md) — company-scoped activity queries must OR in deals'/contacts' activities (notes set only one FK), applied to both list + export handlers.
 - [Git merges blocked for main agent](git-merge-on-main-agent.md) — main agent can't run git merge/pull/fetch/reset (hard block); reconcile a diverged main via `git diff merge-base origin/main | git apply --3way` (content only, no merge commit).
