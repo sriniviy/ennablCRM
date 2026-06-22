@@ -224,13 +224,14 @@ router.patch("/cards/:cardId", requireAuth, async (req: Request, res: Response) 
       res.status(authz.status).json({ error: authz.error });
       return;
     }
-    const { title, vizType, dataset, config, size, order } = req.body as {
+    const { title, vizType, dataset, config, size, order, cardHeight } = req.body as {
       title?: string;
       vizType?: string;
       dataset?: string;
       config?: Record<string, unknown>;
       size?: string;
       order?: number;
+      cardHeight?: number;
     };
     const updates: Record<string, unknown> = { updatedAt: new Date() };
     if (typeof title === "string") updates.title = title.trim();
@@ -239,6 +240,7 @@ router.patch("/cards/:cardId", requireAuth, async (req: Request, res: Response) 
     if (config && typeof config === "object") updates.config = config;
     if (typeof size === "string") updates.size = size;
     if (typeof order === "number") updates.order = order;
+    if (typeof cardHeight === "number" && cardHeight >= 80 && cardHeight <= 900) updates.cardHeight = cardHeight;
     const [updated] = await db
       .update(dashboardCardsTable)
       .set(updates)

@@ -49,6 +49,7 @@ export const dashboardCardsTable = pgTable(
     config: jsonb("config").notNull().default({}),
     order: integer("order").notNull().default(0),
     size: text("size").notNull().default("md"),
+    cardHeight: integer("card_height").notNull().default(260),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

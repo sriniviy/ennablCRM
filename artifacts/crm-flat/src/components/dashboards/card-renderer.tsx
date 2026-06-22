@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useSessionToken } from "@/hooks/use-session-token";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/utils";
 import { ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
@@ -16,18 +16,25 @@ import {
   LineChart,
   Line,
   Cell,
+  LabelList,
 } from "recharts";
 import { BASE, type DashboardCard, type QueryResult } from "./types";
 
 const tooltipStyle = {
-  backgroundColor: "hsl(var(--card))",
+  backgroundColor: "hsl(var(--popover))",
   border: "1px solid hsl(var(--border))",
-  borderRadius: "6px",
+  borderRadius: "8px",
   color: "hsl(var(--foreground))",
-  fontSize: "11px",
-  boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-  padding: "6px 10px",
+  fontSize: "12px",
+  boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+  padding: "8px 12px",
 };
+
+// Vivid palette — used when series color is not set or for single-series
+const PALETTE = [
+  "#6366f1", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444",
+  "#8b5cf6", "#06b6d4", "#84cc16", "#f97316", "#ec4899",
+];
 
 function fmt(v: number, format?: string): string {
   if (format === "currency") return formatCurrency(v);
@@ -42,6 +49,7 @@ function fmtShort(v: number, format?: string): string {
     return `$${Math.round(v)}`;
   }
   if (format === "days") return v >= 30 ? `${(v / 30.44).toFixed(1)}mo` : `${Math.round(v)}d`;
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
   if (v >= 1_000) return `${(v / 1_000).toFixed(1)}k`;
   return Number.isInteger(v) ? String(v) : v.toFixed(1);
 }
@@ -80,16 +88,15 @@ export function useCardQuery(card: Pick<DashboardCard, "vizType" | "dataset" | "
 
 function EmptyState({ label = "No data for this period." }: { label?: string }) {
   return (
-    <div className="flex flex-col items-center justify-center h-full min-h-[100px] text-muted-foreground/60 text-xs gap-1">
-      <div className="w-8 h-8 rounded-full border-2 border-dashed border-muted-foreground/30 flex items-center justify-center">
-        <span className="text-lg leading-none text-muted-foreground/30">—</span>
+    <div className="flex flex-col items-center justify-center h-full min-h-[80px] text-muted-foreground/50 text-xs gap-2">
+      <div className="w-10 h-10 rounded-full border-2 border-dashed border-muted-foreground/20 flex items-center justify-center text-muted-foreground/20 text-xl">
+        —
       </div>
       {label}
     </div>
   );
 }
 
-/** Pivots normalized series into recharts row objects keyed by series name. */
 function toRows(result: QueryResult): Record<string, number | string>[] {
   const cats = result.categories ?? [];
   const series = result.series ?? [];
@@ -100,39 +107,56 @@ function toRows(result: QueryResult): Record<string, number | string>[] {
   });
 }
 
-/** Semicircle SVG gauge */
-function SemiGauge({ pct, value, max, format }: { pct: number; value: number; max: number; format: string }) {
-  const r = 54;
-  const cx = 70;
-  const cy = 64;
-  const circumference = Math.PI * r;
-  const strokeDashoffset = circumference * (1 - pct / 100);
+/** Responsive semicircle gauge — scales with available height */
+function SemiGauge({ pct, value, max, format, height }: { pct: number; value: number; max: number; format: string; height: number }) {
+  const scale = Math.min(1.4, Math.max(0.7, height / 200));
+  const r = Math.round(60 * scale);
+  const W = Math.round(r * 2 + 24);
+  const H = Math.round(r + 32);
+  const cx = W / 2;
+  const cy = r + 4;
+  const circ = Math.PI * r;
+  const offset = circ * (1 - pct / 100);
+  const sw = Math.round(10 * scale);
+
   return (
-    <div className="flex flex-col items-center gap-1">
-      <svg width="140" height="80" viewBox="0 0 140 80">
+    <div className="flex flex-col items-center justify-center h-full gap-1">
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ overflow: "visible" }}>
+        <defs>
+          <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.7" />
+            <stop offset="100%" stopColor="hsl(var(--primary))" />
+          </linearGradient>
+        </defs>
+        {/* Track */}
         <path
           d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
-          fill="none" stroke="hsl(var(--muted))" strokeWidth="10" strokeLinecap="round"
+          fill="none" stroke="hsl(var(--muted))" strokeWidth={sw} strokeLinecap="round"
         />
+        {/* Value arc */}
         <path
           d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
-          fill="none" stroke="hsl(var(--primary))" strokeWidth="10" strokeLinecap="round"
-          strokeDasharray={circumference} strokeDashoffset={strokeDashoffset}
-          style={{ transition: "stroke-dashoffset 0.6s ease" }}
+          fill="none" stroke="url(#gaugeGrad)" strokeWidth={sw} strokeLinecap="round"
+          strokeDasharray={circ} strokeDashoffset={offset}
+          style={{ transition: "stroke-dashoffset 0.7s cubic-bezier(.4,0,.2,1)" }}
         />
-        <text x={cx} y={cy - 4} textAnchor="middle" fontSize="15" fontWeight="700" fill="hsl(var(--foreground))">
+        {/* Value text */}
+        <text x={cx} y={cy - sw / 2 - 4} textAnchor="middle"
+          fontSize={Math.round(18 * scale)} fontWeight="700" fill="hsl(var(--foreground))">
           {fmtShort(value, format)}
         </text>
-        <text x={cx} y={cy + 12} textAnchor="middle" fontSize="8" fill="hsl(var(--muted-foreground))">
-          {pct.toFixed(0)}% of {fmtShort(max, format)}
+        {/* Sub-label */}
+        <text x={cx} y={cy + 14} textAnchor="middle"
+          fontSize={Math.round(9 * scale)} fill="hsl(var(--muted-foreground))">
+          {pct.toFixed(0)}% of {fmtShort(max, format)} target
         </text>
       </svg>
     </div>
   );
 }
 
-/** Sortable table */
-function SortableTable({ data, format }: { data: QueryResult; format?: string }) {
+/** Sortable table with sticky header */
+function SortableTable({ data, height }: { data: QueryResult; height: number }) {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
@@ -147,30 +171,29 @@ function SortableTable({ data, format }: { data: QueryResult; format?: string })
 
   const sorted = [...rows].sort((a, b) => {
     if (!sortKey) return 0;
-    const av = a[sortKey], bv = b[sortKey];
-    const an = Number(av), bn = Number(bv);
+    const an = Number(a[sortKey]), bn = Number(b[sortKey]);
     const cmp = !isNaN(an) && !isNaN(bn)
       ? an - bn
-      : String(av ?? "").localeCompare(String(bv ?? ""));
+      : String(a[sortKey] ?? "").localeCompare(String(b[sortKey] ?? ""));
     return sortDir === "asc" ? cmp : -cmp;
   });
 
   return (
-    <div className="overflow-auto max-h-[320px]">
+    <div className="overflow-auto" style={{ maxHeight: height }}>
       <table className="w-full text-xs">
-        <thead className="sticky top-0 bg-card z-10">
+        <thead className="sticky top-0 bg-card z-10 shadow-sm">
           <tr className="border-b">
             {columns.map(c => (
               <th
                 key={c.key}
                 onClick={() => handleSort(c.key)}
-                className={`py-1.5 px-2 font-semibold text-muted-foreground cursor-pointer select-none hover:text-foreground whitespace-nowrap ${c.format === "currency" ? "text-right" : "text-left"}`}
+                className={`py-1.5 px-2.5 font-semibold text-muted-foreground cursor-pointer select-none hover:text-foreground whitespace-nowrap ${c.format === "currency" ? "text-right" : "text-left"}`}
               >
                 <span className="inline-flex items-center gap-0.5">
                   {c.label}
                   {sortKey === c.key
                     ? sortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
-                    : <ChevronsUpDown className="h-3 w-3 opacity-30" />}
+                    : <ChevronsUpDown className="h-3 w-3 opacity-25" />}
                 </span>
               </th>
             ))}
@@ -181,14 +204,15 @@ function SortableTable({ data, format }: { data: QueryResult; format?: string })
             <tr key={i} className="border-b last:border-0 hover:bg-muted/40 transition-colors">
               {columns.map(c => {
                 const val = r[c.key];
-                let display: string;
-                if (c.format === "currency") display = formatCurrency(Number(val ?? 0));
-                else if (c.format === "date") display = fmtDate(val);
-                else display = val == null || val === "" ? "—" : String(val);
+                const display = c.format === "currency"
+                  ? formatCurrency(Number(val ?? 0))
+                  : c.format === "date"
+                    ? fmtDate(val)
+                    : val == null || val === "" ? "—" : String(val);
                 return (
                   <td
                     key={c.key}
-                    className={`py-1.5 px-2 ${c.format === "currency" ? "text-right font-medium tabular-nums" : "text-left"} ${c.key === "title" || c.key === "owner" ? "font-medium" : "text-muted-foreground"}`}
+                    className={`py-1.5 px-2.5 ${c.format === "currency" ? "text-right font-medium tabular-nums" : "text-left"} ${c.key === "title" || c.key === "owner" ? "font-medium" : "text-muted-foreground"}`}
                   >
                     {display}
                   </td>
@@ -199,10 +223,10 @@ function SortableTable({ data, format }: { data: QueryResult; format?: string })
         </tbody>
         {totalRow && typeof totalRow.value === "number" && (
           <tfoot>
-            <tr className="border-t-2 font-semibold bg-card">
-              {columns.map((c, i) => (
-                <td key={c.key} className={`py-1.5 px-2 text-xs ${c.format === "currency" ? "text-right" : ""}`}>
-                  {i === 0 ? "Total" : c.format === "currency" ? formatCurrency(Number(totalRow.value)) : ""}
+            <tr className="border-t-2 font-semibold bg-muted/20">
+              {columns.map((c, ci) => (
+                <td key={c.key} className={`py-1.5 px-2.5 text-xs ${c.format === "currency" ? "text-right" : ""}`}>
+                  {ci === 0 ? "Total" : c.format === "currency" ? formatCurrency(Number(totalRow.value)) : ""}
                 </td>
               ))}
             </tr>
@@ -213,44 +237,42 @@ function SortableTable({ data, format }: { data: QueryResult; format?: string })
   );
 }
 
-export function CardRenderer({ card, height = 200 }: { card: DashboardCard; height?: number }) {
+/** KPI card — shows large value, scales with height */
+function KpiCard({ value, format, height }: { value: number; format: string; height: number }) {
+  const large = height > 200;
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-1">
+      <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+        {format === "currency" ? "Total Value" : "Count"}
+      </span>
+      <span className={`font-bold tracking-tight text-primary tabular-nums ${large ? "text-5xl" : "text-3xl"}`}>
+        {fmt(value, format)}
+      </span>
+    </div>
+  );
+}
+
+export function CardRenderer({ card, height = 260 }: { card: DashboardCard; height?: number }) {
   const { data, isLoading, isError } = useCardQuery(card);
 
-  if (isLoading) return <Skeleton className="w-full rounded-none" style={{ height }} />;
+  if (isLoading) return <Skeleton className="w-full h-full rounded-sm" />;
   if (isError || !data) return <EmptyState label="Couldn't load data." />;
 
   const format = data.valueFormat;
 
-  // KPI
   if (data.kind === "kpi" && data.kpi) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full min-h-[80px] py-3 gap-0.5">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-          {data.kpi.format === "currency" ? "Total" : "Count"}
-        </span>
-        <span className="text-3xl font-bold tracking-tight text-primary">
-          {fmt(data.kpi.value, data.kpi.format)}
-        </span>
-      </div>
-    );
+    return <KpiCard value={data.kpi.value} format={data.kpi.format} height={height} />;
   }
 
-  // Gauge
   if (data.kind === "gauge" && data.gauge) {
     const pct = data.gauge.max > 0 ? Math.min(100, (data.gauge.value / data.gauge.max) * 100) : 0;
-    return (
-      <div className="flex items-center justify-center h-full min-h-[100px]">
-        <SemiGauge pct={pct} value={data.gauge.value} max={data.gauge.max} format={data.gauge.format} />
-      </div>
-    );
+    return <SemiGauge pct={pct} value={data.gauge.value} max={data.gauge.max} format={data.gauge.format} height={height} />;
   }
 
-  // Table
   if (data.kind === "table") {
-    return <SortableTable data={data} format={format} />;
+    return <SortableTable data={data} height={height} />;
   }
 
-  // Empty series
   if (data.kind !== "series" || !data.series || data.series.length === 0 || (data.categories ?? []).length === 0) {
     return <EmptyState />;
   }
@@ -258,19 +280,28 @@ export function CardRenderer({ card, height = 200 }: { card: DashboardCard; heig
   const rows = toRows(data);
   const series = data.series;
   const multiSeries = series.length > 1;
+  const catCount = rows.length;
   const yFmt = (v: number) => fmtShort(v, format);
+
+  // Show value labels only when not too crowded
+  const showLabels = catCount <= 12 && series.length <= 6;
+
+  const labelStyle = { fontSize: 9, fill: "hsl(var(--foreground) / 65%)" } as React.CSSProperties;
 
   if (card.vizType === "line") {
     return (
       <ResponsiveContainer width="100%" height={height}>
-        <LineChart data={rows} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+        <LineChart data={rows} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} opacity={0.5} />
           <XAxis dataKey="__cat" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
-          <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} tickFormatter={yFmt} width={38} />
+          <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} tickFormatter={yFmt} width={40} domain={[0, "auto"]} />
           <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => fmt(v, format)} />
-          {multiSeries && <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4 }} />}
-          {series.map(s => (
-            <Line key={s.name} type="monotone" dataKey={s.name} stroke={s.color} strokeWidth={2} dot={false} />
+          {multiSeries && <Legend wrapperStyle={{ fontSize: 10, paddingTop: 6 }} iconSize={8} />}
+          {series.map((s, si) => (
+            <Line key={s.name} type="monotone" dataKey={s.name}
+              stroke={s.color || PALETTE[si % PALETTE.length]} strokeWidth={2.5}
+              dot={{ r: 3, fill: s.color || PALETTE[si % PALETTE.length] }}
+              activeDot={{ r: 5 }} />
           ))}
         </LineChart>
       </ResponsiveContainer>
@@ -279,50 +310,93 @@ export function CardRenderer({ card, height = 200 }: { card: DashboardCard; heig
 
   const horizontal = card.vizType === "horizontalBar";
   const stacked = card.vizType === "stackedBar";
-  const tooManyBars = rows.length > 8;
+  const tooManyH = !horizontal && catCount > 8;
+
+  // For horizontal bars, need wider left axis to fit labels
+  const yAxisW = horizontal
+    ? Math.min(120, Math.max(60, Math.max(...rows.map(r => String(r.__cat).length)) * 6))
+    : 44;
 
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart
         data={rows}
         layout={horizontal ? "vertical" : "horizontal"}
+        barCategoryGap={stacked ? "30%" : "25%"}
+        barGap={3}
         margin={horizontal
-          ? { top: 2, right: 12, left: 0, bottom: 2 }
-          : { top: 4, right: 8, left: 0, bottom: tooManyBars ? 36 : 4 }}
+          ? { top: 4, right: showLabels ? 40 : 12, left: 0, bottom: 4 }
+          : { top: showLabels ? 20 : 8, right: 8, left: 0, bottom: tooManyH ? 52 : 8 }}
       >
-        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))"
-          vertical={horizontal} horizontal={!horizontal} />
+        <CartesianGrid
+          strokeDasharray="3 3"
+          stroke="hsl(var(--border))"
+          opacity={0.4}
+          vertical={horizontal}
+          horizontal={!horizontal}
+        />
+
         {horizontal ? (
           <>
-            <XAxis type="number" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} tickFormatter={yFmt} />
-            <YAxis type="category" dataKey="__cat" width={90} tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+            <XAxis type="number" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} tickFormatter={yFmt} domain={[0, "auto"]} />
+            <YAxis type="category" dataKey="__cat" width={yAxisW} tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
           </>
         ) : (
           <>
-            <XAxis dataKey="__cat" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false}
+            <XAxis
+              dataKey="__cat"
+              tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+              axisLine={false} tickLine={false}
               interval={0}
-              angle={tooManyBars ? -35 : 0}
-              textAnchor={tooManyBars ? "end" : "middle"}
-              height={tooManyBars ? 48 : 24} />
-            <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} tickFormatter={yFmt} width={40} />
+              angle={tooManyH ? -40 : 0}
+              textAnchor={tooManyH ? "end" : "middle"}
+              height={tooManyH ? 60 : 28}
+            />
+            <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} tickFormatter={yFmt} width={yAxisW} domain={[0, "auto"]} />
           </>
         )}
-        <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => fmt(v, format)} />
-        {multiSeries && <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4 }} iconSize={8} />}
-        {series.map((s, si) => (
-          <Bar
-            key={s.name}
-            dataKey={s.name}
-            stackId={stacked ? "stack" : undefined}
-            fill={s.color}
-            maxBarSize={stacked ? undefined : 32}
-            radius={stacked
-              ? si === series.length - 1 ? (horizontal ? [0, 3, 3, 0] : [3, 3, 0, 0]) : [0, 0, 0, 0]
-              : horizontal ? [0, 3, 3, 0] : [3, 3, 0, 0]}
-          >
-            {!multiSeries && rows.map((_, i) => <Cell key={i} fill={s.color} />)}
-          </Bar>
-        ))}
+
+        <Tooltip
+          contentStyle={tooltipStyle}
+          formatter={(v: number, name: string) => [fmt(v, format), name]}
+          cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }}
+        />
+        {multiSeries && <Legend wrapperStyle={{ fontSize: 10, paddingTop: 6 }} iconSize={8} />}
+
+        {series.map((s, si) => {
+          const isLast = si === series.length - 1;
+          const color = s.color || PALETTE[si % PALETTE.length];
+          return (
+            <Bar
+              key={s.name}
+              dataKey={s.name}
+              stackId={stacked ? "stack" : undefined}
+              fill={color}
+              maxBarSize={stacked ? undefined : 36}
+              radius={stacked
+                ? isLast ? (horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0]) : [0, 0, 0, 0]
+                : horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0]}
+            >
+              {/* Single-series: color each bar from palette */}
+              {!multiSeries && rows.map((_, ri) => (
+                <Cell key={ri} fill={PALETTE[ri % PALETTE.length]} />
+              ))}
+
+              {/* Value labels */}
+              {showLabels && (
+                <LabelList
+                  dataKey={s.name}
+                  position={horizontal ? "right" : (stacked && !isLast ? "center" : "top")}
+                  formatter={(v: number) => v === 0 ? "" : fmtShort(v, format)}
+                  style={{
+                    ...labelStyle,
+                    ...(stacked && !isLast ? { fill: "rgba(255,255,255,0.85)", fontWeight: 600 } : {}),
+                  }}
+                />
+              )}
+            </Bar>
+          );
+        })}
       </BarChart>
     </ResponsiveContainer>
   );

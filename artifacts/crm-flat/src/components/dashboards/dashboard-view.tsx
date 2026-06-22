@@ -27,7 +27,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { MoreVertical, Plus, Pencil, Trash2, ArrowLeft, ArrowRight, Info, LayoutGrid, GripVertical, Maximize2 } from "lucide-react";
+import { MoreVertical, Plus, Pencil, Trash2, ArrowLeft, ArrowRight, Info, LayoutGrid, GripVertical } from "lucide-react";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 import { CardRenderer } from "./card-renderer";
 import { CardBuilderDialog } from "./card-builder-dialog";
@@ -39,18 +39,18 @@ const SIZE_CLASS: Record<string, string> = {
   lg: "md:col-span-4",
 };
 
-const SIZE_LABELS: Record<string, string> = { sm: "Narrow (1 col)", md: "Medium (2 col)", lg: "Wide (full)" };
-
 type CardSize = "sm" | "md" | "lg";
-
-const SIZE_SPAN: Record<CardSize, number> = { sm: 1, md: 2, lg: 4 };
 const ALLOWED_SPANS: Array<{ span: number; size: CardSize }> = [
   { span: 1, size: "sm" },
   { span: 2, size: "md" },
   { span: 4, size: "lg" },
 ];
-const GRID_GAP = 16;
+const GRID_GAP = 8;
 const GRID_COLS = 4;
+const MIN_HEIGHT = 100;
+const MAX_HEIGHT = 800;
+
+type ResizeState = { id: string; size: CardSize; height: number };
 
 export function DashboardView({ dashboardId, canEdit = true }: { dashboardId: string; canEdit?: boolean }) {
   const getToken = useSessionToken();
@@ -59,7 +59,7 @@ export function DashboardView({ dashboardId, canEdit = true }: { dashboardId: st
   const [builderOpen, setBuilderOpen] = useState(false);
   const [editing, setEditing] = useState<DashboardCard | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DashboardCard | null>(null);
-  const [resizing, setResizing] = useState<{ id: string; size: CardSize } | null>(null);
+  const [resizing, setResizing] = useState<ResizeState | null>(null);
 
   const authFetch = useCallback(
     async (url: string, init?: RequestInit) => {
@@ -140,10 +140,7 @@ export function DashboardView({ dashboardId, canEdit = true }: { dashboardId: st
       const previous = qc.getQueryData<DashboardCard[]>(cardsKey);
       if (previous) {
         const byId = new Map(previous.map((c) => [c.id, c]));
-        const next = order
-          .map((id) => byId.get(id))
-          .filter((c): c is DashboardCard => !!c);
-        qc.setQueryData<DashboardCard[]>(cardsKey, next);
+        qc.setQueryData<DashboardCard[]>(cardsKey, order.map((id) => byId.get(id)).filter((c): c is DashboardCard => !!c));
       }
       return { previous };
     },
@@ -154,79 +151,137 @@ export function DashboardView({ dashboardId, canEdit = true }: { dashboardId: st
     onSettled: () => qc.invalidateQueries({ queryKey: cardsKey }),
   });
 
-  const resizeCard = useMutation({
-    mutationFn: ({ id, size }: { id: string; size: CardSize }) =>
-      authFetch(`${BASE}/api/dashboards/cards/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ size }),
-      }),
-    onMutate: async ({ id, size }: { id: string; size: CardSize }) => {
+  // Unified resize mutation — handles size (cols), cardHeight (px), or both
+  const resizeMutate = useCallback(
+    async (id: string, patch: { size?: CardSize; cardHeight?: number }) => {
       await qc.cancelQueries({ queryKey: cardsKey });
       const previous = qc.getQueryData<DashboardCard[]>(cardsKey);
       if (previous) {
         qc.setQueryData<DashboardCard[]>(
           cardsKey,
-          previous.map((c) => (c.id === id ? { ...c, size } : c)),
+          previous.map((c) => (c.id === id ? { ...c, ...patch } : c)),
         );
       }
-      return { previous };
+      try {
+        await authFetch(`${BASE}/api/dashboards/cards/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify(patch),
+        });
+        qc.invalidateQueries({ queryKey: cardsKey });
+      } catch {
+        if (previous) qc.setQueryData(cardsKey, previous);
+        toast({ title: "Couldn't resize card", variant: "destructive" });
+      }
     },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.previous) qc.setQueryData(cardsKey, ctx.previous);
-      toast({ title: "Couldn't resize card", variant: "destructive" });
-    },
-    onSettled: () => qc.invalidateQueries({ queryKey: cardsKey }),
-  });
+    [qc, cardsKey, authFetch, toast],
+  );
 
-  const startResize = (e: React.PointerEvent, card: DashboardCard) => {
+  /** Right-edge drag → horizontal resize (col snap) */
+  const startResizeH = (e: React.PointerEvent, card: DashboardCard) => {
     e.preventDefault();
     e.stopPropagation();
-    const cardEl = (e.currentTarget as HTMLElement).closest<HTMLElement>(
-      "[data-card-id]",
-    );
+    const cardEl = (e.currentTarget as HTMLElement).closest<HTMLElement>("[data-card-id]");
     if (!cardEl) return;
-    const gridEl = cardEl.parentElement;
-    const gridWidth = gridEl?.clientWidth ?? cardEl.offsetWidth;
+    const gridWidth = cardEl.parentElement?.clientWidth ?? cardEl.offsetWidth;
     const colWidth = (gridWidth - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
     const startX = e.clientX;
-    const startWidth = cardEl.offsetWidth;
+    const startW = cardEl.offsetWidth;
+    const origH = card.cardHeight ?? 260;
     let latestSize: CardSize = card.size;
-    setResizing({ id: card.id, size: card.size });
+    setResizing({ id: card.id, size: card.size, height: origH });
 
-    const prevUserSelect = document.body.style.userSelect;
-    const prevCursor = document.body.style.cursor;
+    const prevSel = document.body.style.userSelect;
     document.body.style.userSelect = "none";
     document.body.style.cursor = "col-resize";
 
     const onMove = (ev: PointerEvent) => {
-      const targetWidth = startWidth + (ev.clientX - startX);
-      const rawSpan = (targetWidth + GRID_GAP) / (colWidth + GRID_GAP);
+      const rawSpan = (startW + (ev.clientX - startX) + GRID_GAP) / (colWidth + GRID_GAP);
       let best = ALLOWED_SPANS[0];
-      let bestDist = Infinity;
-      for (const opt of ALLOWED_SPANS) {
-        const d = Math.abs(opt.span - rawSpan);
-        if (d < bestDist) {
-          bestDist = d;
-          best = opt;
-        }
-      }
-      if (best.size !== latestSize) {
-        latestSize = best.size;
-        setResizing({ id: card.id, size: best.size });
-      }
+      for (const opt of ALLOWED_SPANS) if (Math.abs(opt.span - rawSpan) < Math.abs(best.span - rawSpan)) best = opt;
+      latestSize = best.size;
+      setResizing({ id: card.id, size: latestSize, height: origH });
     };
-
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
-      document.body.style.userSelect = prevUserSelect;
-      document.body.style.cursor = prevCursor;
+      document.body.style.userSelect = prevSel;
+      document.body.style.cursor = "";
       setResizing(null);
-      if (latestSize !== card.size) {
-        resizeCard.mutate({ id: card.id, size: latestSize });
-      }
+      if (latestSize !== card.size) resizeMutate(card.id, { size: latestSize });
     };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
 
+  /** Bottom-edge drag → vertical resize (free px) */
+  const startResizeV = (e: React.PointerEvent, card: DashboardCard) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const origH = card.cardHeight ?? 260;
+    const origSize = card.size;
+    const startY = e.clientY;
+    let latestH = origH;
+    setResizing({ id: card.id, size: origSize, height: origH });
+
+    const prevSel = document.body.style.userSelect;
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "row-resize";
+
+    const onMove = (ev: PointerEvent) => {
+      latestH = Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, origH + (ev.clientY - startY)));
+      setResizing({ id: card.id, size: origSize, height: latestH });
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.style.userSelect = prevSel;
+      document.body.style.cursor = "";
+      setResizing(null);
+      if (latestH !== origH) resizeMutate(card.id, { cardHeight: Math.round(latestH) });
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
+  /** Bottom-right corner drag → both width and height */
+  const startResizeCorner = (e: React.PointerEvent, card: DashboardCard) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const cardEl = (e.currentTarget as HTMLElement).closest<HTMLElement>("[data-card-id]");
+    if (!cardEl) return;
+    const gridWidth = cardEl.parentElement?.clientWidth ?? cardEl.offsetWidth;
+    const colWidth = (gridWidth - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startW = cardEl.offsetWidth;
+    const origH = card.cardHeight ?? 260;
+    let latestSize: CardSize = card.size;
+    let latestH = origH;
+    setResizing({ id: card.id, size: card.size, height: origH });
+
+    const prevSel = document.body.style.userSelect;
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "se-resize";
+
+    const onMove = (ev: PointerEvent) => {
+      const rawSpan = (startW + (ev.clientX - startX) + GRID_GAP) / (colWidth + GRID_GAP);
+      let best = ALLOWED_SPANS[0];
+      for (const opt of ALLOWED_SPANS) if (Math.abs(opt.span - rawSpan) < Math.abs(best.span - rawSpan)) best = opt;
+      latestSize = best.size;
+      latestH = Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, origH + (ev.clientY - startY)));
+      setResizing({ id: card.id, size: latestSize, height: latestH });
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.style.userSelect = prevSel;
+      document.body.style.cursor = "";
+      setResizing(null);
+      const patch: { size?: CardSize; cardHeight?: number } = {};
+      if (latestSize !== card.size) patch.size = latestSize;
+      if (latestH !== origH) patch.cardHeight = Math.round(latestH);
+      if (Object.keys(patch).length) resizeMutate(card.id, patch);
+    };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
   };
@@ -251,8 +306,6 @@ export function DashboardView({ dashboardId, canEdit = true }: { dashboardId: st
     reorder.mutate(next.map((c) => c.id));
   };
 
-  const chartHeight = (size: string) => (size === "sm" ? 160 : size === "lg" ? 280 : 200);
-
   return (
     <div className="space-y-3">
       {canEdit && (
@@ -265,8 +318,8 @@ export function DashboardView({ dashboardId, canEdit = true }: { dashboardId: st
       )}
 
       {isLoading ? (
-        <div className="grid gap-4 md:grid-cols-4">
-          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-64 md:col-span-2" />)}
+        <div className="grid gap-2 md:grid-cols-4">
+          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-72 md:col-span-2" />)}
         </div>
       ) : !cards || cards.length === 0 ? (
         <Card className="border-dashed">
@@ -296,111 +349,126 @@ export function DashboardView({ dashboardId, canEdit = true }: { dashboardId: st
                 className="grid gap-2 md:grid-cols-4"
               >
                 {cards.map((card, i) => {
-                  const displaySize =
-                    resizing?.id === card.id ? resizing.size : card.size;
+                  const live = resizing?.id === card.id ? resizing : null;
+                  const displaySize = live?.size ?? card.size;
+                  const contentH = live?.height ?? card.cardHeight ?? 260;
+
                   return (
-                  <Draggable key={card.id} draggableId={card.id} index={i}>
-                    {(dragProvided, dragSnapshot) => (
-                      <Card
-                        ref={dragProvided.innerRef}
-                        {...dragProvided.draggableProps}
-                        style={dragProvided.draggableProps.style}
-                        data-card-id={card.id}
-                        className={`${SIZE_CLASS[displaySize] ?? SIZE_CLASS.md} group/card relative flex flex-col rounded-none border transition-[box-shadow,border-color] duration-150 ${
-                          dragSnapshot.isDragging
-                            ? "shadow-lg border-primary/40"
-                            : resizing?.id === card.id
-                              ? "border-primary/50"
-                              : "hover:border-primary/30 hover:shadow-sm"
-                        }`}
-                      >
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 py-2 px-3 gap-1 border-b">
-                          <div className="flex items-center gap-1 min-w-0">
-                            {canEdit ? (
-                              <button
-                                {...dragProvided.dragHandleProps}
-                                className="shrink-0 cursor-grab text-muted-foreground/30 hover:text-muted-foreground transition-colors active:cursor-grabbing"
-                                aria-label="Drag to reorder"
-                              >
-                                <GripVertical className="h-3.5 w-3.5" />
-                              </button>
-                            ) : (
-                              <span {...dragProvided.dragHandleProps} />
-                            )}
-                            <CardTitle className="text-xs font-semibold truncate text-foreground/80">{card.title}</CardTitle>
-                            {card.config.info && (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Info className="h-3 w-3 text-muted-foreground/50 shrink-0" />
-                                  </TooltipTrigger>
-                                  <TooltipContent className="max-w-[240px] text-xs">
-                                    {String(card.config.info)}
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            )}
-                          </div>
-                          {canEdit && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" aria-label="Card options" className="h-5 w-5 shrink-0 text-muted-foreground/40 opacity-0 transition-all group-hover/card:opacity-100 hover:text-foreground">
-                                  <MoreVertical className="h-3.5 w-3.5" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="text-xs">
-                                <DropdownMenuItem onClick={() => { setEditing(card); setBuilderOpen(true); }}>
-                                  <Pencil className="h-3.5 w-3.5 mr-2" /> Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuItem disabled={i === 0} onClick={() => move(card, -1)}>
-                                  <ArrowLeft className="h-3.5 w-3.5 mr-2" /> Move left
-                                </DropdownMenuItem>
-                                <DropdownMenuItem disabled={i === cards.length - 1} onClick={() => move(card, 1)}>
-                                  <ArrowRight className="h-3.5 w-3.5 mr-2" /> Move right
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onSelect={e => e.preventDefault()}
-                                  className="flex-col items-start gap-1 py-2"
+                    <Draggable key={card.id} draggableId={card.id} index={i}>
+                      {(dragProvided, dragSnapshot) => (
+                        <Card
+                          ref={dragProvided.innerRef}
+                          {...dragProvided.draggableProps}
+                          style={dragProvided.draggableProps.style}
+                          data-card-id={card.id}
+                          className={`${SIZE_CLASS[displaySize] ?? SIZE_CLASS.md} group/card relative flex flex-col rounded-sm border overflow-visible transition-[box-shadow,border-color] duration-150 ${
+                            dragSnapshot.isDragging
+                              ? "shadow-xl border-primary/50 z-50"
+                              : live
+                                ? "border-primary/60 shadow-md"
+                                : "hover:border-primary/30 hover:shadow-sm"
+                          }`}
+                        >
+                          {/* Header */}
+                          <CardHeader className="flex flex-row items-center justify-between space-y-0 py-2 px-3 gap-1 border-b shrink-0">
+                            <div className="flex items-center gap-1 min-w-0">
+                              {canEdit ? (
+                                <button
+                                  {...dragProvided.dragHandleProps}
+                                  className="shrink-0 cursor-grab text-muted-foreground/30 hover:text-muted-foreground/70 transition-colors active:cursor-grabbing"
+                                  aria-label="Drag to reorder"
                                 >
-                                  <span className="flex items-center gap-1.5 font-medium"><Maximize2 className="h-3.5 w-3.5" /> Resize</span>
-                                  <div className="flex gap-1 mt-1">
-                                    {(["sm", "md", "lg"] as const).map(sz => (
-                                      <button
-                                        key={sz}
-                                        onClick={() => resizeCard.mutate({ id: card.id, size: sz })}
-                                        className={`px-2 py-0.5 text-[10px] rounded border transition-colors ${(resizing?.id === card.id ? resizing.size : card.size) === sz ? "bg-primary text-primary-foreground border-primary" : "border-border hover:border-primary/50"}`}
-                                      >
-                                        {sz === "sm" ? "1×" : sz === "md" ? "2×" : "Full"}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget(card)}>
-                                  <Trash2 className="h-3.5 w-3.5 mr-2" /> Remove
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                                  <GripVertical className="h-3.5 w-3.5" />
+                                </button>
+                              ) : (
+                                <span {...dragProvided.dragHandleProps} />
+                              )}
+                              <CardTitle className="text-xs font-semibold truncate text-foreground/80">{card.title}</CardTitle>
+                              {card.config.info && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Info className="h-3 w-3 text-muted-foreground/50 shrink-0 cursor-default" />
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-[240px] text-xs">
+                                      {String(card.config.info)}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
+                            </div>
+                            {canEdit && (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" aria-label="Card options" className="h-5 w-5 shrink-0 text-muted-foreground/40 opacity-0 transition-all group-hover/card:opacity-100 hover:text-foreground">
+                                    <MoreVertical className="h-3.5 w-3.5" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="text-xs">
+                                  <DropdownMenuItem onClick={() => { setEditing(card); setBuilderOpen(true); }}>
+                                    <Pencil className="h-3.5 w-3.5 mr-2" /> Edit
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem disabled={i === 0} onClick={() => move(card, -1)}>
+                                    <ArrowLeft className="h-3.5 w-3.5 mr-2" /> Move left
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem disabled={i === cards.length - 1} onClick={() => move(card, 1)}>
+                                    <ArrowRight className="h-3.5 w-3.5 mr-2" /> Move right
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget(card)}>
+                                    <Trash2 className="h-3.5 w-3.5 mr-2" /> Remove
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
+                          </CardHeader>
+
+                          {/* Chart area — fixed height drives the card height */}
+                          <CardContent className="p-2 pt-2 overflow-hidden" style={{ height: contentH }}>
+                            <CardRenderer card={card} height={contentH} />
+                          </CardContent>
+
+                          {canEdit && (
+                            <>
+                              {/* Right edge → horizontal resize */}
+                              <div
+                                onPointerDown={(e) => startResizeH(e, card)}
+                                title="Drag to resize width"
+                                className="group/rh absolute right-0 top-6 bottom-4 w-2 cursor-col-resize touch-none select-none z-10"
+                              >
+                                <div className="absolute inset-y-0 right-0 w-px bg-transparent group-hover/rh:bg-primary/50 transition-colors" />
+                              </div>
+
+                              {/* Bottom edge → vertical resize */}
+                              <div
+                                onPointerDown={(e) => startResizeV(e, card)}
+                                title="Drag to resize height"
+                                className="group/rv absolute bottom-0 left-4 right-4 h-2 cursor-row-resize touch-none select-none z-10"
+                              >
+                                <div className="absolute bottom-0 inset-x-0 h-px bg-transparent group-hover/rv:bg-primary/50 transition-colors" />
+                              </div>
+
+                              {/* Corner → both */}
+                              <div
+                                onPointerDown={(e) => startResizeCorner(e, card)}
+                                title="Drag to resize"
+                                className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize touch-none select-none z-20 flex items-end justify-end"
+                              >
+                                <svg width="8" height="8" viewBox="0 0 8 8" className="opacity-0 group-hover/card:opacity-40 transition-opacity">
+                                  <path d="M2 8 L8 2 M5 8 L8 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                                </svg>
+                              </div>
+                            </>
                           )}
-                        </CardHeader>
-                        <CardContent className="flex-1 p-2 pt-2">
-                          <CardRenderer card={card} height={chartHeight(displaySize)} />
-                        </CardContent>
-                        {canEdit && (
-                          <div
-                            onPointerDown={(e) => startResize(e, card)}
-                            onClick={(e) => e.stopPropagation()}
-                            role="separator"
-                            aria-orientation="vertical"
-                            aria-label="Drag to resize card"
-                            title="Drag to resize"
-                            className="group absolute right-0 top-0 bottom-0 hidden w-2 cursor-col-resize touch-none items-center justify-center md:flex"
-                          >
-                            <div className="h-8 w-0.5 rounded-full bg-transparent transition-colors group-hover:bg-primary/60" />
-                          </div>
-                        )}
-                      </Card>
-                    )}
-                  </Draggable>
+
+                          {/* Live resize size badge */}
+                          {live && (
+                            <div className="absolute top-1 right-7 bg-primary text-primary-foreground text-[9px] font-mono px-1.5 py-0.5 rounded-sm pointer-events-none select-none z-30">
+                              {displaySize === "sm" ? "1×" : displaySize === "md" ? "2×" : "4×"} · {contentH}px
+                            </div>
+                          )}
+                        </Card>
+                      )}
+                    </Draggable>
                   );
                 })}
                 {dropProvided.placeholder}

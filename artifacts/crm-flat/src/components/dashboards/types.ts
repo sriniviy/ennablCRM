@@ -55,6 +55,7 @@ export interface DashboardCard {
   config: CardConfig;
   order: number;
   size: "sm" | "md" | "lg";
+  cardHeight: number;
   createdAt: string;
   updatedAt: string;
 }
