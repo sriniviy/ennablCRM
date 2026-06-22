@@ -8,7 +8,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, ChevronDown, ChevronRight, Mail } from "lucide-react";
+import { Search, ChevronDown, ChevronRight, Mail, StickyNote } from "lucide-react";
 import { useUrlFilters } from "@/hooks/use-url-filters";
 import { useDebounce } from "@/hooks/use-debounce";
 import { ViewToggle, type ViewMode } from "@/components/view-toggle";
@@ -78,6 +78,8 @@ export function ActivitiesPage() {
   const pageTitle = PAGE_TITLES[typeFilter] ?? "Notes";
 
   const isEmail = (a: ActivityWithRelations) => a.type === "EMAIL_SENT";
+  const isNote = (a: ActivityWithRelations) => a.type === "NOTE";
+  const isExpandable = (a: ActivityWithRelations) => isEmail(a) || (isNote(a) && !!a.description);
   const toggle = (id: string) => setSelectedId(prev => (prev === id ? null : id));
 
   return (
@@ -161,11 +163,11 @@ export function ActivitiesPage() {
                   activities.map(activity => (
                     <Fragment key={activity.id}>
                       <TableRow
-                        className={isEmail(activity) ? "cursor-pointer select-none hover:bg-muted/40" : undefined}
-                        onClick={isEmail(activity) ? () => toggle(activity.id) : undefined}
+                        className={isExpandable(activity) ? "cursor-pointer select-none hover:bg-muted/40" : undefined}
+                        onClick={isExpandable(activity) ? () => toggle(activity.id) : undefined}
                       >
                         <TableCell className="w-8 pr-0 text-muted-foreground">
-                          {isEmail(activity) && (
+                          {isExpandable(activity) && (
                             selectedId === activity.id
                               ? <ChevronDown className="h-4 w-4" />
                               : <ChevronRight className="h-4 w-4" />
@@ -174,9 +176,16 @@ export function ActivitiesPage() {
                         <TableCell>
                           <Badge
                             variant="outline"
-                            className={`font-normal gap-1 ${isEmail(activity) ? "border-blue-200 bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800" : ""}`}
+                            className={`font-normal gap-1 ${
+                              isEmail(activity)
+                                ? "border-blue-200 bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800"
+                                : isNote(activity)
+                                  ? "border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800"
+                                  : ""
+                            }`}
                           >
                             {isEmail(activity) && <Mail className="h-3 w-3" />}
+                            {isNote(activity) && <StickyNote className="h-3 w-3" />}
                             {fmtType(activity.type)}
                           </Badge>
                         </TableCell>
@@ -223,6 +232,18 @@ export function ActivitiesPage() {
                                 </p>
                               </div>
                             )}
+                          </TableCell>
+                        </TableRow>
+                      )}
+
+                      {selectedId === activity.id && isNote(activity) && (
+                        <TableRow className="bg-muted/20 hover:bg-muted/20">
+                          <TableCell colSpan={7} className="px-6 py-4">
+                            <div className="rounded border bg-card px-4 py-3">
+                              <p className="whitespace-pre-wrap text-sm text-muted-foreground leading-relaxed">
+                                {activity.description}
+                              </p>
+                            </div>
                           </TableCell>
                         </TableRow>
                       )}
