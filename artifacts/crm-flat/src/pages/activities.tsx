@@ -210,19 +210,19 @@ export function ActivitiesPage() {
                                 <span className="text-muted-foreground">{activity.emailSubject}</span>
                               </p>
                             )}
-                            {activity.emailBody && (
-                              <div className="mb-3 rounded border bg-card px-4 py-3">
-                                <p className="whitespace-pre-wrap text-sm text-muted-foreground leading-relaxed">
-                                  {activity.emailBody}
-                                </p>
-                              </div>
-                            )}
                             <ActivitySummary
                               activityId={activity.id}
                               type={activity.type}
                               summary={summaryMap[activity.id] ?? activity.aiSummary}
                               onUpdated={s => setSummaryMap(m => ({ ...m, [activity.id]: s }))}
                             />
+                            {activity.emailBody && (
+                              <div className="mt-3 rounded border bg-card px-4 py-3">
+                                <p className="whitespace-pre-wrap text-sm text-muted-foreground leading-relaxed">
+                                  {activity.emailBody}
+                                </p>
+                              </div>
+                            )}
                           </TableCell>
                         </TableRow>
                       )}
