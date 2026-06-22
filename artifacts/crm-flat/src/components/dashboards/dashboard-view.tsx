@@ -304,16 +304,20 @@ export function DashboardView({ dashboardId, canEdit = true }: { dashboardId: st
                         {...dragProvided.draggableProps}
                         style={dragProvided.draggableProps.style}
                         data-card-id={card.id}
-                        className={`${SIZE_CLASS[displaySize] ?? SIZE_CLASS.md} relative flex flex-col ${
-                          dragSnapshot.isDragging ? "shadow-lg border-primary/40" : ""
-                        } ${resizing?.id === card.id ? "border-primary/40 ring-1 ring-primary/30" : ""}`}
+                        className={`${SIZE_CLASS[displaySize] ?? SIZE_CLASS.md} group/card relative flex flex-col transition-[transform,box-shadow,border-color] duration-200 ease-out ${
+                          dragSnapshot.isDragging
+                            ? "shadow-xl border-primary/40 ring-1 ring-primary/20"
+                            : resizing?.id === card.id
+                              ? "border-primary/40 ring-1 ring-primary/30"
+                              : "hover:-translate-y-1 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5"
+                        }`}
                       >
                         <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2 gap-2">
                           <div className="flex items-center gap-1.5 min-w-0">
                             {canEdit ? (
                               <button
                                 {...dragProvided.dragHandleProps}
-                                className="shrink-0 -ml-1 cursor-grab text-muted-foreground/50 hover:text-muted-foreground active:cursor-grabbing"
+                                className="shrink-0 -ml-1 cursor-grab text-muted-foreground/50 transition-colors group-hover/card:text-muted-foreground/70 hover:!text-foreground focus-visible:text-foreground active:cursor-grabbing"
                                 aria-label="Drag to reorder"
                               >
                                 <GripVertical className="h-4 w-4" />
@@ -338,7 +342,7 @@ export function DashboardView({ dashboardId, canEdit = true }: { dashboardId: st
                           {canEdit && (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
+                                <Button variant="ghost" size="icon" aria-label="Card options" className="h-7 w-7 shrink-0 text-muted-foreground/60 opacity-70 transition-all group-hover/card:opacity-100 hover:text-foreground focus-visible:opacity-100 data-[state=open]:opacity-100">
                                   <MoreVertical className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
