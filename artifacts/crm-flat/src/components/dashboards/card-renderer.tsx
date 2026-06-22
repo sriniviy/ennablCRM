@@ -10,7 +10,7 @@ import {
 } from "recharts";
 import { BASE, type DashboardCard, type QueryResult } from "./types";
 
-// ── Formatting helpers ────────────────────────────────────────────────────────
+// ── Formatting ────────────────────────────────────────────────────────────────
 
 function fmt(v: number, format?: string): string {
   if (format === "currency") return formatCurrency(v);
@@ -33,8 +33,7 @@ function fmtShort(v: number, format?: string): string {
 function fmtDate(v: unknown): string {
   if (!v) return "—";
   const d = new Date(String(v));
-  if (Number.isNaN(d.getTime())) return String(v);
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return isNaN(d.getTime()) ? String(v) : d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
 // ── Colors ────────────────────────────────────────────────────────────────────
@@ -43,8 +42,6 @@ const PALETTE = [
   "#6366f1","#0ea5e9","#10b981","#f59e0b","#ef4444",
   "#8b5cf6","#06b6d4","#84cc16","#f97316","#ec4899",
 ];
-
-// ── Tooltip ───────────────────────────────────────────────────────────────────
 
 const tooltipStyle: React.CSSProperties = {
   backgroundColor: "hsl(var(--popover))",
@@ -56,7 +53,7 @@ const tooltipStyle: React.CSSProperties = {
   padding: "8px 12px",
 };
 
-// ── Query hook ────────────────────────────────────────────────────────────────
+// ── Query ─────────────────────────────────────────────────────────────────────
 
 export function useCardQuery(card: Pick<DashboardCard, "vizType" | "dataset" | "config">) {
   const getToken = useSessionToken();
@@ -87,8 +84,6 @@ function EmptyState({ label = "No data for this period." }: { label?: string }) 
   );
 }
 
-// ── Series pivot ──────────────────────────────────────────────────────────────
-
 function toRows(result: QueryResult): Record<string, number | string>[] {
   return (result.categories ?? []).map((c, i) => {
     const row: Record<string, number | string> = { __cat: c };
@@ -97,101 +92,97 @@ function toRows(result: QueryResult): Record<string, number | string>[] {
   });
 }
 
-// ── Gauge (fully responsive SVG) ──────────────────────────────────────────────
+// ── Gauge — clean arc, no needle ──────────────────────────────────────────────
 
-function GaugeCard({ value, max, format, height }: { value: number; max: number; format: string; height: number }) {
+function GaugeCard({ value, max, format }: { value: number; max: number; format: string }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
 
-  // Fixed viewBox — SVG scales to fill the container
-  const VW = 220, VH = 140;
-  const cx = 110, cy = 110, r = 88, sw = 14;
+  // Fixed viewBox so SVG scales to container via preserveAspectRatio
+  const VW = 260, VH = 148;
+  const cx = 130, cy = 120, r = 96, sw = 18;
   const halfCirc = Math.PI * r;
   const offset = halfCirc * (1 - pct / 100);
 
-  // Tick marks at 0%, 25%, 50%, 75%, 100%
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => {
-    const angle = Math.PI * f; // 0 = left, PI = right
-    const x1 = cx - r * Math.cos(angle);
-    const y1 = cy - r * Math.sin(angle);
-    const x2 = cx - (r + 8) * Math.cos(angle);
-    const y2 = cy - (r + 8) * Math.sin(angle);
-    return { x1, y1, x2, y2 };
-  });
+  // Current-value dot position on arc
+  const angle = Math.PI * (1 - pct / 100); // 0=right end, PI=left end
+  const dotX = cx + r * Math.cos(angle);
+  const dotY = cy - r * Math.sin(angle);
 
-  // Needle angle
-  const needleAngle = Math.PI * (1 - pct / 100);
-  const nx = cx - (r - 10) * Math.cos(needleAngle);
-  const ny = cy - (r - 10) * Math.sin(needleAngle);
+  // Segment colour stops (green zone above 75%)
+  const isHealthy = pct >= 75;
 
   return (
     <div className="flex items-center justify-center w-full h-full">
       <svg
         viewBox={`0 0 ${VW} ${VH}`}
-        style={{ width: "100%", maxHeight: height, overflow: "visible" }}
+        style={{ width: "100%", maxHeight: "100%", overflow: "visible" }}
         preserveAspectRatio="xMidYMid meet"
       >
         <defs>
-          <linearGradient id="gaugeTrack" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="hsl(var(--muted))" />
-            <stop offset="100%" stopColor="hsl(var(--muted))" />
-          </linearGradient>
-          <linearGradient id="gaugeFill" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.5" />
-            <stop offset="100%" stopColor="hsl(var(--primary))" />
+          <linearGradient id="gFill" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#6366f1" />
+            <stop offset="60%" stopColor="#0ea5e9" />
+            <stop offset="100%" stopColor={isHealthy ? "#10b981" : "#f59e0b"} />
           </linearGradient>
         </defs>
 
-        {/* Track arc */}
+        {/* Background track */}
         <path
           d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
-          fill="none" stroke="hsl(var(--muted))" strokeWidth={sw} strokeLinecap="round"
+          fill="none"
+          stroke="hsl(var(--muted))"
+          strokeWidth={sw}
+          strokeLinecap="round"
         />
 
-        {/* Value arc */}
+        {/* Filled arc */}
         <path
           d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
-          fill="none" stroke="url(#gaugeFill)" strokeWidth={sw} strokeLinecap="round"
+          fill="none"
+          stroke="url(#gFill)"
+          strokeWidth={sw}
+          strokeLinecap="round"
           strokeDasharray={halfCirc}
           strokeDashoffset={offset}
-          style={{ transition: "stroke-dashoffset 0.8s cubic-bezier(0.4,0,0.2,1)" }}
+          style={{ transition: "stroke-dashoffset 0.9s cubic-bezier(0.4,0,0.2,1)" }}
         />
 
-        {/* Tick marks */}
-        {ticks.map((t, i) => (
-          <line key={i} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2}
-            stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} strokeOpacity={0.4} />
-        ))}
+        {/* Tick marks at 0%, 25%, 50%, 75%, 100% */}
+        {[0, 0.25, 0.5, 0.75, 1].map((f, i) => {
+          const a = Math.PI * f;
+          const ox = cx - r * Math.cos(a), oy = cy - r * Math.sin(a);
+          const ex = cx - (r + sw / 2 + 6) * Math.cos(a), ey = cy - (r + sw / 2 + 6) * Math.sin(a);
+          return (
+            <line key={i} x1={ox} y1={oy} x2={ex} y2={ey}
+              stroke="hsl(var(--background))" strokeWidth={2} strokeLinecap="round" />
+          );
+        })}
 
-        {/* End dots */}
-        <circle cx={cx - r} cy={cy} r={5} fill="hsl(var(--muted-foreground))" opacity={0.3} />
-        <circle cx={cx + r} cy={cy} r={5} fill="hsl(var(--muted-foreground))" opacity={0.3} />
-
-        {/* Needle dot */}
-        <circle cx={cx} cy={cy} r={6} fill="hsl(var(--primary))" opacity={0.2} />
-        <line
-          x1={cx} y1={cy} x2={nx} y2={ny}
-          stroke="hsl(var(--primary))" strokeWidth={2.5} strokeLinecap="round"
-          style={{ transition: "x2 0.8s cubic-bezier(0.4,0,0.2,1), y2 0.8s cubic-bezier(0.4,0,0.2,1)" }}
+        {/* Live position dot */}
+        <circle cx={dotX} cy={dotY} r={sw / 2 + 3} fill="hsl(var(--background))" />
+        <circle
+          cx={dotX} cy={dotY} r={sw / 2}
+          fill={isHealthy ? "#10b981" : "#f59e0b"}
+          style={{ transition: "cx 0.9s cubic-bezier(0.4,0,0.2,1), cy 0.9s cubic-bezier(0.4,0,0.2,1)" }}
         />
-        <circle cx={cx} cy={cy} r={4} fill="hsl(var(--primary))" />
 
         {/* Main value */}
-        <text x={cx} y={cy - 14} textAnchor="middle"
-          style={{ fontSize: 24, fontWeight: 800, fill: "hsl(var(--foreground))", fontFamily: "inherit" }}>
+        <text x={cx} y={cy - 18} textAnchor="middle"
+          style={{ fontSize: 30, fontWeight: 800, fill: "hsl(var(--foreground))", fontFamily: "inherit" }}>
           {fmtShort(value, format)}
         </text>
 
-        {/* Pct and max */}
-        <text x={cx} y={cy + 8} textAnchor="middle"
-          style={{ fontSize: 10, fill: "hsl(var(--muted-foreground))", fontFamily: "inherit" }}>
-          {pct.toFixed(0)}% of {fmtShort(max, format)} weighted target
+        {/* Pct line */}
+        <text x={cx} y={cy + 2} textAnchor="middle"
+          style={{ fontSize: 11, fill: "hsl(var(--muted-foreground))", fontFamily: "inherit" }}>
+          {pct.toFixed(0)}% of {fmtShort(max, format)} target
         </text>
 
-        {/* 0% / 100% labels */}
-        <text x={cx - r - 4} y={cy + 16} textAnchor="middle"
-          style={{ fontSize: 8, fill: "hsl(var(--muted-foreground))", fontFamily: "inherit" }}>0</text>
-        <text x={cx + r + 4} y={cy + 16} textAnchor="middle"
-          style={{ fontSize: 8, fill: "hsl(var(--muted-foreground))", fontFamily: "inherit" }}>100%</text>
+        {/* 0 and 100% end labels */}
+        <text x={cx - r - 4} y={cy + 18} textAnchor="end"
+          style={{ fontSize: 9, fill: "hsl(var(--muted-foreground))", opacity: 0.5, fontFamily: "inherit" }}>$0</text>
+        <text x={cx + r + 4} y={cy + 18} textAnchor="start"
+          style={{ fontSize: 9, fill: "hsl(var(--muted-foreground))", opacity: 0.5, fontFamily: "inherit" }}>100%</text>
       </svg>
     </div>
   );
@@ -220,7 +211,7 @@ function SortableTable({ data, height }: { data: QueryResult; height: number }) 
 
   if (!data.table) return <EmptyState />;
   const { columns, rows, totalRow } = data.table;
-  if (rows.length === 0) return <EmptyState label="No matching records." />;
+  if (!rows.length) return <EmptyState label="No matching records." />;
 
   const handleSort = (key: string) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -230,8 +221,7 @@ function SortableTable({ data, height }: { data: QueryResult; height: number }) 
   const sorted = [...rows].sort((a, b) => {
     if (!sortKey) return 0;
     const an = Number(a[sortKey]), bn = Number(b[sortKey]);
-    const cmp = !isNaN(an) && !isNaN(bn)
-      ? an - bn : String(a[sortKey] ?? "").localeCompare(String(b[sortKey] ?? ""));
+    const cmp = !isNaN(an) && !isNaN(bn) ? an - bn : String(a[sortKey] ?? "").localeCompare(String(b[sortKey] ?? ""));
     return sortDir === "asc" ? cmp : -cmp;
   });
 
@@ -297,43 +287,43 @@ export function CardRenderer({ card, height = 260 }: { card: DashboardCard; heig
 
   const format = data.valueFormat;
 
-  // KPI
-  if (data.kind === "kpi" && data.kpi) {
+  if (data.kind === "kpi" && data.kpi)
     return <KpiCard value={data.kpi.value} format={data.kpi.format} height={height} />;
-  }
 
-  // Gauge
-  if (data.kind === "gauge" && data.gauge) {
-    return <GaugeCard value={data.gauge.value} max={data.gauge.max} format={data.gauge.format} height={height} />;
-  }
+  if (data.kind === "gauge" && data.gauge)
+    return <GaugeCard value={data.gauge.value} max={data.gauge.max} format={data.gauge.format} />;
 
-  // Table
-  if (data.kind === "table") return <SortableTable data={data} height={height} />;
+  if (data.kind === "table")
+    return <SortableTable data={data} height={height} />;
 
-  // Empty series
-  if (data.kind !== "series" || !data.series?.length || !(data.categories ?? []).length) {
+  if (data.kind !== "series" || !data.series?.length || !(data.categories ?? []).length)
     return <EmptyState />;
-  }
 
   const rows = toRows(data);
   const series = data.series;
   const multiSeries = series.length > 1;
   const catCount = rows.length;
+  const horizontal = card.vizType === "horizontalBar";
+  const stacked = card.vizType === "stackedBar";
   const yFmt = (v: number) => fmtShort(v, format);
 
-  // Show value labels only when not too crowded
-  const showLabels = !multiSeries && catCount <= 14;
+  // Label visibility: single series only, avoid clutter
+  const showLabels = !multiSeries && catCount <= 12;
+
+  // For stacked bars: show total on top of last segment
+  const showStackTotal = stacked && multiSeries && catCount <= 10;
 
   const labelStyle: React.CSSProperties = {
     fontSize: 9,
-    fill: "hsl(var(--foreground) / 55%)",
+    fill: "hsl(var(--foreground) / 60%)",
     fontFamily: "inherit",
   };
 
+  // ── Line chart ──────────────────────────────────────────────────────────────
   if (card.vizType === "line") {
     return (
       <ResponsiveContainer width="100%" height={height}>
-        <LineChart data={rows} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
+        <LineChart data={rows} margin={{ top: 18, right: 12, left: 0, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} opacity={0.5} />
           <XAxis dataKey="__cat" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
           <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} tickFormatter={yFmt} width={44} domain={[0, "auto"]} />
@@ -342,81 +332,117 @@ export function CardRenderer({ card, height = 260 }: { card: DashboardCard; heig
           {series.map((s, si) => (
             <Line key={s.name} type="monotone" dataKey={s.name}
               stroke={s.color || PALETTE[si % PALETTE.length]} strokeWidth={2.5}
-              dot={{ r: 3, fill: s.color || PALETTE[si % PALETTE.length] }}
-              activeDot={{ r: 5 }} />
+              dot={{ r: 3 }} activeDot={{ r: 5 }} />
           ))}
         </LineChart>
       </ResponsiveContainer>
     );
   }
 
-  const horizontal = card.vizType === "horizontalBar";
-  const stacked = card.vizType === "stackedBar";
+  // ── Horizontal bar ──────────────────────────────────────────────────────────
+  if (horizontal) {
+    // Width of the left Y-axis to fit owner names
+    const maxChars = Math.max(...rows.map((r) => String(r.__cat).length));
+    const yAxisW = Math.min(150, Math.max(80, maxChars * 7));
+    // Right margin for value labels
+    const rightMargin = showLabels ? 56 : 14;
 
-  // For horizontal bars: compute Y-axis width from longest category label
-  const maxLabelChars = horizontal
-    ? Math.max(...rows.map((r) => String(r.__cat).length))
-    : 0;
-  const yAxisW = horizontal
-    ? Math.min(140, Math.max(70, maxLabelChars * 7))
-    : 44;
+    return (
+      <ResponsiveContainer width="100%" height={height}>
+        <BarChart
+          data={rows}
+          layout="vertical"
+          barCategoryGap="20%"
+          barGap={3}
+          margin={{ top: 4, right: rightMargin, left: 0, bottom: 4 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} vertical={true} horizontal={false} />
+          <XAxis
+            type="number"
+            tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+            axisLine={false} tickLine={false}
+            tickFormatter={yFmt}
+            domain={[0, "auto"]}
+          />
+          <YAxis
+            type="category"
+            dataKey="__cat"
+            width={yAxisW}
+            tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+            axisLine={false} tickLine={false}
+          />
+          <Tooltip
+            contentStyle={tooltipStyle}
+            formatter={(v: number, name: string) => [fmt(v, format), name]}
+            cursor={{ fill: "hsl(var(--muted))", opacity: 0.35 }}
+          />
+          {multiSeries && <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4 }} iconSize={8} iconType="circle" />}
+          {series.map((s, si) => {
+            const isLast = si === series.length - 1;
+            const color = s.color || PALETTE[si % PALETTE.length];
+            return (
+              <Bar key={s.name} dataKey={s.name}
+                fill={color}
+                radius={isLast ? [0, 4, 4, 0] : [0, 0, 0, 0]}
+                maxBarSize={32}
+              >
+                {!multiSeries && rows.map((_, ri) => (
+                  <Cell key={ri} fill={PALETTE[ri % PALETTE.length]} />
+                ))}
+                {showLabels && isLast && (
+                  <LabelList
+                    dataKey={s.name}
+                    position="right"
+                    formatter={(v: number) => v === 0 ? "" : fmtShort(v, format)}
+                    style={labelStyle}
+                  />
+                )}
+              </Bar>
+            );
+          })}
+        </BarChart>
+      </ResponsiveContainer>
+    );
+  }
 
-  // For vertical bars: rotate labels when many categories
-  const tooManyBars = !horizontal && catCount > 8;
-
-  // Right margin: need space for value labels on horizontal bars
-  const rightMargin = horizontal && showLabels ? 52 : horizontal ? 12 : 10;
-  const topMargin = !horizontal && showLabels ? 22 : 8;
-  const bottomMargin = tooManyBars ? 60 : !horizontal ? 10 : 4;
+  // ── Vertical bar (bar / groupedBar / stackedBar) ────────────────────────────
+  const tooManyBars = catCount > 6;
+  const yAxisW = 44;
+  const topMargin = showLabels || showStackTotal ? 22 : 8;
+  const bottomMargin = tooManyBars ? 64 : 10;
 
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart
         data={rows}
-        layout={horizontal ? "vertical" : "horizontal"}
         barCategoryGap={stacked ? "28%" : "22%"}
         barGap={2}
-        margin={{ top: topMargin, right: rightMargin, left: 0, bottom: bottomMargin }}
+        margin={{ top: topMargin, right: 10, left: 0, bottom: bottomMargin }}
       >
-        <CartesianGrid
-          strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4}
-          vertical={horizontal} horizontal={!horizontal}
+        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} vertical={false} />
+        <XAxis
+          dataKey="__cat"
+          tick={{ fontSize: tooManyBars ? 9 : 10, fill: "hsl(var(--muted-foreground))" }}
+          axisLine={false} tickLine={false}
+          interval={0}
+          angle={tooManyBars ? -40 : 0}
+          textAnchor={tooManyBars ? "end" : "middle"}
+          height={tooManyBars ? 70 : 28}
         />
-
-        {horizontal ? (
-          <>
-            <XAxis type="number"
-              tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-              axisLine={false} tickLine={false} tickFormatter={yFmt} domain={[0, "auto"]} />
-            <YAxis type="category" dataKey="__cat" width={yAxisW}
-              tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-              axisLine={false} tickLine={false} />
-          </>
-        ) : (
-          <>
-            <XAxis dataKey="__cat"
-              tick={{ fontSize: tooManyBars ? 9 : 10, fill: "hsl(var(--muted-foreground))" }}
-              axisLine={false} tickLine={false}
-              interval={0}
-              angle={tooManyBars ? -40 : 0}
-              textAnchor={tooManyBars ? "end" : "middle"}
-              height={tooManyBars ? 64 : 28} />
-            <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-              axisLine={false} tickLine={false} tickFormatter={yFmt} width={yAxisW} domain={[0, "auto"]} />
-          </>
-        )}
-
+        <YAxis
+          tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+          axisLine={false} tickLine={false}
+          tickFormatter={yFmt}
+          width={yAxisW}
+          domain={[0, "auto"]}
+        />
         <Tooltip
           contentStyle={tooltipStyle}
           formatter={(v: number, name: string) => [fmt(v, format), name]}
           cursor={{ fill: "hsl(var(--muted))", opacity: 0.35 }}
         />
         {multiSeries && (
-          <Legend
-            wrapperStyle={{ fontSize: 10, paddingTop: 6 }}
-            iconSize={8}
-            iconType="circle"
-          />
+          <Legend wrapperStyle={{ fontSize: 10, paddingTop: 6 }} iconSize={8} iconType="circle" />
         )}
 
         {series.map((s, si) => {
@@ -427,50 +453,46 @@ export function CardRenderer({ card, height = 260 }: { card: DashboardCard; heig
             <Bar key={s.name} dataKey={s.name}
               stackId={stacked ? "stack" : undefined}
               fill={color}
-              maxBarSize={horizontal ? 28 : 40}
+              maxBarSize={stacked ? undefined : 40}
               radius={
                 stacked
-                  ? isLast
-                    ? (horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0])
-                    : [0, 0, 0, 0]
-                  : horizontal
-                    ? [0, 4, 4, 0]
-                    : [4, 4, 0, 0]
+                  ? isLast ? [4, 4, 0, 0] : [0, 0, 0, 0]
+                  : [4, 4, 0, 0]
               }
             >
-              {/* Per-bar colors for single-series charts */}
               {!multiSeries && rows.map((_, ri) => (
                 <Cell key={ri} fill={PALETTE[ri % PALETTE.length]} />
               ))}
 
-              {/* Value labels */}
+              {/* Single-series value labels */}
               {showLabels && (
                 <LabelList
                   dataKey={s.name}
-                  position={horizontal ? "right" : "top"}
-                  formatter={(v: number) => (v === 0 ? "" : fmtShort(v, format))}
+                  position="top"
+                  formatter={(v: number) => v === 0 ? "" : fmtShort(v, format)}
                   style={labelStyle}
                 />
               )}
 
-              {/* For stacked bar: show total on the top segment only */}
-              {multiSeries && stacked && isLast && (
+              {/* Stacked bar: show stack total on the topmost segment */}
+              {showStackTotal && isLast && (
                 <LabelList
                   dataKey={s.name}
-                  position={horizontal ? "right" : "top"}
+                  position="top"
                   content={(props) => {
-                    const { x = 0, y = 0, width = 0, value, index = 0 } = props as {
-                      x?: number; y?: number; width?: number; value?: number; index?: number;
+                    const { x = 0, y = 0, width = 0, index = 0 } = props as {
+                      x?: number; y?: number; width?: number; index?: number;
                     };
-                    if (typeof index !== "number") return null;
-                    const total = series.reduce((sum, sr) => sum + (Number(sr.data[index]) || 0), 0);
+                    const total = series.reduce(
+                      (sum, sr) => sum + (Number(sr.data[Number(index)]) || 0), 0,
+                    );
                     if (!total) return null;
                     return (
                       <text
-                        x={horizontal ? Number(x) + Number(width) + 4 : Number(x) + Number(width) / 2}
-                        y={horizontal ? Number(y) + 10 : Number(y) - 4}
-                        textAnchor={horizontal ? "start" : "middle"}
-                        style={{ ...labelStyle, fontSize: 9, fontWeight: 600 }}
+                        x={Number(x) + Number(width) / 2}
+                        y={Number(y) - 4}
+                        textAnchor="middle"
+                        style={{ ...labelStyle, fontWeight: 600, fontSize: 9 }}
                       >
                         {fmtShort(total, format)}
                       </text>
