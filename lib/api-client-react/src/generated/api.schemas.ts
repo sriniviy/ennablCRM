@@ -263,6 +263,7 @@ export interface TaskWithRelations {
   title: string;
   description?: string | null;
   dueDate?: string | null;
+  reminderAt?: string | null;
   completed: boolean;
   completedAt?: string | null;
   priority: Priority;
@@ -271,6 +272,8 @@ export interface TaskWithRelations {
   contact?: ContactSummary | null;
   dealId?: string | null;
   deal?: TaskWithRelationsDeal;
+  companyId?: string | null;
+  company?: { id: string; name: string } | null;
   assigneeId?: string | null;
   assignee?: UserSummary | null;
   createdAt: string;
@@ -639,10 +642,12 @@ export interface CreateTaskInput {
   title: string;
   description?: string;
   dueDate?: string;
+  reminderAt?: string;
   priority?: Priority;
   type?: TaskType;
   contactId?: string;
   dealId?: string;
+  companyId?: string;
   assigneeId?: string;
 }
 
@@ -650,10 +655,12 @@ export interface UpdateTaskInput {
   title?: string;
   description?: string | null;
   dueDate?: string | null;
+  reminderAt?: string | null;
   priority?: Priority;
   type?: TaskType;
   contactId?: string | null;
   dealId?: string | null;
+  companyId?: string | null;
   assigneeId?: string | null;
 }
 

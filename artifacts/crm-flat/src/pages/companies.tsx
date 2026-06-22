@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Plus, Globe, Building2, Download, CopyCheck, Share2, Pencil, Check } from "lucide-react";
+import { Search, Plus, Globe, Building2, Download, CopyCheck, Share2, Pencil, Check, ChevronDown } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useSharedTags } from "@/hooks/use-shared-tags";
@@ -366,12 +366,14 @@ export function CompaniesPage() {
     }
   };
 
-  const { data, isLoading } = useListCompanies({
+  const [pageSize, setPageSize] = useState(100);
+
+  const { data, isLoading, isFetching } = useListCompanies({
     search: debouncedSearch || undefined,
     status: statusFilter !== "ALL" ? (statusFilter as typeof CompanyStatus[keyof typeof CompanyStatus]) : undefined,
     memberOf: debouncedMemberOf || undefined,
     page: 1,
-    pageSize: 50,
+    pageSize,
   });
 
   const openNew = () => { setEditCompany(undefined); setDialogOpen(true); };
@@ -389,7 +391,9 @@ export function CompaniesPage() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Companies</h1>
-            <p className="text-muted-foreground">Manage your accounts and organizations.</p>
+            <p className="text-muted-foreground">
+              {data?.total ? `Showing ${data.data.length.toLocaleString()} of ${data.total.toLocaleString()} companies` : "Manage your accounts and organizations."}
+            </p>
           </div>
           <div className="flex gap-2">
             {isAdmin && (
@@ -558,6 +562,19 @@ export function CompaniesPage() {
                 )}
               </TableBody>
             </Table>
+          </div>
+        )}
+
+        {data?.hasMore && (
+          <div className="flex justify-center pt-2">
+            <Button
+              variant="outline"
+              onClick={() => setPageSize(ps => ps + 100)}
+              disabled={isFetching}
+            >
+              <ChevronDown className="mr-2 h-4 w-4" />
+              {isFetching ? "Loading…" : `Load more (${((data.total ?? 0) - (data.data?.length ?? 0)).toLocaleString()} remaining)`}
+            </Button>
           </div>
         )}
       </div>

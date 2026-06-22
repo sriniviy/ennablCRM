@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Clock, Calendar, CheckCircle2, AlertCircle, Pencil, Download } from "lucide-react";
+import { Plus, Clock, Calendar, CheckCircle2, AlertCircle, Pencil, Download, ChevronDown } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { TaskDialog } from "@/components/tasks/task-dialog";
 import { ExportFilterDialog } from "@/components/tasks/export-filter-dialog";
@@ -39,9 +39,12 @@ function useTaskDeepLink(onOpen: (t: TaskWithRelations) => void) {
   }, [deepTask, onOpen]);
 }
 
+const TASK_PAGE_SIZE = 100;
+
 export function TasksPage() {
   const [filter, setFilter] = useState("open");
-  const { data, isLoading } = useListTasks({ filter, page: 1, pageSize: 50 });
+  const [pageSize, setPageSize] = useState(TASK_PAGE_SIZE);
+  const { data, isLoading, isFetching } = useListTasks({ filter, page: 1, pageSize });
   const completeTask = useCompleteTask();
   const queryClient = useQueryClient();
 
@@ -54,7 +57,7 @@ export function TasksPage() {
   completeTaskMutate.current = completeTask.mutate;
 
   const handleToggleTask = (id: string, currentlyCompleted: boolean) => {
-    queryClient.setQueryData(getListTasksQueryKey({ filter, page: 1, pageSize: 50 }), (old: any) => {
+    queryClient.setQueryData(getListTasksQueryKey({ filter, page: 1, pageSize }), (old: any) => {
       if (!old || !old.data) return old;
       return { ...old, data: old.data.map((t: any) => t.id === id ? { ...t, completed: !currentlyCompleted } : t) };
     });
@@ -102,7 +105,7 @@ export function TasksPage() {
           </div>
         </div>
 
-        <Tabs value={filter} onValueChange={setFilter}>
+        <Tabs value={filter} onValueChange={v => { setFilter(v); setPageSize(TASK_PAGE_SIZE); }}>
           <TabsList>
             <TabsTrigger value="open">Open</TabsTrigger>
             <TabsTrigger value="today">Today</TabsTrigger>
@@ -163,6 +166,25 @@ export function TasksPage() {
                 <div className="text-center py-16 text-muted-foreground">
                   <CheckCircle2 className="h-10 w-10 mx-auto mb-3 opacity-30" />
                   <p>No tasks here.</p>
+                </div>
+              )}
+              {!isLoading && data && data.total > 0 && (
+                <div className="pt-2 space-y-2">
+                  <p className="text-center text-sm text-muted-foreground">
+                    Showing {data.data.length.toLocaleString()} of {data.total.toLocaleString()} tasks
+                  </p>
+                  {data.hasMore && (
+                    <div className="flex justify-center">
+                      <Button
+                        variant="outline"
+                        onClick={() => setPageSize(ps => ps + TASK_PAGE_SIZE)}
+                        disabled={isFetching}
+                      >
+                        <ChevronDown className="mr-2 h-4 w-4" />
+                        {isFetching ? "Loading…" : `Load more (${(data.total - data.data.length).toLocaleString()} remaining)`}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </TabsContent>

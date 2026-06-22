@@ -1,14 +1,15 @@
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
-
+import { useState } from "react";
 import { useListActivities, ActivityType, type ActivityWithRelations } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search } from "lucide-react";
+import { Search, ChevronDown } from "lucide-react";
 import { useUrlFilters } from "@/hooks/use-url-filters";
 import { useDebounce } from "@/hooks/use-debounce";
 import { ViewToggle, type ViewMode } from "@/components/view-toggle";
@@ -21,6 +22,7 @@ const PAGE_TITLES: Record<string, string> = {
   CALL: "Calls",
   EMAIL_SENT: "Emails",
   NOTE: "Notes",
+  MEETING: "Meetings",
 };
 
 const contactName = (a: ActivityWithRelations) =>
@@ -44,6 +46,8 @@ const CARD_FIELDS: CardField<ActivityWithRelations>[] = [
   { label: "ID", render: a => dash(a.id) },
 ];
 
+const PAGE_SIZE = 200;
+
 export function ActivitiesPage() {
   const { get, set } = useUrlFilters();
 
@@ -53,17 +57,22 @@ export function ActivitiesPage() {
   const dateTo = get("dateTo");
   const view: ViewMode = get("view") === "cards" ? "cards" : "table";
 
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
+
   const debouncedSearch = useDebounce(search, 300);
 
-  const { data, isLoading } = useListActivities({
+  const { data, isLoading, isFetching } = useListActivities({
     type: typeFilter !== "ALL" ? typeFilter as typeof ActivityType[keyof typeof ActivityType] : undefined,
     dateFrom: dateFrom || undefined,
     dateTo: dateTo || undefined,
     page: 1,
-    pageSize: 100,
+    pageSize,
   });
 
   const allActivities = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const hasMore = data?.hasMore ?? false;
+
   const activities = debouncedSearch
     ? allActivities.filter(a =>
         [a.title, a.description, a.emailSubject, a.emailBody]
@@ -71,7 +80,7 @@ export function ActivitiesPage() {
       )
     : allActivities;
 
-  const pageTitle = PAGE_TITLES[typeFilter] ?? "Notes";
+  const pageTitle = PAGE_TITLES[typeFilter] ?? "Activities";
 
   return (
     <SidebarLayout>
@@ -79,7 +88,11 @@ export function ActivitiesPage() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">{pageTitle}</h1>
-            <p className="text-muted-foreground">A timeline of everything happening across your CRM.</p>
+            <p className="text-muted-foreground">
+              {total > 0
+                ? `Showing ${allActivities.length.toLocaleString()} of ${total.toLocaleString()} ${pageTitle.toLowerCase()}`
+                : "A timeline of everything happening across your CRM."}
+            </p>
           </div>
         </div>
 
@@ -177,6 +190,19 @@ export function ActivitiesPage() {
                 )}
               </TableBody>
             </Table>
+          </div>
+        )}
+
+        {hasMore && (
+          <div className="flex justify-center pt-2">
+            <Button
+              variant="outline"
+              onClick={() => setPageSize(ps => ps + PAGE_SIZE)}
+              disabled={isFetching}
+            >
+              <ChevronDown className="mr-2 h-4 w-4" />
+              {isFetching ? "Loading…" : `Load more (${(total - allActivities.length).toLocaleString()} remaining)`}
+            </Button>
           </div>
         )}
       </div>

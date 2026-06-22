@@ -28,6 +28,7 @@ import {
   FileText,
   Megaphone,
   MessageSquare,
+  CalendarDays,
 } from "lucide-react";
 import { GlobalSearch } from "@/components/global-search";
 import { Button } from "@/components/ui/button";
@@ -87,6 +88,7 @@ const navGroups: NavGroup[] = [
     label: "ACTIVITIES",
     items: [
       { name: "Calls", href: "/activities?type=CALL", icon: Phone },
+      { name: "Meetings", href: "/activities?type=MEETING", icon: CalendarDays },
       { name: "Emails", href: "/activities?type=EMAIL_SENT", icon: Mail },
       { name: "Notes", href: "/activities?type=NOTE", icon: FileText },
       { name: "Tasks", href: "/tasks", icon: CheckSquare },

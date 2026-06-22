@@ -79,7 +79,7 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
           },
           engagementOpens: sql<number>`count(distinct case when ${campaignContactsTable.openedAt} is not null then ${campaignContactsTable.id} end)::int`,
           engagementClicks: sql<number>`count(distinct case when ${campaignContactsTable.clickedAt} is not null then ${campaignContactsTable.id} end)::int`,
-          lastActivityDate: sql<string | null>`(SELECT MAX(a.created_at) FROM activities a WHERE a.contact_id = ${contactsTable.id})`,
+          lastActivityDate: sql<string | null>`GREATEST(contacts.last_activity_date, (SELECT MAX(a.created_at) FROM activities a WHERE a.contact_id = ${contactsTable.id}))`,
         })
         .from(contactsTable)
         .leftJoin(companiesTable, eq(contactsTable.companyId, companiesTable.id))

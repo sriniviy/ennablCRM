@@ -11,6 +11,7 @@ import { priorityEnum, taskTypeEnum } from "./enums";
 import { usersTable } from "./users";
 import { contactsTable } from "./contacts";
 import { dealsTable } from "./deals";
+import { companiesTable } from "./companies";
 
 export const tasksTable = pgTable(
   "tasks",
@@ -28,6 +29,8 @@ export const tasksTable = pgTable(
     type: taskTypeEnum("type").notNull().default("TODO"),
     contactId: text("contact_id").references(() => contactsTable.id),
     dealId: text("deal_id").references(() => dealsTable.id),
+    companyId: text("company_id").references(() => companiesTable.id),
+    reminderAt: timestamp("reminder_at", { withTimezone: true }),
     assigneeId: text("assignee_id").references(() => usersTable.id),
     creatorId: text("creator_id").references(() => usersTable.id),
     createdAt: timestamp("created_at", { withTimezone: true })

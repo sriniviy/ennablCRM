@@ -33,7 +33,7 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
           contactCount: sql<number>`count(distinct ${contactsTable.id})::int`,
           openDeals: sql<number>`count(distinct ${dealsTable.id})::int`,
           totalDealsValue: sql<number>`coalesce(sum(${dealsTable.value}), 0)::float`,
-          lastActivityDate: sql<string | null>`(SELECT MAX(a.created_at) FROM activities a WHERE a.company_id = ${companiesTable.id})`,
+          lastActivityDate: sql<string | null>`GREATEST(companies.last_activity_date, (SELECT MAX(a.created_at) FROM activities a WHERE a.company_id = ${companiesTable.id}))`,
         })
         .from(companiesTable)
         .leftJoin(contactsTable, eq(contactsTable.companyId, companiesTable.id))

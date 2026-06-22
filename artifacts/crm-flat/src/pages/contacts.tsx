@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Plus, Upload, Download, CopyCheck, Mail, Zap, Share2, X } from "lucide-react";
+import { Search, Plus, Upload, Download, CopyCheck, Mail, Zap, Share2, X, ChevronDown } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useSharedTags } from "@/hooks/use-shared-tags";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -296,14 +296,16 @@ export function ContactsPage() {
   });
   const triggerEnrolledSet = new Set(triggerEnrolledData?.contactIds ?? []);
 
-  const { data, isLoading } = useListContacts({
+  const [pageSize, setPageSize] = useState(100);
+
+  const { data, isLoading, isFetching } = useListContacts({
     search: debouncedSearch || undefined,
     status: statusFilter !== "ALL" ? statusFilter as typeof ContactStatus[keyof typeof ContactStatus] : undefined,
     reviewStatus: reviewFilter !== "ALL" ? reviewFilter as typeof ReviewStatus[keyof typeof ReviewStatus] : undefined,
     assigneeId: ownerFilter !== "ALL" ? ownerFilter : undefined,
     tag: debouncedTag || undefined,
     page: 1,
-    pageSize: 50,
+    pageSize,
   });
 
   const openNew = () => { setEditContact(undefined); setDialogOpen(true); };
@@ -322,7 +324,9 @@ export function ContactsPage() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Contacts</h1>
-            <p className="text-muted-foreground">Manage your people and leads.</p>
+            <p className="text-muted-foreground">
+              {data?.total ? `Showing ${data.data.length.toLocaleString()} of ${data.total.toLocaleString()} contacts` : "Manage your people and leads."}
+            </p>
           </div>
           <div className="flex gap-2">
             {isAdmin && (
@@ -524,6 +528,19 @@ export function ContactsPage() {
                 )}
               </TableBody>
             </Table>
+          </div>
+        )}
+
+        {data?.hasMore && (
+          <div className="flex justify-center pt-2">
+            <Button
+              variant="outline"
+              onClick={() => setPageSize(ps => ps + 100)}
+              disabled={isFetching}
+            >
+              <ChevronDown className="mr-2 h-4 w-4" />
+              {isFetching ? "Loading…" : `Load more (${((data.total ?? 0) - (data.data?.length ?? 0)).toLocaleString()} remaining)`}
+            </Button>
           </div>
         )}
       </div>

@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { db, tasksTable, contactsTable, dealsTable, usersTable } from "@workspace/db";
+import { db, tasksTable, contactsTable, dealsTable, usersTable, companiesTable } from "@workspace/db";
 import { eq, and, lte, gte, isNull, isNotNull, desc, asc, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin, type AuthRequest } from "../middlewares/requireAuth";
 import { logActivity } from "../lib/activity";
@@ -114,11 +114,13 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
           task: tasksTable,
           contact: { id: contactsTable.id, firstName: contactsTable.firstName, lastName: contactsTable.lastName },
           deal: { id: dealsTable.id, title: dealsTable.title },
+          company: { id: companiesTable.id, name: companiesTable.name },
           assignee: { id: usersTable.id, name: usersTable.name, avatarUrl: usersTable.avatarUrl },
         })
         .from(tasksTable)
         .leftJoin(contactsTable, eq(tasksTable.contactId, contactsTable.id))
         .leftJoin(dealsTable, eq(tasksTable.dealId, dealsTable.id))
+        .leftJoin(companiesTable, eq(tasksTable.companyId, companiesTable.id))
         .leftJoin(usersTable, eq(tasksTable.assigneeId, usersTable.id))
         .where(where)
         .orderBy(asc(tasksTable.dueDate), desc(tasksTable.createdAt))
@@ -128,10 +130,11 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
     ]);
 
     res.json({
-      data: tasks.map(({ task, contact, deal, assignee }) => ({
+      data: tasks.map(({ task, contact, deal, company, assignee }) => ({
         ...task,
         contact: contact?.id ? contact : null,
         deal: deal?.id ? deal : null,
+        company: company?.id ? company : null,
         assignee: assignee?.id ? assignee : null,
       })),
       total: count,
@@ -152,11 +155,13 @@ router.get("/:id", requireAuth, async (req: Request, res: Response) => {
         task: tasksTable,
         contact: { id: contactsTable.id, firstName: contactsTable.firstName, lastName: contactsTable.lastName },
         deal: { id: dealsTable.id, title: dealsTable.title },
+        company: { id: companiesTable.id, name: companiesTable.name },
         assignee: { id: usersTable.id, name: usersTable.name, avatarUrl: usersTable.avatarUrl },
       })
       .from(tasksTable)
       .leftJoin(contactsTable, eq(tasksTable.contactId, contactsTable.id))
       .leftJoin(dealsTable, eq(tasksTable.dealId, dealsTable.id))
+      .leftJoin(companiesTable, eq(tasksTable.companyId, companiesTable.id))
       .leftJoin(usersTable, eq(tasksTable.assigneeId, usersTable.id))
       .where(eq(tasksTable.id, id))
       .limit(1);
@@ -170,12 +175,26 @@ router.get("/:id", requireAuth, async (req: Request, res: Response) => {
       ...row.task,
       contact: row.contact?.id ? row.contact : null,
       deal: row.deal?.id ? row.deal : null,
+      company: row.company?.id ? row.company : null,
       assignee: row.assignee?.id ? row.assignee : null,
     });
   } catch {
     res.status(500).json({ error: "Failed to get task" });
   }
 });
+
+async function resolveCompanyId(explicitCompanyId: string | null | undefined, contactId: string | null | undefined, dealId: string | null | undefined): Promise<string | null> {
+  if (explicitCompanyId) return explicitCompanyId;
+  if (contactId) {
+    const [c] = await db.select({ companyId: contactsTable.companyId }).from(contactsTable).where(eq(contactsTable.id, contactId)).limit(1);
+    if (c?.companyId) return c.companyId;
+  }
+  if (dealId) {
+    const [d] = await db.select({ companyId: dealsTable.companyId }).from(dealsTable).where(eq(dealsTable.id, dealId)).limit(1);
+    if (d?.companyId) return d.companyId;
+  }
+  return null;
+}
 
 router.post("/", requireAuth, async (req: Request, res: Response) => {
   try {
@@ -187,14 +206,18 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
       return;
     }
 
+    const companyId = await resolveCompanyId(body.companyId, body.contactId, body.dealId);
+
     const [task] = await db.insert(tasksTable).values({
       title: body.title,
       description: body.description ?? null,
       dueDate: body.dueDate ? new Date(body.dueDate) : null,
+      reminderAt: body.reminderAt ? new Date(body.reminderAt) : null,
       priority: body.priority ?? "MEDIUM",
       type: body.type ?? "TODO",
       contactId: body.contactId ?? null,
       dealId: body.dealId ?? null,
+      companyId,
       assigneeId: body.assigneeId ?? dbUser.id,
       creatorId: dbUser.id,
     }).returning();
@@ -264,7 +287,15 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
     }
 
     const body = { ...req.body };
-    if (body.dueDate) body.dueDate = new Date(body.dueDate);
+    if (body.dueDate !== undefined) body.dueDate = body.dueDate ? new Date(body.dueDate) : null;
+    if (body.reminderAt !== undefined) body.reminderAt = body.reminderAt ? new Date(body.reminderAt) : null;
+
+    // Auto-derive company from contact or deal if not explicitly provided
+    if (body.companyId === undefined && (body.contactId !== undefined || body.dealId !== undefined)) {
+      const effectiveContactId = body.contactId !== undefined ? body.contactId : existing.contactId;
+      const effectiveDealId = body.dealId !== undefined ? body.dealId : existing.dealId;
+      body.companyId = await resolveCompanyId(null, effectiveContactId, effectiveDealId);
+    }
 
     const [updated] = await db
       .update(tasksTable)

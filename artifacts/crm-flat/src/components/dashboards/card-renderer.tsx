@@ -341,20 +341,21 @@ export function CardRenderer({ card, height = 260 }: { card: DashboardCard; heig
 
   // ── Horizontal bar ──────────────────────────────────────────────────────────
   if (horizontal) {
-    // Width of the left Y-axis to fit owner names
     const maxChars = Math.max(...rows.map((r) => String(r.__cat).length));
-    const yAxisW = Math.min(150, Math.max(80, maxChars * 7));
-    // Right margin for value labels
-    const rightMargin = showLabels ? 56 : 14;
+    // Conservative Y-axis width so bars have room on narrow (sm) cards too
+    const yAxisW = Math.min(110, Math.max(56, maxChars * 6));
+    const rightMargin = showLabels ? 50 : 10;
+    // Per-bar height for adequate spacing; total chart height is driven by container
+    const barH = Math.min(28, Math.max(10, Math.floor((height - 24) / (rows.length * (multiSeries ? series.length : 1) + 1))));
 
     return (
       <ResponsiveContainer width="100%" height={height}>
         <BarChart
           data={rows}
           layout="vertical"
-          barCategoryGap="20%"
-          barGap={3}
-          margin={{ top: 4, right: rightMargin, left: 0, bottom: 4 }}
+          barCategoryGap="18%"
+          barGap={2}
+          margin={{ top: 4, right: rightMargin, left: 0, bottom: multiSeries ? 20 : 4 }}
         >
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} vertical={true} horizontal={false} />
           <XAxis
@@ -368,7 +369,7 @@ export function CardRenderer({ card, height = 260 }: { card: DashboardCard; heig
             type="category"
             dataKey="__cat"
             width={yAxisW}
-            tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+            tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
             axisLine={false} tickLine={false}
           />
           <Tooltip
@@ -376,15 +377,15 @@ export function CardRenderer({ card, height = 260 }: { card: DashboardCard; heig
             formatter={(v: number, name: string) => [fmt(v, format), name]}
             cursor={{ fill: "hsl(var(--muted))", opacity: 0.35 }}
           />
-          {multiSeries && <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4 }} iconSize={8} iconType="circle" />}
+          {multiSeries && <Legend wrapperStyle={{ fontSize: 10, paddingTop: 2 }} iconSize={8} iconType="circle" />}
           {series.map((s, si) => {
             const isLast = si === series.length - 1;
             const color = s.color || PALETTE[si % PALETTE.length];
             return (
               <Bar key={s.name} dataKey={s.name}
                 fill={color}
-                radius={isLast ? [0, 4, 4, 0] : [0, 0, 0, 0]}
-                maxBarSize={32}
+                radius={isLast ? [0, 3, 3, 0] : [0, 0, 0, 0]}
+                maxBarSize={barH}
               >
                 {!multiSeries && rows.map((_, ri) => (
                   <Cell key={ri} fill={PALETTE[ri % PALETTE.length]} />
@@ -409,7 +410,9 @@ export function CardRenderer({ card, height = 260 }: { card: DashboardCard; heig
   const tooManyBars = catCount > 6;
   const yAxisW = 44;
   const topMargin = showLabels || showStackTotal ? 22 : 8;
-  const bottomMargin = tooManyBars ? 64 : 10;
+  // XAxis height={70} already allocates space for rotated labels inside the plot area.
+  // bottomMargin is outside that — don't double-count it.
+  const bottomMargin = tooManyBars ? 4 : 10;
 
   return (
     <ResponsiveContainer width="100%" height={height}>
