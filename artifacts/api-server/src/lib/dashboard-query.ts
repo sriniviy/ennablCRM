@@ -174,11 +174,11 @@ function dealGroupSql(dim: string, dateCol: string): { label: string; order: str
 function buildDealWhere(filters: Filters): ReturnType<typeof sql>[] {
   const conds: ReturnType<typeof sql>[] = [];
   if (filters.status === "open") {
-    conds.push(sql`s.name not in ('Closed Won','Closed Lost','No Decisions')`);
+    conds.push(sql`s.name not in ('Won','Lost','No Decision')`);
   } else if (filters.status === "won") {
-    conds.push(sql`s.name = 'Closed Won'`);
+    conds.push(sql`s.name = 'Won'`);
   } else if (filters.status === "lost") {
-    conds.push(sql`s.name = 'Closed Lost'`);
+    conds.push(sql`s.name = 'Lost'`);
   }
   if (filters.stages && filters.stages.length > 0) {
     conds.push(inList(sql`s.name`, filters.stages));
