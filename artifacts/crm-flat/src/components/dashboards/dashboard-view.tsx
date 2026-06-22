@@ -50,7 +50,7 @@ const ALLOWED_SPANS: Array<{ span: number; size: CardSize }> = [
 const GRID_GAP = 16;
 const GRID_COLS = 4;
 
-export function DashboardView({ dashboardId }: { dashboardId: string }) {
+export function DashboardView({ dashboardId, canEdit = true }: { dashboardId: string; canEdit?: boolean }) {
   const getToken = useSessionToken();
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -253,12 +253,14 @@ export function DashboardView({ dashboardId }: { dashboardId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-end">
-        <Button size="sm" onClick={() => { setEditing(null); setBuilderOpen(true); }}>
-          <Plus className="h-4 w-4 mr-1.5" />
-          Add card
-        </Button>
-      </div>
+      {canEdit && (
+        <div className="flex items-center justify-end">
+          <Button size="sm" onClick={() => { setEditing(null); setBuilderOpen(true); }}>
+            <Plus className="h-4 w-4 mr-1.5" />
+            Add card
+          </Button>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-4">
@@ -270,12 +272,16 @@ export function DashboardView({ dashboardId }: { dashboardId: string }) {
             <LayoutGrid className="h-10 w-10 text-muted-foreground/40" />
             <div>
               <p className="font-medium">No cards yet</p>
-              <p className="text-sm text-muted-foreground">Add your first card to start building this dashboard.</p>
+              <p className="text-sm text-muted-foreground">
+                {canEdit ? "Add your first card to start building this dashboard." : "This dashboard has no cards."}
+              </p>
             </div>
-            <Button onClick={() => { setEditing(null); setBuilderOpen(true); }}>
-              <Plus className="h-4 w-4 mr-1.5" />
-              Add card
-            </Button>
+            {canEdit && (
+              <Button onClick={() => { setEditing(null); setBuilderOpen(true); }}>
+                <Plus className="h-4 w-4 mr-1.5" />
+                Add card
+              </Button>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -304,13 +310,17 @@ export function DashboardView({ dashboardId }: { dashboardId: string }) {
                       >
                         <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2 gap-2">
                           <div className="flex items-center gap-1.5 min-w-0">
-                            <button
-                              {...dragProvided.dragHandleProps}
-                              className="shrink-0 -ml-1 cursor-grab text-muted-foreground/50 hover:text-muted-foreground active:cursor-grabbing"
-                              aria-label="Drag to reorder"
-                            >
-                              <GripVertical className="h-4 w-4" />
-                            </button>
+                            {canEdit ? (
+                              <button
+                                {...dragProvided.dragHandleProps}
+                                className="shrink-0 -ml-1 cursor-grab text-muted-foreground/50 hover:text-muted-foreground active:cursor-grabbing"
+                                aria-label="Drag to reorder"
+                              >
+                                <GripVertical className="h-4 w-4" />
+                              </button>
+                            ) : (
+                              <span {...dragProvided.dragHandleProps} />
+                            )}
                             <CardTitle className="text-sm font-medium truncate">{card.title}</CardTitle>
                             {card.config.info && (
                               <TooltipProvider>
@@ -325,42 +335,46 @@ export function DashboardView({ dashboardId }: { dashboardId: string }) {
                               </TooltipProvider>
                             )}
                           </div>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => { setEditing(card); setBuilderOpen(true); }}>
-                                <Pencil className="h-4 w-4 mr-2" /> Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuItem disabled={i === 0} onClick={() => move(card, -1)}>
-                                <ArrowLeft className="h-4 w-4 mr-2" /> Move left
-                              </DropdownMenuItem>
-                              <DropdownMenuItem disabled={i === cards.length - 1} onClick={() => move(card, 1)}>
-                                <ArrowRight className="h-4 w-4 mr-2" /> Move right
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget(card)}>
-                                <Trash2 className="h-4 w-4 mr-2" /> Remove
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          {canEdit && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => { setEditing(card); setBuilderOpen(true); }}>
+                                  <Pencil className="h-4 w-4 mr-2" /> Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem disabled={i === 0} onClick={() => move(card, -1)}>
+                                  <ArrowLeft className="h-4 w-4 mr-2" /> Move left
+                                </DropdownMenuItem>
+                                <DropdownMenuItem disabled={i === cards.length - 1} onClick={() => move(card, 1)}>
+                                  <ArrowRight className="h-4 w-4 mr-2" /> Move right
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget(card)}>
+                                  <Trash2 className="h-4 w-4 mr-2" /> Remove
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
                         </CardHeader>
                         <CardContent className="flex-1">
                           <CardRenderer card={card} height={chartHeight(displaySize)} />
                         </CardContent>
-                        <div
-                          onPointerDown={(e) => startResize(e, card)}
-                          onClick={(e) => e.stopPropagation()}
-                          role="separator"
-                          aria-orientation="vertical"
-                          aria-label="Drag to resize card"
-                          title="Drag to resize"
-                          className="group absolute right-0 top-0 bottom-0 hidden w-2.5 cursor-col-resize touch-none items-center justify-center md:flex"
-                        >
-                          <div className="h-10 w-1 rounded-full bg-border transition-colors group-hover:bg-primary/60" />
-                        </div>
+                        {canEdit && (
+                          <div
+                            onPointerDown={(e) => startResize(e, card)}
+                            onClick={(e) => e.stopPropagation()}
+                            role="separator"
+                            aria-orientation="vertical"
+                            aria-label="Drag to resize card"
+                            title="Drag to resize"
+                            className="group absolute right-0 top-0 bottom-0 hidden w-2.5 cursor-col-resize touch-none items-center justify-center md:flex"
+                          >
+                            <div className="h-10 w-1 rounded-full bg-border transition-colors group-hover:bg-primary/60" />
+                          </div>
+                        )}
                       </Card>
                     )}
                   </Draggable>

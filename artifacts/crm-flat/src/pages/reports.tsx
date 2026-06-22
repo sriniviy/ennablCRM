@@ -34,6 +34,7 @@ import { Plus, MoreHorizontal, Pencil, Trash2, LayoutDashboard } from "lucide-re
 import { PipelineOverview } from "@/components/dashboards/pipeline-overview";
 import { DashboardView } from "@/components/dashboards/dashboard-view";
 import { BASE, type Dashboard } from "@/components/dashboards/types";
+import { useGetMe } from "@workspace/api-client-react";
 
 const BUILTIN_ID = "__pipeline_overview__";
 
@@ -42,12 +43,19 @@ export function ReportsPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
 
+  const { data: me } = useGetMe();
   const [activeId, setActiveId] = useState<string>(BUILTIN_ID);
   const [createOpen, setCreateOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<Dashboard | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Dashboard | null>(null);
   const [draftName, setDraftName] = useState("");
   const [draftDesc, setDraftDesc] = useState("");
+
+  const canMutate = (d: Dashboard | null) => {
+    if (!d || d.builtin) return false;
+    if (me?.role === "ADMIN") return true;
+    return !!(d.createdBy && d.createdBy === me?.id);
+  };
 
   const authFetch = useCallback(
     async (url: string, init?: RequestInit) => {
@@ -152,7 +160,7 @@ export function ReportsPage() {
                 <LayoutDashboard className="h-4 w-4" />
                 {t.name}
               </button>
-              {!t.builtin && t.id === activeId && (
+              {!t.builtin && t.id === activeId && canMutate(t.dashboard) && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-6 w-6 mr-1">
@@ -192,7 +200,10 @@ export function ReportsPage() {
         </div>
 
         {/* Active dashboard content */}
-        {active.builtin ? <PipelineOverview /> : <DashboardView dashboardId={active.id} />}
+        {active.builtin
+          ? <PipelineOverview />
+          : <DashboardView dashboardId={active.id} canEdit={canMutate(active.dashboard)} />
+        }
       </div>
 
       {/* Create dialog */}
