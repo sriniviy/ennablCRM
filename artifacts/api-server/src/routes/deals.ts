@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { db, dealsTable, dealStagesTable, contactsTable, companiesTable, usersTable, customFieldDefinitionsTable, customFieldValuesTable, sequenceTriggersTable, sequenceEnrollmentsTable, sequenceStepsTable, sequencesTable, activitiesTable, dealSplitsTable } from "@workspace/db";
-import { eq, ilike, and, asc, desc, inArray, sql } from "drizzle-orm";
+import { eq, ilike, and, or, asc, desc, inArray, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin, type AuthRequest } from "../middlewares/requireAuth";
 import { logActivity } from "../lib/activity";
 import { logAudit } from "../lib/audit";
@@ -122,16 +122,76 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
         .orderBy(asc(dealsTable.order), desc(dealsTable.createdAt)),
     ]);
 
+    // Compute last activity + next meeting per deal for card display.
+    const ACTIVITY_LABEL: Record<string, string> = {
+      EMAIL_SENT: "Email",
+      EMAIL_OPENED: "Email",
+      EMAIL_CLICKED: "Email",
+      MEETING: "Meeting",
+      CALL: "Call",
+      NOTE: "Note",
+    };
+    const RELEVANT_TYPES = [
+      "EMAIL_SENT", "EMAIL_OPENED", "EMAIL_CLICKED", "MEETING", "CALL", "NOTE",
+    ] as const;
+
+    const dealIds = rows.map((r) => r.deal.id);
+    const contactIds = [
+      ...new Set(rows.map((r) => r.deal.contactId).filter((v): v is string => !!v)),
+    ];
+
+    const lastByDeal = new Map<string, { type: string; at: Date }>();
+    const lastByContact = new Map<string, { type: string; at: Date }>();
+    const nextMeetingByDeal = new Map<string, Date>();
+    const nextMeetingByContact = new Map<string, Date>();
+
+    if (dealIds.length > 0 || contactIds.length > 0) {
+      const scope = [];
+      if (dealIds.length > 0) scope.push(inArray(activitiesTable.dealId, dealIds));
+      if (contactIds.length > 0) scope.push(inArray(activitiesTable.contactId, contactIds));
+      const activityRows = await db
+        .select({
+          type: activitiesTable.type,
+          dealId: activitiesTable.dealId,
+          contactId: activitiesTable.contactId,
+          createdAt: activitiesTable.createdAt,
+          endDate: activitiesTable.endDate,
+        })
+        .from(activitiesTable)
+        .where(and(inArray(activitiesTable.type, [...RELEVANT_TYPES]), or(...scope)))
+        .orderBy(desc(activitiesTable.createdAt));
+
+      const now = Date.now();
+      for (const a of activityRows) {
+        if (a.dealId && !lastByDeal.has(a.dealId)) lastByDeal.set(a.dealId, { type: a.type, at: a.createdAt });
+        if (a.contactId && !lastByContact.has(a.contactId)) lastByContact.set(a.contactId, { type: a.type, at: a.createdAt });
+        if (a.type === "MEETING" && a.endDate && a.endDate.getTime() > now) {
+          if (a.dealId) {
+            const cur = nextMeetingByDeal.get(a.dealId);
+            if (!cur || a.endDate < cur) nextMeetingByDeal.set(a.dealId, a.endDate);
+          }
+          if (a.contactId) {
+            const cur = nextMeetingByContact.get(a.contactId);
+            if (!cur || a.endDate < cur) nextMeetingByContact.set(a.contactId, a.endDate);
+          }
+        }
+      }
+    }
+
     const dealMap = new Map<string, object[]>();
     for (const { deal, stage, contact, company, assignee } of rows) {
       const key = deal.stageId;
       if (!dealMap.has(key)) dealMap.set(key, []);
+      const last = lastByDeal.get(deal.id) ?? (deal.contactId ? lastByContact.get(deal.contactId) : undefined);
+      const nextMeeting = nextMeetingByDeal.get(deal.id) ?? (deal.contactId ? nextMeetingByContact.get(deal.contactId) : undefined);
       dealMap.get(key)!.push({
         ...deal,
         stage: stage?.id ? stage : null,
         contact: contact?.id ? contact : null,
         company: company?.id ? company : null,
         assignee: assignee?.id ? assignee : null,
+        lastActivity: last ? { type: ACTIVITY_LABEL[last.type] ?? last.type, at: last.at.toISOString() } : null,
+        nextMeetingAt: nextMeeting ? nextMeeting.toISOString() : null,
       });
     }
 

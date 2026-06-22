@@ -63,13 +63,15 @@ const BREAKDOWNS_BY_DATASET: Record<Dataset, string[]> = {
 };
 
 const STAGE_OPTIONS = [
+  "Qualified",
   "Discovery",
   "Validation",
   "Proposal",
   "Proof of Concept",
   "Out for Signature",
-  "Won",
-  "Lost",
+  "Closed Won",
+  "Closed Lost",
+  "No Decisions",
 ];
 
 const TABLE_COLUMNS = ["owner", "title", "stage", "value", "closeDate"];

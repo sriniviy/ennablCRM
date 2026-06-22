@@ -1603,6 +1603,10 @@ components:
         campaignEngagementCount:
           type: integer
           description: Number of campaigns the contact has opened or clicked at least once.
+        engagementOpens:
+          type: integer
+        engagementClicks:
+          type: integer
         createdAt:
           type: string
           format: date-time
@@ -1814,6 +1818,22 @@ components:
           nullable: true
         order:
           type: integer
+        lastActivity:
+          nullable: true
+          type: object
+          description: Most recent relevant activity (email/meeting/call/note) for the deal or its contact.
+          properties:
+            type:
+              type: string
+            at:
+              type: string
+              format: date-time
+          required: [type, at]
+        nextMeetingAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Soonest upcoming meeting end time for the deal or its contact.
         createdAt:
           type: string
           format: date-time
@@ -1993,6 +2013,15 @@ components:
         sentAt:
           type: string
           format: date-time
+          nullable: true
+        segmentId:
+          type: string
+          nullable: true
+        builderBlocks:
+          type: string
+          nullable: true
+        builderStep:
+          type: integer
           nullable: true
         stats:
           $ref: "#/components/schemas/CampaignStats"

@@ -76,7 +76,9 @@ export const ListContactsResponse = zod.object({
 }).nullish(),
   "dealCount": zod.number(),
   "taskCount": zod.number(),
-  "campaignEngagementCount": zod.number().optional(),
+  "campaignEngagementCount": zod.number().optional().describe('Number of campaigns the contact has opened or clicked at least once.'),
+  "engagementOpens": zod.number().optional(),
+  "engagementClicks": zod.number().optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })),
@@ -194,7 +196,9 @@ export const MergeContactsResponse = zod.object({
 }).nullish(),
   "dealCount": zod.number(),
   "taskCount": zod.number(),
-  "campaignEngagementCount": zod.number().optional(),
+  "campaignEngagementCount": zod.number().optional().describe('Number of campaigns the contact has opened or clicked at least once.'),
+  "engagementOpens": zod.number().optional(),
+  "engagementClicks": zod.number().optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -235,6 +239,9 @@ export const GetContactResponse = zod.object({
 }).nullish(),
   "dealCount": zod.number(),
   "taskCount": zod.number(),
+  "campaignEngagementCount": zod.number().optional().describe('Number of campaigns the contact has opened or clicked at least once.'),
+  "engagementOpens": zod.number().optional(),
+  "engagementClicks": zod.number().optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 }).and(zod.object({
@@ -275,6 +282,11 @@ export const GetContactResponse = zod.object({
 }).nullish(),
   "notes": zod.string().nullish(),
   "order": zod.number(),
+  "lastActivity": zod.object({
+  "type": zod.string(),
+  "at": zod.coerce.date()
+}).nullish().describe('Most recent relevant activity (email\/meeting\/call\/note) for the deal or its contact.'),
+  "nextMeetingAt": zod.coerce.date().nullish().describe('Soonest upcoming meeting end time for the deal or its contact.'),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })),
@@ -397,7 +409,9 @@ export const UpdateContactResponse = zod.object({
 }).nullish(),
   "dealCount": zod.number(),
   "taskCount": zod.number(),
-  "campaignEngagementCount": zod.number().optional(),
+  "campaignEngagementCount": zod.number().optional().describe('Number of campaigns the contact has opened or clicked at least once.'),
+  "engagementOpens": zod.number().optional(),
+  "engagementClicks": zod.number().optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -618,6 +632,11 @@ export const GetCompanyResponse = zod.object({
 }).nullish(),
   "notes": zod.string().nullish(),
   "order": zod.number(),
+  "lastActivity": zod.object({
+  "type": zod.string(),
+  "at": zod.coerce.date()
+}).nullish().describe('Most recent relevant activity (email\/meeting\/call\/note) for the deal or its contact.'),
+  "nextMeetingAt": zod.coerce.date().nullish().describe('Soonest upcoming meeting end time for the deal or its contact.'),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })),
@@ -751,6 +770,11 @@ export const ListDealsResponseItem = zod.object({
 }).nullish(),
   "notes": zod.string().nullish(),
   "order": zod.number(),
+  "lastActivity": zod.object({
+  "type": zod.string(),
+  "at": zod.coerce.date()
+}).nullish().describe('Most recent relevant activity (email\/meeting\/call\/note) for the deal or its contact.'),
+  "nextMeetingAt": zod.coerce.date().nullish().describe('Soonest upcoming meeting end time for the deal or its contact.'),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })),
@@ -822,6 +846,11 @@ export const GetDealResponse = zod.object({
 }).nullish(),
   "notes": zod.string().nullish(),
   "order": zod.number(),
+  "lastActivity": zod.object({
+  "type": zod.string(),
+  "at": zod.coerce.date()
+}).nullish().describe('Most recent relevant activity (email\/meeting\/call\/note) for the deal or its contact.'),
+  "nextMeetingAt": zod.coerce.date().nullish().describe('Soonest upcoming meeting end time for the deal or its contact.'),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -884,6 +913,11 @@ export const UpdateDealResponse = zod.object({
 }).nullish(),
   "notes": zod.string().nullish(),
   "order": zod.number(),
+  "lastActivity": zod.object({
+  "type": zod.string(),
+  "at": zod.coerce.date()
+}).nullish().describe('Most recent relevant activity (email\/meeting\/call\/note) for the deal or its contact.'),
+  "nextMeetingAt": zod.coerce.date().nullish().describe('Soonest upcoming meeting end time for the deal or its contact.'),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -946,6 +980,11 @@ export const MoveDealResponse = zod.object({
 }).nullish(),
   "notes": zod.string().nullish(),
   "order": zod.number(),
+  "lastActivity": zod.object({
+  "type": zod.string(),
+  "at": zod.coerce.date()
+}).nullish().describe('Most recent relevant activity (email\/meeting\/call\/note) for the deal or its contact.'),
+  "nextMeetingAt": zod.coerce.date().nullish().describe('Soonest upcoming meeting end time for the deal or its contact.'),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -1265,6 +1304,9 @@ export const ListCampaignsResponse = zod.object({
   "status": zod.enum(['DRAFT', 'SCHEDULED', 'SENDING', 'SENT', 'CANCELLED']),
   "scheduledAt": zod.coerce.date().nullish(),
   "sentAt": zod.coerce.date().nullish(),
+  "segmentId": zod.string().nullish(),
+  "builderBlocks": zod.string().nullish(),
+  "builderStep": zod.number().nullish(),
   "stats": zod.object({
   "total": zod.number(),
   "sent": zod.number(),
@@ -1315,6 +1357,9 @@ export const GetCampaignResponse = zod.object({
   "status": zod.enum(['DRAFT', 'SCHEDULED', 'SENDING', 'SENT', 'CANCELLED']),
   "scheduledAt": zod.coerce.date().nullish(),
   "sentAt": zod.coerce.date().nullish(),
+  "segmentId": zod.string().nullish(),
+  "builderBlocks": zod.string().nullish(),
+  "builderStep": zod.number().nullish(),
   "stats": zod.object({
   "total": zod.number(),
   "sent": zod.number(),
@@ -1355,6 +1400,9 @@ export const UpdateCampaignResponse = zod.object({
   "status": zod.enum(['DRAFT', 'SCHEDULED', 'SENDING', 'SENT', 'CANCELLED']),
   "scheduledAt": zod.coerce.date().nullish(),
   "sentAt": zod.coerce.date().nullish(),
+  "segmentId": zod.string().nullish(),
+  "builderBlocks": zod.string().nullish(),
+  "builderStep": zod.number().nullish(),
   "stats": zod.object({
   "total": zod.number(),
   "sent": zod.number(),
@@ -1398,6 +1446,9 @@ export const SendCampaignResponse = zod.object({
   "status": zod.enum(['DRAFT', 'SCHEDULED', 'SENDING', 'SENT', 'CANCELLED']),
   "scheduledAt": zod.coerce.date().nullish(),
   "sentAt": zod.coerce.date().nullish(),
+  "segmentId": zod.string().nullish(),
+  "builderBlocks": zod.string().nullish(),
+  "builderStep": zod.number().nullish(),
   "stats": zod.object({
   "total": zod.number(),
   "sent": zod.number(),

@@ -311,8 +311,8 @@ router.get("/my-assignments", requireAuth, async (req: Request, res: Response) =
         .where(
           and(
             eq(dealsTable.assigneeId, dbUser.id),
-            not(eq(dealStagesTable.name, "Won")),
-            not(eq(dealStagesTable.name, "Lost")),
+            not(eq(dealStagesTable.name, "Closed Won")),
+            not(eq(dealStagesTable.name, "Closed Lost")),
           ),
         ),
       db.select({ count: sql<number>`count(*)::int` })

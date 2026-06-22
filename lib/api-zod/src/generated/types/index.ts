@@ -41,6 +41,7 @@ export * from './createTaskInput';
 export * from './dashboardStats';
 export * from './dealStage';
 export * from './dealWithRelations';
+export * from './dealWithRelationsLastActivity';
 export * from './errorEnvelope';
 export * from './errorResponse';
 export * from './getDashboardActivityFeedParams';

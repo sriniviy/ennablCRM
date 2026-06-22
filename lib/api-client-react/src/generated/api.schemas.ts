@@ -184,6 +184,14 @@ export interface DealStage {
   createdAt: string;
 }
 
+/**
+ * Most recent relevant activity (email/meeting/call/note) for the deal or its contact.
+ */
+export type DealWithRelationsLastActivity = {
+  type: string;
+  at: string;
+} | null;
+
 export interface DealWithRelations {
   id: string;
   title: string;
@@ -201,6 +209,10 @@ export interface DealWithRelations {
   assignee?: UserSummary | null;
   notes?: string | null;
   order: number;
+  /** Most recent relevant activity (email/meeting/call/note) for the deal or its contact. */
+  lastActivity?: DealWithRelationsLastActivity;
+  /** Soonest upcoming meeting end time for the deal or its contact. */
+  nextMeetingAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -233,6 +245,8 @@ export interface ContactWithRelations {
   assignee?: UserSummary | null;
   dealCount: number;
   taskCount: number;
+  /** Number of campaigns the contact has opened or clicked at least once. */
+  campaignEngagementCount?: number;
   engagementOpens?: number;
   engagementClicks?: number;
   createdAt: string;

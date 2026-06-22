@@ -19,6 +19,9 @@ export interface CampaignWithStats {
   status: CampaignStatus;
   scheduledAt?: Date | null;
   sentAt?: Date | null;
+  segmentId?: string | null;
+  builderBlocks?: string | null;
+  builderStep?: number | null;
   stats: CampaignStats;
   createdAt: Date;
   updatedAt: Date;

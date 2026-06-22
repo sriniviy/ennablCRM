@@ -8,6 +8,7 @@
 import type { CompanySummary } from './companySummary';
 import type { ContactSummary } from './contactSummary';
 import type { DealStage } from './dealStage';
+import type { DealWithRelationsLastActivity } from './dealWithRelationsLastActivity';
 import type { UserSummary } from './userSummary';
 
 export interface DealWithRelations {
@@ -27,6 +28,10 @@ export interface DealWithRelations {
   assignee?: UserSummary | null;
   notes?: string | null;
   order: number;
+  /** Most recent relevant activity (email/meeting/call/note) for the deal or its contact. */
+  lastActivity?: DealWithRelationsLastActivity;
+  /** Soonest upcoming meeting end time for the deal or its contact. */
+  nextMeetingAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }

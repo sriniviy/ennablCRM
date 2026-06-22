@@ -7,13 +7,15 @@ async function seed() {
   const stages = await db
     .insert(dealStagesTable)
     .values([
-      { name: "Discovery",         order: 0, color: "#3b82f6" },
-      { name: "Validation",        order: 1, color: "#0ea5e9" },
-      { name: "Proposal",          order: 2, color: "#06b6d4" },
-      { name: "Proof of Concept",  order: 3, color: "#0d9488" },
-      { name: "Out for Signature", order: 4, color: "#f59e0b" },
-      { name: "Won",               order: 5, color: "#22c55e" },
-      { name: "Lost",              order: 6, color: "#ef4444" },
+      { name: "Qualified",         order: 0, color: "#6366f1" },
+      { name: "Discovery",         order: 1, color: "#3b82f6" },
+      { name: "Validation",        order: 2, color: "#0ea5e9" },
+      { name: "Proposal",          order: 3, color: "#06b6d4" },
+      { name: "Proof of Concept",  order: 4, color: "#0d9488" },
+      { name: "Out for Signature", order: 5, color: "#f59e0b" },
+      { name: "Closed Won",        order: 6, color: "#22c55e" },
+      { name: "Closed Lost",       order: 7, color: "#ef4444" },
+      { name: "No Decisions",      order: 8, color: "#6b7280" },
     ])
     .onConflictDoNothing()
     .returning();
@@ -124,9 +126,9 @@ async function seed() {
   const discoveryStage = allStages.find((s) => s.name === "Discovery");
   const qualifiedStage = allStages.find((s) => s.name === "Qualified");
   const proposalStage = allStages.find((s) => s.name === "Proposal");
-  const negotiationStage = allStages.find((s) => s.name === "Negotiation");
+  const outForSignatureStage = allStages.find((s) => s.name === "Out for Signature");
 
-  if (!discoveryStage || !qualifiedStage || !proposalStage || !negotiationStage) {
+  if (!discoveryStage || !qualifiedStage || !proposalStage || !outForSignatureStage) {
     console.error("Could not find deal stages");
     process.exit(1);
   }
@@ -140,7 +142,7 @@ async function seed() {
         value: 120000,
         currency: "USD",
         probability: 80,
-        stageId: negotiationStage.id,
+        stageId: outForSignatureStage.id,
         contactId: alice.id,
         companyId: acme.id,
         closeDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),

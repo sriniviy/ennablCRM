@@ -49,8 +49,8 @@ router.get("/stats", requireAuth, async (_req: Request, res: Response) => {
         .leftJoin(dealStagesTable, eq(dealsTable.stageId, dealStagesTable.id))
         .where(
           and(
-            not(eq(dealStagesTable.name, "Won")),
-            not(eq(dealStagesTable.name, "Lost")),
+            not(eq(dealStagesTable.name, "Closed Won")),
+            not(eq(dealStagesTable.name, "Closed Lost")),
           ),
         ),
       db
@@ -62,7 +62,7 @@ router.get("/stats", requireAuth, async (_req: Request, res: Response) => {
         .leftJoin(dealStagesTable, eq(dealsTable.stageId, dealStagesTable.id))
         .where(
           and(
-            eq(dealStagesTable.name, "Won"),
+            eq(dealStagesTable.name, "Closed Won"),
             gte(dealsTable.updatedAt, startOfMonth),
           ),
         ),

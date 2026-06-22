@@ -2,12 +2,15 @@ import { useSessionToken } from "@/hooks/use-session-token";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useRef, useState, useEffect } from "react";
 
-import { useListDeals, useMoveDeal, useListDealStages, getListDealsQueryKey, type PipelineColumn, type DealWithRelations } from "@workspace/api-client-react";
+import { useListDeals, useMoveDeal, useListDealStages, useCreateActivity, getListDealsQueryKey, type PipelineColumn, type DealWithRelations } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Download, ChevronDown, Zap } from "lucide-react";
+import { authClient } from "@/lib/auth-client";
+import { Plus, Download, ChevronDown, Zap, StickyNote, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { formatCurrency, formatCurrencyCompact } from "@/lib/utils";
@@ -32,6 +35,17 @@ const DEAL_COLUMNS: ColumnDef[] = [
 ];
 
 const dash = (v: unknown) => (v === null || v === undefined || v === "" ? "—" : String(v));
+
+function relativeFromNow(iso: string) {
+  const diffDays = Math.round((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  if (diffDays <= 0) return "today";
+  if (diffDays === 1) return "1 day ago";
+  return `${diffDays} days ago`;
+}
+
+function daysUntil(iso: string) {
+  return Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000);
+}
 
 const CARD_FIELDS: CardField<DealWithRelations>[] = [
   { label: "Stage", render: d => dash(d.stage?.name) },
@@ -89,6 +103,51 @@ export function DealsPage() {
   const [defaultStageId, setDefaultStageId] = useState<string | undefined>();
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+
+  const { data: session } = authClient.useSession();
+  const myEmail = session?.user?.email ?? "";
+  const createActivity = useCreateActivity();
+  const [noteDeal, setNoteDeal] = useState<DealWithRelations | null>(null);
+  const [noteText, setNoteText] = useState("");
+
+  const openGmailCompose = (e: React.MouseEvent, deal: DealWithRelations) => {
+    e.stopPropagation();
+    const to = deal.contact?.email;
+    if (!to) {
+      toast({ title: "No contact email", description: "This deal has no contact with an email address.", variant: "destructive" });
+      return;
+    }
+    const params = new URLSearchParams({ view: "cm", fs: "1", to });
+    if (myEmail) params.set("authuser", myEmail);
+    window.open(`https://mail.google.com/mail/?${params.toString()}`, "_blank", "noopener,noreferrer");
+  };
+
+  const openNoteDialog = (e: React.MouseEvent, deal: DealWithRelations) => {
+    e.stopPropagation();
+    setNoteDeal(deal);
+    setNoteText("");
+  };
+
+  const submitNote = async () => {
+    if (!noteDeal || !noteText.trim()) return;
+    try {
+      await createActivity.mutateAsync({
+        data: {
+          type: "NOTE",
+          title: `Note on ${noteDeal.title}`,
+          description: noteText.trim(),
+          dealId: noteDeal.id,
+          contactId: noteDeal.contactId ?? undefined,
+        },
+      });
+      toast({ title: "Note added" });
+      setNoteDeal(null);
+      setNoteText("");
+      queryClient.invalidateQueries({ queryKey: getListDealsQueryKey() });
+    } catch {
+      toast({ title: "Failed to add note", variant: "destructive" });
+    }
+  };
 
   useEffect(() => {
     set({
@@ -191,9 +250,9 @@ export function DealsPage() {
 
   const weightedValue = allDeals.reduce((sum, d) => sum + (d.value || 0) * ((d.probability ?? 0) / 100), 0);
 
-  const openDeals = (columns ?? []).filter(c => !/^won$|^lost$/i.test(c.stage.name)).flatMap(c => c.deals);
-  const closedDeals = (columns ?? []).filter(c => /^won$/i.test(c.stage.name)).flatMap(c => c.deals);
-  const newDeals = (columns ?? []).filter(c => /^discovery$/i.test(c.stage.name)).flatMap(c => c.deals);
+  const openDeals = (columns ?? []).filter(c => !/^closed won$|^closed lost$|^no decisions$/i.test(c.stage.name)).flatMap(c => c.deals);
+  const closedDeals = (columns ?? []).filter(c => /^closed won$/i.test(c.stage.name)).flatMap(c => c.deals);
+  const newDeals = (columns ?? []).filter(c => /^qualified$/i.test(c.stage.name)).flatMap(c => c.deals);
 
   const openValue = openDeals.reduce((sum, d) => sum + (d.value || 0), 0);
   const closedValue = closedDeals.reduce((sum, d) => sum + (d.value || 0), 0);
@@ -244,7 +303,7 @@ export function DealsPage() {
               { label: "Weighted Deal Amount", value: weightedValue, count: totalDeals },
               { label: "Open Deal Amount", value: openValue, count: openDeals.length },
               { label: "Closed Deal Amount", value: closedValue, count: closedDeals.length },
-              { label: "Discovery Amount", value: newValue, count: newDeals.length },
+              { label: "Qualified Amount", value: newValue, count: newDeals.length },
             ].map((stat, i) => (
               <div key={stat.label} className={`px-3 py-2 ${i < 5 ? "border-r border-border" : ""}`}>
                 <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
@@ -424,28 +483,71 @@ export function DealsPage() {
                                       </Tooltip>
                                     </TooltipProvider>
                                   )}
-                                  {/* Value */}
-                                  <div
-                                    className="text-sm font-bold mb-2"
-                                    style={{ color: column.stage.color || "var(--color-primary)" }}
-                                  >
-                                    {formatCurrency(deal.value || 0)}
-                                  </div>
-                                  {/* Company + probability */}
+                                  {/* Amount + probability */}
                                   <div className="flex items-center justify-between gap-1 mb-1">
-                                    <span className="text-[10px] text-muted-foreground truncate">
-                                      {deal.company?.name || deal.contact?.firstName || "No account"}
+                                    <span
+                                      className="text-sm font-bold"
+                                      style={{ color: column.stage.color || "var(--color-primary)" }}
+                                    >
+                                      {formatCurrency(deal.value || 0)}
                                     </span>
                                     <span className={`text-[10px] font-semibold px-1 py-0.5 shrink-0 ${probBadgeStyle(deal.probability)}`}>
                                       {deal.probability ?? 0}%
                                     </span>
                                   </div>
-                                  {/* Owner */}
-                                  {deal.assignee?.name && (
-                                    <div className="border-t border-border/60 pt-1 mt-1">
-                                      <span className="text-[10px] text-muted-foreground/80">{deal.assignee.name}</span>
+                                  {/* Close date */}
+                                  <div className="text-[10px] text-muted-foreground mb-0.5">
+                                    Close: {deal.closeDate ? new Date(deal.closeDate).toLocaleDateString() : "—"}
+                                  </div>
+                                  {/* Deal owner */}
+                                  <div className="text-[10px] text-muted-foreground/90 truncate mb-0.5">
+                                    {deal.assignee?.name || "Unassigned"}
+                                  </div>
+                                  {/* Last activity + upcoming meeting */}
+                                  {deal.lastActivity && (
+                                    <div className="text-[10px] text-muted-foreground/80">
+                                      {deal.lastActivity.type} {relativeFromNow(deal.lastActivity.at)}
                                     </div>
                                   )}
+                                  {deal.nextMeetingAt && daysUntil(deal.nextMeetingAt) >= 0 && (
+                                    <div className="text-[10px] font-medium text-primary">
+                                      {(() => {
+                                        const d = daysUntil(deal.nextMeetingAt);
+                                        return d <= 0 ? "Meeting today" : d === 1 ? "Meeting in 1 day" : `Meeting in ${d} days`;
+                                      })()}
+                                    </div>
+                                  )}
+                                  {/* Action icons */}
+                                  <div className="flex items-center justify-end gap-1 border-t border-border/60 pt-1 mt-1.5">
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => openNoteDialog(e, deal)}
+                                            className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
+                                            aria-label="Create note"
+                                          >
+                                            <StickyNote className="h-3.5 w-3.5" />
+                                          </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top">Create note</TooltipContent>
+                                      </Tooltip>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => openGmailCompose(e, deal)}
+                                            className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
+                                            aria-label="Create email"
+                                          >
+                                            <Mail className="h-3.5 w-3.5" />
+                                          </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top">Email contact</TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  </div>
                                 </div>
                               )}
                             </Draggable>
@@ -468,6 +570,27 @@ export function DealsPage() {
           </div>
         )}
       </div>
+
+      <Dialog open={!!noteDeal} onOpenChange={(o) => { if (!o) { setNoteDeal(null); setNoteText(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{noteDeal ? `Add note — ${noteDeal.title}` : "Add note"}</DialogTitle>
+          </DialogHeader>
+          <Textarea
+            autoFocus
+            value={noteText}
+            onChange={(e) => setNoteText(e.target.value)}
+            placeholder="Write a note about this deal…"
+            rows={5}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setNoteDeal(null); setNoteText(""); }}>Cancel</Button>
+            <Button onClick={submitNote} disabled={!noteText.trim() || createActivity.isPending}>
+              {createActivity.isPending ? "Saving…" : "Save note"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <DealDialog open={dialogOpen} onOpenChange={setDialogOpen} deal={editDeal} defaultStageId={defaultStageId} />
       <ExportColumnsDialog

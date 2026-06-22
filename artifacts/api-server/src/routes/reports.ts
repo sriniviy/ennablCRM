@@ -65,8 +65,8 @@ router.get("/win-loss", requireAuth, async (req: Request, res: Response) => {
     const { range = "month" } = req.query as Record<string, string>;
     const rangeStart = getRangeStart(range);
 
-    const wonConditions = [eq(dealStagesTable.name, "Won")];
-    const lostConditions = [eq(dealStagesTable.name, "Lost")];
+    const wonConditions = [eq(dealStagesTable.name, "Closed Won")];
+    const lostConditions = [eq(dealStagesTable.name, "Closed Lost")];
     if (rangeStart) {
       wonConditions.push(gte(dealsTable.updatedAt, rangeStart));
       lostConditions.push(gte(dealsTable.updatedAt, rangeStart));
@@ -122,8 +122,8 @@ router.get("/forecast", requireAuth, async (_req: Request, res: Response) => {
         .leftJoin(dealStagesTable, eq(dealsTable.stageId, dealStagesTable.id))
         .where(
           and(
-            not(eq(dealStagesTable.name, "Won")),
-            not(eq(dealStagesTable.name, "Lost")),
+            not(eq(dealStagesTable.name, "Closed Won")),
+            not(eq(dealStagesTable.name, "Closed Lost")),
           ),
         ),
       db
@@ -138,8 +138,8 @@ router.get("/forecast", requireAuth, async (_req: Request, res: Response) => {
         .leftJoin(dealsTable, eq(dealsTable.stageId, dealStagesTable.id))
         .where(
           and(
-            not(eq(dealStagesTable.name, "Won")),
-            not(eq(dealStagesTable.name, "Lost")),
+            not(eq(dealStagesTable.name, "Closed Won")),
+            not(eq(dealStagesTable.name, "Closed Lost")),
           ),
         )
         .groupBy(dealStagesTable.id, dealStagesTable.name, dealStagesTable.order)
@@ -157,8 +157,8 @@ router.get("/forecast", requireAuth, async (_req: Request, res: Response) => {
         .leftJoin(dealStagesTable, eq(dealsTable.stageId, dealStagesTable.id))
         .where(
           and(
-            not(eq(dealStagesTable.name, "Won")),
-            not(eq(dealStagesTable.name, "Lost")),
+            not(eq(dealStagesTable.name, "Closed Won")),
+            not(eq(dealStagesTable.name, "Closed Lost")),
           ),
         )
         .groupBy(usersTable.id, usersTable.name)

@@ -32,7 +32,10 @@ export interface ContactWithRelations {
   assignee?: UserSummary | null;
   dealCount: number;
   taskCount: number;
+  /** Number of campaigns the contact has opened or clicked at least once. */
   campaignEngagementCount?: number;
+  engagementOpens?: number;
+  engagementClicks?: number;
   createdAt: Date;
   updatedAt: Date;
 }

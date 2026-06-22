@@ -161,9 +161,9 @@ export function PipelineOverview() {
 
   const pipelineData = pipeline.data ?? [];
   const openStages = pipelineData.filter(
-    (s) => s.stageName !== "Won" && s.stageName !== "Lost",
+    (s) => s.stageName !== "Closed Won" && s.stageName !== "Closed Lost" && s.stageName !== "No Decisions",
   );
-  const velocityData = (velocity.data ?? []).filter((r) => r.stageName !== "Won" && r.stageName !== "Lost");
+  const velocityData = (velocity.data ?? []).filter((r) => r.stageName !== "Closed Won" && r.stageName !== "Closed Lost" && r.stageName !== "No Decisions");
   const trendData = trend.data ?? [];
 
   return (
