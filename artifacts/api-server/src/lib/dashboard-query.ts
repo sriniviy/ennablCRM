@@ -133,7 +133,7 @@ function dealMetricExpr(metric: string): ReturnType<typeof sql> {
     case "weightedForecast":
       return sql`coalesce(sum(d.value * d.probability / 100.0), 0)::float`;
     case "avgTimeInStage":
-      return sql`coalesce(avg(extract(epoch from (now() - coalesce(d.updated_at, d.created_at))) / 86400), 0)::float`;
+      return sql`coalesce(avg(extract(epoch from (now() - d.created_at)) / 86400), 0)::float`;
     case "count":
     default:
       return sql`count(d.id)::int`;
@@ -190,7 +190,7 @@ function buildDealWhere(filters: Filters): ReturnType<typeof sql>[] {
   if (filters.dateTo) conds.push(sql`${sql.raw(dateCol)} <= ${filters.dateTo}`);
   if (typeof filters.timeInStageMinDays === "number") {
     conds.push(
-      sql`extract(epoch from (now() - coalesce(d.updated_at, d.created_at))) / 86400 >= ${filters.timeInStageMinDays}`,
+      sql`extract(epoch from (now() - d.created_at)) / 86400 >= ${filters.timeInStageMinDays}`,
     );
   }
   if (typeof filters.closingWithinDays === "number") {

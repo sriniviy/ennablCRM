@@ -27,7 +27,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { MoreVertical, Plus, Pencil, Trash2, ArrowLeft, ArrowRight, Info, LayoutGrid, GripVertical } from "lucide-react";
+import { MoreVertical, Plus, Pencil, Trash2, ArrowLeft, ArrowRight, Info, LayoutGrid, GripVertical, Maximize2 } from "lucide-react";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 import { CardRenderer } from "./card-renderer";
 import { CardBuilderDialog } from "./card-builder-dialog";
@@ -38,6 +38,8 @@ const SIZE_CLASS: Record<string, string> = {
   md: "md:col-span-2",
   lg: "md:col-span-4",
 };
+
+const SIZE_LABELS: Record<string, string> = { sm: "Narrow (1 col)", md: "Medium (2 col)", lg: "Wide (full)" };
 
 type CardSize = "sm" | "md" | "lg";
 
@@ -249,14 +251,14 @@ export function DashboardView({ dashboardId, canEdit = true }: { dashboardId: st
     reorder.mutate(next.map((c) => c.id));
   };
 
-  const chartHeight = (size: string) => (size === "sm" ? 180 : 260);
+  const chartHeight = (size: string) => (size === "sm" ? 160 : size === "lg" ? 280 : 200);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {canEdit && (
         <div className="flex items-center justify-end">
-          <Button size="sm" onClick={() => { setEditing(null); setBuilderOpen(true); }}>
-            <Plus className="h-4 w-4 mr-1.5" />
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setEditing(null); setBuilderOpen(true); }}>
+            <Plus className="h-3.5 w-3.5 mr-1" />
             Add card
           </Button>
         </div>
@@ -291,7 +293,7 @@ export function DashboardView({ dashboardId, canEdit = true }: { dashboardId: st
               <div
                 ref={dropProvided.innerRef}
                 {...dropProvided.droppableProps}
-                className="grid gap-4 md:grid-cols-4"
+                className="grid gap-2 md:grid-cols-4"
               >
                 {cards.map((card, i) => {
                   const displaySize =
@@ -304,36 +306,36 @@ export function DashboardView({ dashboardId, canEdit = true }: { dashboardId: st
                         {...dragProvided.draggableProps}
                         style={dragProvided.draggableProps.style}
                         data-card-id={card.id}
-                        className={`${SIZE_CLASS[displaySize] ?? SIZE_CLASS.md} group/card relative flex flex-col transition-[transform,box-shadow,border-color] duration-200 ease-out ${
+                        className={`${SIZE_CLASS[displaySize] ?? SIZE_CLASS.md} group/card relative flex flex-col rounded-none border transition-[box-shadow,border-color] duration-150 ${
                           dragSnapshot.isDragging
-                            ? "shadow-xl border-primary/40 ring-1 ring-primary/20"
+                            ? "shadow-lg border-primary/40"
                             : resizing?.id === card.id
-                              ? "border-primary/40 ring-1 ring-primary/30"
-                              : "hover:-translate-y-1 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5"
+                              ? "border-primary/50"
+                              : "hover:border-primary/30 hover:shadow-sm"
                         }`}
                       >
-                        <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2 gap-2">
-                          <div className="flex items-center gap-1.5 min-w-0">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 py-2 px-3 gap-1 border-b">
+                          <div className="flex items-center gap-1 min-w-0">
                             {canEdit ? (
                               <button
                                 {...dragProvided.dragHandleProps}
-                                className="shrink-0 -ml-1 cursor-grab text-muted-foreground/50 transition-colors group-hover/card:text-muted-foreground/70 hover:!text-foreground focus-visible:text-foreground active:cursor-grabbing"
+                                className="shrink-0 cursor-grab text-muted-foreground/30 hover:text-muted-foreground transition-colors active:cursor-grabbing"
                                 aria-label="Drag to reorder"
                               >
-                                <GripVertical className="h-4 w-4" />
+                                <GripVertical className="h-3.5 w-3.5" />
                               </button>
                             ) : (
                               <span {...dragProvided.dragHandleProps} />
                             )}
-                            <CardTitle className="text-sm font-medium truncate">{card.title}</CardTitle>
+                            <CardTitle className="text-xs font-semibold truncate text-foreground/80">{card.title}</CardTitle>
                             {card.config.info && (
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <Info className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                    <Info className="h-3 w-3 text-muted-foreground/50 shrink-0" />
                                   </TooltipTrigger>
                                   <TooltipContent className="max-w-[240px] text-xs">
-                                    {card.config.info}
+                                    {String(card.config.info)}
                                   </TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>
@@ -342,28 +344,45 @@ export function DashboardView({ dashboardId, canEdit = true }: { dashboardId: st
                           {canEdit && (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" aria-label="Card options" className="h-7 w-7 shrink-0 text-muted-foreground/60 opacity-70 transition-all group-hover/card:opacity-100 hover:text-foreground focus-visible:opacity-100 data-[state=open]:opacity-100">
-                                  <MoreVertical className="h-4 w-4" />
+                                <Button variant="ghost" size="icon" aria-label="Card options" className="h-5 w-5 shrink-0 text-muted-foreground/40 opacity-0 transition-all group-hover/card:opacity-100 hover:text-foreground">
+                                  <MoreVertical className="h-3.5 w-3.5" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
+                              <DropdownMenuContent align="end" className="text-xs">
                                 <DropdownMenuItem onClick={() => { setEditing(card); setBuilderOpen(true); }}>
-                                  <Pencil className="h-4 w-4 mr-2" /> Edit
+                                  <Pencil className="h-3.5 w-3.5 mr-2" /> Edit
                                 </DropdownMenuItem>
                                 <DropdownMenuItem disabled={i === 0} onClick={() => move(card, -1)}>
-                                  <ArrowLeft className="h-4 w-4 mr-2" /> Move left
+                                  <ArrowLeft className="h-3.5 w-3.5 mr-2" /> Move left
                                 </DropdownMenuItem>
                                 <DropdownMenuItem disabled={i === cards.length - 1} onClick={() => move(card, 1)}>
-                                  <ArrowRight className="h-4 w-4 mr-2" /> Move right
+                                  <ArrowRight className="h-3.5 w-3.5 mr-2" /> Move right
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onSelect={e => e.preventDefault()}
+                                  className="flex-col items-start gap-1 py-2"
+                                >
+                                  <span className="flex items-center gap-1.5 font-medium"><Maximize2 className="h-3.5 w-3.5" /> Resize</span>
+                                  <div className="flex gap-1 mt-1">
+                                    {(["sm", "md", "lg"] as const).map(sz => (
+                                      <button
+                                        key={sz}
+                                        onClick={() => resizeCard.mutate({ id: card.id, size: sz })}
+                                        className={`px-2 py-0.5 text-[10px] rounded border transition-colors ${(resizing?.id === card.id ? resizing.size : card.size) === sz ? "bg-primary text-primary-foreground border-primary" : "border-border hover:border-primary/50"}`}
+                                      >
+                                        {sz === "sm" ? "1×" : sz === "md" ? "2×" : "Full"}
+                                      </button>
+                                    ))}
+                                  </div>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget(card)}>
-                                  <Trash2 className="h-4 w-4 mr-2" /> Remove
+                                  <Trash2 className="h-3.5 w-3.5 mr-2" /> Remove
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
                           )}
                         </CardHeader>
-                        <CardContent className="flex-1">
+                        <CardContent className="flex-1 p-2 pt-2">
                           <CardRenderer card={card} height={chartHeight(displaySize)} />
                         </CardContent>
                         {canEdit && (
@@ -374,9 +393,9 @@ export function DashboardView({ dashboardId, canEdit = true }: { dashboardId: st
                             aria-orientation="vertical"
                             aria-label="Drag to resize card"
                             title="Drag to resize"
-                            className="group absolute right-0 top-0 bottom-0 hidden w-2.5 cursor-col-resize touch-none items-center justify-center md:flex"
+                            className="group absolute right-0 top-0 bottom-0 hidden w-2 cursor-col-resize touch-none items-center justify-center md:flex"
                           >
-                            <div className="h-10 w-1 rounded-full bg-border transition-colors group-hover:bg-primary/60" />
+                            <div className="h-8 w-0.5 rounded-full bg-transparent transition-colors group-hover:bg-primary/60" />
                           </div>
                         )}
                       </Card>
