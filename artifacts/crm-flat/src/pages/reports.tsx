@@ -30,7 +30,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, MoreHorizontal, Pencil, Trash2, LayoutDashboard } from "lucide-react";
+import { Plus, MoreHorizontal, Pencil, Trash2, LayoutDashboard, Download, Share2 } from "lucide-react";
 import { PipelineOverview } from "@/components/dashboards/pipeline-overview";
 import { DashboardView } from "@/components/dashboards/dashboard-view";
 import { BASE, type Dashboard } from "@/components/dashboards/types";
@@ -136,13 +136,40 @@ export function ReportsPage() {
   return (
     <SidebarLayout>
       <div className="space-y-6">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
-          <p className="text-muted-foreground">
-            {active.builtin
-              ? "Pipeline health, win rates, and revenue forecast."
-              : active.dashboard?.description || "Custom analytics dashboard."}
-          </p>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
+            <p className="text-muted-foreground">
+              {active.builtin
+                ? "Pipeline health, win rates, and revenue forecast."
+                : active.dashboard?.description || "Custom analytics dashboard."}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 print:hidden">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const url = window.location.href;
+                navigator.clipboard.writeText(url).then(() => {
+                  toast({ title: "Link copied!", description: "Share this link with anyone on your team." });
+                }).catch(() => {
+                  toast({ title: "Couldn't copy link", variant: "destructive" });
+                });
+              }}
+            >
+              <Share2 className="h-4 w-4 mr-1.5" />
+              Share
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.print()}
+            >
+              <Download className="h-4 w-4 mr-1.5" />
+              Download PDF
+            </Button>
+          </div>
         </div>
 
         {/* Dashboard switcher */}
