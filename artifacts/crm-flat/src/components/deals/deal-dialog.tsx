@@ -16,7 +16,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Trash2, UserCircle, Plus, X, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Trash2, UserCircle, Plus, X, AlertCircle, CheckCircle2, ExternalLink } from "lucide-react";
+import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { NotesFeed } from "@/components/notes/notes-feed";
 
@@ -199,7 +200,21 @@ export function DealDialog({ open, onOpenChange, deal, defaultStageId }: DealDia
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label>Company</Label>
+          <div className="flex items-center justify-between">
+            <Label>Company</Label>
+            {companyId && companyId !== "none" && (() => {
+              const co = companies?.data?.find(c => c.id === companyId);
+              return co ? (
+                <a
+                  href={`/companies/${companyId}`}
+                  onClick={e => { e.preventDefault(); e.stopPropagation(); window.location.href = `/companies/${companyId}`; }}
+                  className="flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                  {co.name} <ExternalLink className="h-3 w-3" />
+                </a>
+              ) : null;
+            })()}
+          </div>
           <Select value={companyId || "none"} onValueChange={v => setCompanyId(v === "none" ? "" : v)}>
             <SelectTrigger><SelectValue placeholder="No company" /></SelectTrigger>
             <SelectContent>

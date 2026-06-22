@@ -250,8 +250,8 @@ export function DealsPage() {
 
   const weightedValue = allDeals.reduce((sum, d) => sum + (d.value || 0) * ((d.probability ?? 0) / 100), 0);
 
-  const openDeals = (columns ?? []).filter(c => !/^closed won$|^closed lost$|^no decisions$/i.test(c.stage.name)).flatMap(c => c.deals);
-  const closedDeals = (columns ?? []).filter(c => /^closed won$/i.test(c.stage.name)).flatMap(c => c.deals);
+  const openDeals = (columns ?? []).filter(c => !/^won$|^lost$|^no decision$/i.test(c.stage.name)).flatMap(c => c.deals);
+  const closedDeals = (columns ?? []).filter(c => /^won$/i.test(c.stage.name)).flatMap(c => c.deals);
   const newDeals = (columns ?? []).filter(c => /^qualified$/i.test(c.stage.name)).flatMap(c => c.deals);
 
   const openValue = openDeals.reduce((sum, d) => sum + (d.value || 0), 0);
