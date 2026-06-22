@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { db, dealsTable, dealStagesTable, contactsTable, companiesTable, usersTable, customFieldDefinitionsTable, customFieldValuesTable, sequenceTriggersTable, sequenceEnrollmentsTable, sequenceStepsTable, sequencesTable, activitiesTable, dealSplitsTable } from "@workspace/db";
+import { db, dealsTable, dealStagesTable, contactsTable, companiesTable, usersTable, customFieldDefinitionsTable, customFieldValuesTable, sequenceTriggersTable, sequenceEnrollmentsTable, sequenceStepsTable, sequencesTable, activitiesTable, dealSplitsTable, tasksTable } from "@workspace/db";
 import { eq, ilike, and, or, asc, desc, inArray, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin, type AuthRequest } from "../middlewares/requireAuth";
 import { logActivity } from "../lib/activity";
@@ -620,6 +620,9 @@ router.delete("/:id", requireAuth, requireAdmin, async (req: Request, res: Respo
       return;
     }
 
+    // Clear FK-constrained children before deleting the deal
+    await db.delete(activitiesTable).where(eq(activitiesTable.dealId, id));
+    await db.delete(tasksTable).where(eq(tasksTable.dealId, id));
     await db.delete(dealsTable).where(eq(dealsTable.id, id));
 
     await logAudit({

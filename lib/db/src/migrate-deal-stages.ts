@@ -2,29 +2,30 @@ import { db, dealStagesTable, dealsTable } from "./index";
 import { eq, sql } from "drizzle-orm";
 
 const PRD_STAGES: { name: string; order: number; color: string }[] = [
-  { name: "Qualified",         order: 0, color: "#6366f1" },
-  { name: "Discovery",         order: 1, color: "#3b82f6" },
-  { name: "Validation",        order: 2, color: "#0ea5e9" },
-  { name: "Proposal",          order: 3, color: "#06b6d4" },
-  { name: "Proof of Concept",  order: 4, color: "#0d9488" },
-  { name: "Out for Signature", order: 5, color: "#f59e0b" },
-  { name: "Closed Won",        order: 6, color: "#22c55e" },
-  { name: "Closed Lost",       order: 7, color: "#ef4444" },
-  { name: "No Decisions",      order: 8, color: "#6b7280" },
+  { name: "Qualified",         order: -1, color: "#8b5cf6" },
+  { name: "Discovery",         order:  0, color: "#3b82f6" },
+  { name: "Validation",        order:  1, color: "#0ea5e9" },
+  { name: "Proposal",          order:  2, color: "#06b6d4" },
+  { name: "Proof of Concept",  order:  3, color: "#0d9488" },
+  { name: "Out for Signature", order:  4, color: "#f59e0b" },
+  { name: "Negotiation",       order:  5, color: "#f97316" },
+  { name: "Won",               order:  6, color: "#22c55e" },
+  { name: "Lost",              order:  7, color: "#ef4444" },
+  { name: "No Decision",       order:  8, color: "#6b7280" },
 ];
 
 const PRD_NAMES = new Set(PRD_STAGES.map((s) => s.name));
 
-// Old stage names that should be renamed in place so existing deals stay attached.
+// Stage names to rename in place so existing deals stay attached.
 const RENAME: Record<string, string> = {
-  Won: "Closed Won",
-  Lost: "Closed Lost",
+  "Closed Won":   "Won",
+  "Closed Lost":  "Lost",
+  "No Decisions": "No Decision",
 };
 
 // Map any other removed / legacy stage names to the nearest current stage.
 const LEGACY_REMAP: Record<string, string> = {
-  Lead:        "Discovery",
-  Negotiation: "Out for Signature",
+  Lead: "Discovery",
 };
 
 export async function migrateDealStages() {
