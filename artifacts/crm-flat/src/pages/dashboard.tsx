@@ -24,7 +24,7 @@ import {
   AlertCircle, ArrowRight, Mail, Zap, Send, CalendarDays, Globe,
   TrendingUp, Sparkles, ExternalLink, Radio, RefreshCw, Loader2,
   ListTodo, ChevronDown, ChevronRight, PhoneCall, MessageSquare,
-  StickyNote, Video, FileText, Settings2,
+  StickyNote, Video, FileText,
 } from "lucide-react";
 
 // ─── Intel types ──────────────────────────────────────────────────────────────
@@ -48,13 +48,6 @@ type NextStepsDeal = {
 };
 type NextStepsResults = { generatedAt: string; frequency: string; deals: NextStepsDeal[] };
 type NextStepsData = { results: NextStepsResults | null; settings: { frequency: "weekly" | "biweekly" | "monthly" } };
-type NextStepsFrequency = "weekly" | "biweekly" | "monthly";
-
-const FREQ_LABELS: Record<NextStepsFrequency, string> = {
-  weekly: "Weekly",
-  biweekly: "Bi-weekly",
-  monthly: "Monthly",
-};
 
 function activityIcon(type: string | null) {
   switch (type) {
@@ -311,9 +304,6 @@ export function DashboardPage() {
 
   // ── Next Steps ─────────────────────────────────────────────────────────────
   const [expandedDeals, setExpandedDeals] = useState<Set<string>>(new Set());
-  const [frequency, setFrequency] = useState<NextStepsFrequency>("weekly");
-  const [freqMenuOpen, setFreqMenuOpen] = useState(false);
-
   const { data: nextStepsData, isLoading: nextStepsLoading, refetch: refetchNextSteps } = useQuery<NextStepsData>({
     queryKey: ["next-steps"],
     queryFn: async () => {
@@ -324,22 +314,9 @@ export function DashboardPage() {
     },
     staleTime: 60_000,
     onSuccess: (data: NextStepsData) => {
-      if (data.settings?.frequency) setFrequency(data.settings.frequency as NextStepsFrequency);
       if (data.results?.deals?.length) {
         setExpandedDeals(new Set(data.results.deals.slice(0, 3).map(d => d.dealId)));
       }
-    },
-  });
-
-  const saveFrequency = useMutation({
-    mutationFn: async (freq: NextStepsFrequency) => {
-      const token = await getToken();
-      const res = await fetch("/api/next-steps/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ frequency: freq }),
-      });
-      if (!res.ok) throw new Error("Failed to save settings");
     },
   });
 
@@ -907,38 +884,6 @@ export function DashboardPage() {
                 )}
               </div>
               <div className="flex items-center gap-2">
-                {/* Frequency selector */}
-                <div className="relative">
-                  <button
-                    onClick={() => setFreqMenuOpen(o => !o)}
-                    className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-medium hover:bg-muted transition-colors"
-                  >
-                    <Settings2 className="h-2.5 w-2.5" />
-                    {FREQ_LABELS[frequency]}
-                    <ChevronDown className="h-2.5 w-2.5" />
-                  </button>
-                  {freqMenuOpen && (
-                    <div className="absolute right-0 top-full mt-1 z-20 w-32 rounded-md border bg-background shadow-md py-1">
-                      {(["weekly", "biweekly", "monthly"] as NextStepsFrequency[]).map(f => (
-                        <button
-                          key={f}
-                          onClick={() => {
-                            setFrequency(f);
-                            setFreqMenuOpen(false);
-                            saveFrequency.mutate(f);
-                            toast({ title: `Frequency set to ${FREQ_LABELS[f].toLowerCase()}` });
-                          }}
-                          className={cn(
-                            "w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors",
-                            f === frequency && "font-semibold text-primary",
-                          )}
-                        >
-                          {FREQ_LABELS[f]}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
                 {/* Generate button */}
                 <button
                   onClick={() => generateNextSteps.mutate()}
