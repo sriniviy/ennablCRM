@@ -23,12 +23,67 @@ import {
   Users, CircleDollarSign, Target, CheckSquare, Clock, CheckCheck,
   AlertCircle, ArrowRight, Mail, Zap, Send, CalendarDays, Globe,
   TrendingUp, Sparkles, ExternalLink, Radio, RefreshCw, Loader2,
+  ListTodo, ChevronDown, ChevronRight, PhoneCall, MessageSquare,
+  StickyNote, Video, FileText, Settings2,
 } from "lucide-react";
 
 // ─── Intel types ──────────────────────────────────────────────────────────────
 type IntelItem = { section: string; headline: string; summary: string; tag: string; date: string };
 type IntelResults = { generatedAt: string; jobId: string; items: IntelItem[] };
 type IntelStatus = { results: IntelResults | null; runsToday: number; runsRemaining: number; maxRunsPerDay: number };
+
+// ─── Next Steps types ─────────────────────────────────────────────────────────
+type NextStepsDeal = {
+  dealId: string;
+  dealTitle: string;
+  companyName: string | null;
+  contactName: string | null;
+  contactEmail: string | null;
+  value: number | null;
+  stageName: string;
+  lastContactedAt: string | null;
+  lastContactType: string | null;
+  daysSinceContact: number | null;
+  steps: string[];
+};
+type NextStepsResults = { generatedAt: string; frequency: string; deals: NextStepsDeal[] };
+type NextStepsData = { results: NextStepsResults | null; settings: { frequency: "weekly" | "biweekly" | "monthly" } };
+type NextStepsFrequency = "weekly" | "biweekly" | "monthly";
+
+const FREQ_LABELS: Record<NextStepsFrequency, string> = {
+  weekly: "Weekly",
+  biweekly: "Bi-weekly",
+  monthly: "Monthly",
+};
+
+function activityIcon(type: string | null) {
+  switch (type) {
+    case "CALL": return <PhoneCall className="h-3 w-3" />;
+    case "EMAIL": return <Mail className="h-3 w-3" />;
+    case "MEETING": return <Video className="h-3 w-3" />;
+    case "NOTE": return <StickyNote className="h-3 w-3" />;
+    case "TASK": return <CheckSquare className="h-3 w-3" />;
+    default: return <MessageSquare className="h-3 w-3" />;
+  }
+}
+
+function lastContactLabel(days: number | null, type: string | null) {
+  if (days === null) return { text: "Never contacted", cls: "text-destructive" };
+  if (days === 0) return { text: "Contacted today", cls: "text-emerald-600 dark:text-emerald-400" };
+  if (days <= 7) return { text: `${days}d ago via ${type ?? "activity"}`, cls: "text-emerald-600 dark:text-emerald-400" };
+  if (days <= 21) return { text: `${days}d ago via ${type ?? "activity"}`, cls: "text-amber-600 dark:text-amber-400" };
+  return { text: `${days}d ago — re-engage!`, cls: "text-destructive font-medium" };
+}
+
+function nextRunLabel(generatedAt: string, frequency: string): string {
+  const gen = new Date(generatedAt).getTime();
+  const daysMap: Record<string, number> = { weekly: 7, biweekly: 14, monthly: 30 };
+  const days = daysMap[frequency] ?? 7;
+  const next = new Date(gen + days * 86_400_000);
+  const diff = Math.ceil((next.getTime() - Date.now()) / 86_400_000);
+  if (diff <= 0) return "Due now";
+  return `Next run in ${diff}d`;
+}
 
 function intelTagClass(tag: string): string {
   const map: Record<string, string> = {
@@ -253,6 +308,63 @@ export function DashboardPage() {
   const { toast } = useToast();
 
   const [intelTab, setIntelTab] = useState<"events" | "market">("events");
+
+  // ── Next Steps ─────────────────────────────────────────────────────────────
+  const [expandedDeals, setExpandedDeals] = useState<Set<string>>(new Set());
+  const [frequency, setFrequency] = useState<NextStepsFrequency>("weekly");
+  const [freqMenuOpen, setFreqMenuOpen] = useState(false);
+
+  const { data: nextStepsData, isLoading: nextStepsLoading, refetch: refetchNextSteps } = useQuery<NextStepsData>({
+    queryKey: ["next-steps"],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch("/api/next-steps", { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error("Failed to load next steps");
+      return res.json();
+    },
+    staleTime: 60_000,
+    onSuccess: (data: NextStepsData) => {
+      if (data.settings?.frequency) setFrequency(data.settings.frequency as NextStepsFrequency);
+      if (data.results?.deals?.length) {
+        setExpandedDeals(new Set(data.results.deals.slice(0, 3).map(d => d.dealId)));
+      }
+    },
+  });
+
+  const saveFrequency = useMutation({
+    mutationFn: async (freq: NextStepsFrequency) => {
+      const token = await getToken();
+      const res = await fetch("/api/next-steps/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ frequency: freq }),
+      });
+      if (!res.ok) throw new Error("Failed to save settings");
+    },
+  });
+
+  const generateNextSteps = useMutation({
+    mutationFn: async () => {
+      const token = await getToken();
+      const res = await fetch("/api/next-steps/generate", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const body = await res.json() as { error?: string };
+        throw new Error(body.error ?? res.statusText);
+      }
+      return res.json() as Promise<NextStepsData>;
+    },
+    onSuccess: (data: NextStepsData) => {
+      refetchNextSteps();
+      if (data.results?.deals?.length) {
+        setExpandedDeals(new Set(data.results.deals.slice(0, 3).map(d => d.dealId)));
+      }
+      toast({ title: "Next steps generated", description: `Action items ready for ${data.results?.deals?.length ?? 0} open deals.` });
+    },
+    onError: (err: Error) => toast({ title: "Generation failed", description: err.message, variant: "destructive" }),
+  });
 
   // ── Intel results ──────────────────────────────────────────────────────────
   const { data: intelStatus, isLoading: intelLoading, refetch: refetchIntel } = useQuery<IntelStatus>({
@@ -776,6 +888,185 @@ export function DashboardPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* ── Row 4: Deal Next Steps ────────────────────────────────────────── */}
+        <Card>
+          <CardHeader className="pb-0 pt-4 px-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <div className="flex h-6 w-6 items-center justify-center rounded bg-indigo-100 dark:bg-indigo-950/40">
+                  <ListTodo className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+                </div>
+                <CardTitle className="text-sm font-semibold">Deal Next Steps</CardTitle>
+                {nextStepsData?.results && (
+                  <span className="text-[10px] text-muted-foreground">
+                    Generated {relativeTimeDash(nextStepsData.results.generatedAt)}
+                    {" · "}
+                    {nextRunLabel(nextStepsData.results.generatedAt, nextStepsData.results.frequency)}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {/* Frequency selector */}
+                <div className="relative">
+                  <button
+                    onClick={() => setFreqMenuOpen(o => !o)}
+                    className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-medium hover:bg-muted transition-colors"
+                  >
+                    <Settings2 className="h-2.5 w-2.5" />
+                    {FREQ_LABELS[frequency]}
+                    <ChevronDown className="h-2.5 w-2.5" />
+                  </button>
+                  {freqMenuOpen && (
+                    <div className="absolute right-0 top-full mt-1 z-20 w-32 rounded-md border bg-background shadow-md py-1">
+                      {(["weekly", "biweekly", "monthly"] as NextStepsFrequency[]).map(f => (
+                        <button
+                          key={f}
+                          onClick={() => {
+                            setFrequency(f);
+                            setFreqMenuOpen(false);
+                            saveFrequency.mutate(f);
+                            toast({ title: `Frequency set to ${FREQ_LABELS[f].toLowerCase()}` });
+                          }}
+                          className={cn(
+                            "w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors",
+                            f === frequency && "font-semibold text-primary",
+                          )}
+                        >
+                          {FREQ_LABELS[f]}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {/* Generate button */}
+                <button
+                  onClick={() => generateNextSteps.mutate()}
+                  disabled={generateNextSteps.isPending}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-medium transition-all",
+                    generateNextSteps.isPending
+                      ? "text-muted-foreground bg-muted cursor-wait"
+                      : "hover:bg-indigo-600 hover:text-white hover:border-indigo-600",
+                  )}
+                >
+                  {generateNextSteps.isPending
+                    ? <><Loader2 className="h-2.5 w-2.5 animate-spin" />Generating…</>
+                    : <><Sparkles className="h-2.5 w-2.5" />{nextStepsData?.results ? "Regenerate" : "Generate now"}</>}
+                </button>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="px-4 pt-3 pb-4">
+            {nextStepsLoading ? (
+              <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16" />)}</div>
+            ) : nextStepsData?.results?.deals?.length ? (
+              <div className="space-y-0 divide-y">
+                {nextStepsData.results.deals.map((deal) => {
+                  const isExpanded = expandedDeals.has(deal.dealId);
+                  const { text: contactText, cls: contactCls } = lastContactLabel(deal.daysSinceContact, deal.lastContactType);
+                  return (
+                    <div key={deal.dealId} className="py-3">
+                      {/* Deal header row */}
+                      <button
+                        className="w-full flex items-start gap-2 text-left group"
+                        onClick={() => setExpandedDeals(prev => {
+                          const next = new Set(prev);
+                          if (next.has(deal.dealId)) next.delete(deal.dealId);
+                          else next.add(deal.dealId);
+                          return next;
+                        })}
+                      >
+                        <span className="mt-0.5 shrink-0 text-muted-foreground group-hover:text-foreground transition-colors">
+                          {isExpanded
+                            ? <ChevronDown className="h-3.5 w-3.5" />
+                            : <ChevronRight className="h-3.5 w-3.5" />}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-semibold leading-snug">{deal.dealTitle}</span>
+                            {deal.companyName && (
+                              <span className="text-[10px] text-muted-foreground">· {deal.companyName}</span>
+                            )}
+                            <Badge variant="outline" className="text-[9px] h-4 px-1.5 shrink-0">
+                              {deal.stageName}
+                            </Badge>
+                            {deal.value != null && (
+                              <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 shrink-0">
+                                {formatCurrency(deal.value)}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                            {deal.contactName && (
+                              <span className="text-[10px] text-muted-foreground">{deal.contactName}</span>
+                            )}
+                            <span className={cn("flex items-center gap-0.5 text-[10px]", contactCls)}>
+                              {activityIcon(deal.lastContactType)}
+                              {contactText}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
+                          {deal.steps.length} step{deal.steps.length !== 1 ? "s" : ""}
+                        </span>
+                      </button>
+
+                      {/* Expanded: action items */}
+                      {isExpanded && deal.steps.length > 0 && (
+                        <ul className="mt-2.5 ml-5 space-y-2">
+                          {deal.steps.map((step, i) => (
+                            <li key={i} className="flex items-start gap-2">
+                              <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 text-[10px] font-bold text-indigo-600 dark:text-indigo-400">
+                                {i + 1}
+                              </span>
+                              <span className="text-xs leading-snug">{step}</span>
+                            </li>
+                          ))}
+                          {deal.contactEmail && (
+                            <li className="pt-0.5">
+                              <a
+                                href={`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(deal.contactEmail)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline"
+                              >
+                                <Mail className="h-2.5 w-2.5" />
+                                Email {deal.contactName ?? deal.contactEmail}
+                              </a>
+                            </li>
+                          )}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center gap-3 py-8 text-center">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-950/40">
+                  <ListTodo className="h-5 w-5 text-indigo-500" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold">No next steps generated yet</p>
+                  <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed max-w-xs">
+                    Click <strong>Generate now</strong> to analyze your open deals — emails, calls, notes, and market context — and get AI-driven action items per deal.
+                  </p>
+                </div>
+                <button
+                  onClick={() => generateNextSteps.mutate()}
+                  disabled={generateNextSteps.isPending}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 text-white px-3 py-1.5 text-xs font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                >
+                  {generateNextSteps.isPending
+                    ? <><Loader2 className="h-3 w-3 animate-spin" />Generating…</>
+                    : <><Sparkles className="h-3 w-3" />Generate now</>}
+                </button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
       </div>
     </SidebarLayout>
