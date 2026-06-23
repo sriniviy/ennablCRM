@@ -807,8 +807,7 @@ export function ContactDetailPage() {
                               ...Array.from(threadMap.entries()).map(([tid, msgs]) => {
                                 const sorted = [...msgs].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
                                 const latestDate = new Date(Math.max(...msgs.map(m => new Date(m.createdAt).getTime())));
-                                const rawSubject = sorted[0].emailSubject ?? sorted[0].title ?? "(no subject)";
-                                const subject = rawSubject.replace(/^(Re:\s*|Fwd?:\s*)+/i, "").trim() || rawSubject;
+                                const subject = sorted[0].emailSubject ?? sorted[0].title ?? "(no subject)";
                                 return { kind: "thread" as const, threadId: tid, messages: sorted, subject, latestDate };
                               }),
                             ].sort((a, b) => {
