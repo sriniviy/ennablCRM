@@ -268,6 +268,41 @@ Return only a JSON array. P&C & group benefits ONLY. No life insurance.`;
   }
 });
 
+// ── Next Steps config ─────────────────────────────────────────────────────────
+export const NEXT_STEPS_CONFIG_KEY = "next_steps_config";
+export const NEXT_STEPS_CONFIG_DEFAULTS = {
+  analysisDepth: "standard" as "compact" | "standard" | "deep",
+  activityLookbackDays: 90 as 30 | 60 | 90 | 180,
+  stagesIncluded: [] as string[], // empty = all open stages
+  focusTopics: ["renewal risk", "pricing objections", "competitor mentions"] as string[],
+  insightTypes: ["re_engagement", "objection_signals", "renewal_timeline", "upsell_opportunity"] as string[],
+  frequency: "weekly" as "weekly" | "biweekly" | "monthly",
+};
+
+/* GET /api/automations/next-steps-config */
+router.get("/next-steps-config", requireAuth, async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const row = await db.select().from(workspaceSettingsTable)
+      .where(eq(workspaceSettingsTable.key, NEXT_STEPS_CONFIG_KEY)).then(r => r[0]);
+    res.json({ ...NEXT_STEPS_CONFIG_DEFAULTS, ...(row?.value ?? {}) });
+  } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+});
+
+/* PATCH /api/automations/next-steps-config */
+router.patch("/next-steps-config", requireAuth, async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const row = await db.select().from(workspaceSettingsTable)
+      .where(eq(workspaceSettingsTable.key, NEXT_STEPS_CONFIG_KEY)).then(r => r[0]);
+    const current = { ...NEXT_STEPS_CONFIG_DEFAULTS, ...(row?.value ?? {}) } as Record<string, unknown>;
+    const updated = { ...current, ...(req.body as Record<string, unknown>) };
+    await db.insert(workspaceSettingsTable).values({ key: NEXT_STEPS_CONFIG_KEY, value: updated })
+      .onConflictDoUpdate({ target: workspaceSettingsTable.key, set: { value: updated, updatedAt: new Date() } });
+    res.json(updated);
+  } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+});
+
 // ── Email analysis config ─────────────────────────────────────────────────────
 const EMAIL_ANALYSIS_CONFIG_KEY = "email_analysis_config";
 const EMAIL_ANALYSIS_DEFAULTS = {

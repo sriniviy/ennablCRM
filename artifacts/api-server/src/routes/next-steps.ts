@@ -89,24 +89,40 @@ router.post("/generate", requireAuth, async (_req: Request, res: Response) => {
   }
 
   try {
-    // ── 1. Load settings ───────────────────────────────────────────────────
-    const settingsRow = await db
-      .select()
-      .from(workspaceSettingsTable)
-      .where(eq(workspaceSettingsTable.key, SETTINGS_KEY))
-      .then(r => r[0]);
+    // ── 1. Load settings + analysis config ────────────────────────────────
+    const [settingsRow, configRow, intelRow] = await Promise.all([
+      db.select().from(workspaceSettingsTable).where(eq(workspaceSettingsTable.key, SETTINGS_KEY)).then(r => r[0]),
+      db.select().from(workspaceSettingsTable).where(eq(workspaceSettingsTable.key, "next_steps_config")).then(r => r[0]),
+      db.select().from(workspaceSettingsTable).where(eq(workspaceSettingsTable.key, "industry_intel_results")).then(r => r[0]),
+    ]);
+
+    const cfg = {
+      analysisDepth: "standard" as "compact" | "standard" | "deep",
+      activityLookbackDays: 90 as number,
+      stagesIncluded: [] as string[],
+      focusTopics: ["renewal risk", "pricing objections", "competitor mentions"] as string[],
+      insightTypes: ["re_engagement", "objection_signals", "renewal_timeline", "upsell_opportunity"] as string[],
+      frequency: "weekly" as "weekly" | "biweekly" | "monthly",
+      ...(configRow?.value as Record<string, unknown> ?? {}),
+    };
+
+    // Frequency: config takes precedence over the old settings key
+    const frequency = cfg.frequency;
     const settings: NextStepsSettings = settingsRow
       ? { ...DEFAULT_SETTINGS, ...(settingsRow.value as unknown as NextStepsSettings) }
       : DEFAULT_SETTINGS;
+    const resolvedFrequency = frequency ?? settings.frequency;
 
-    // ── 2. Load market intel (optional context) ────────────────────────────
-    const intelRow = await db
-      .select()
-      .from(workspaceSettingsTable)
-      .where(eq(workspaceSettingsTable.key, "industry_intel_results"))
-      .then(r => r[0]);
+    // Depth → activity limit + token budget
+    const depthActivityLimit: Record<string, number> = { compact: 5, standard: 15, deep: 30 };
+    const depthTokens: Record<string, number> = { compact: 200, standard: 320, deep: 500 };
+    const activityLimit = depthActivityLimit[cfg.analysisDepth] ?? 15;
+    const maxTokens = depthTokens[cfg.analysisDepth] ?? 320;
+    const activityCount = cfg.analysisDepth === "compact" ? 4 : cfg.analysisDepth === "deep" ? 12 : 8;
+
+    // ── 2. Market intel (optional context) ────────────────────────────────
     const intelItems = intelRow
-      ? ((intelRow.value as unknown as { items: { headline: string }[] }).items ?? []).slice(0, 3)
+      ? ((intelRow.value as unknown as { items: { headline: string }[] }).items ?? []).slice(0, cfg.analysisDepth === "deep" ? 5 : 3)
       : [];
     const marketContext = intelItems.length > 0
       ? intelItems.map((i) => `• ${i.headline}`).join("\n")
@@ -136,11 +152,16 @@ router.post("/generate", requireAuth, async (_req: Request, res: Response) => {
       .where(not(eq(dealStagesTable.name, CLOSED_STAGES[0])))
       .orderBy(desc(dealsTable.value));
 
-    const openDeals = deals.filter(d => !CLOSED_STAGES.includes(d.stageName));
+    let openDeals = deals.filter(d => !CLOSED_STAGES.includes(d.stageName));
+    // Filter by configured stages (empty = all)
+    if (cfg.stagesIncluded.length > 0) {
+      openDeals = openDeals.filter(d => cfg.stagesIncluded.includes(d.stageName));
+    }
+
     if (openDeals.length === 0) {
       const emptyResult: NextStepsResults = {
         generatedAt: new Date().toISOString(),
-        frequency: settings.frequency,
+        frequency: resolvedFrequency,
         deals: [],
       };
       await upsertResults(emptyResult);
@@ -148,12 +169,29 @@ router.post("/generate", requireAuth, async (_req: Request, res: Response) => {
       return;
     }
 
-    const cutoff = new Date(Date.now() - 90 * 86_400_000);
+    const cutoff = new Date(Date.now() - cfg.activityLookbackDays * 86_400_000);
+
+    // Build insight type label map for the prompt
+    const INSIGHT_LABELS: Record<string, string> = {
+      re_engagement: "re-engagement cues (long silence from contact, inactivity)",
+      objection_signals: "objection signals (budget, authority, timeline concerns)",
+      renewal_timeline: "renewal timeline alignment (upcoming policy renewal dates)",
+      upsell_opportunity: "upsell / cross-sell opportunities",
+      competitive_threats: "competitive threats (mentions of other providers)",
+      budget_constraints: "budget constraints or approval barriers",
+      decision_maker: "decision-maker access (who to engage next)",
+    };
+    const insightInstructions = cfg.insightTypes.length > 0
+      ? `\nPay special attention to: ${cfg.insightTypes.map(id => INSIGHT_LABELS[id] ?? id).join(", ")}.`
+      : "";
+    const topicInstructions = cfg.focusTopics.length > 0
+      ? `\nCustom focus topics the broker cares about: ${cfg.focusTopics.join(", ")}.`
+      : "";
 
     // ── 4. Generate next steps per deal (parallel) ─────────────────────────
     const dealResults: NextStepsDeal[] = await Promise.all(
       openDeals.slice(0, 10).map(async (deal) => {
-        // Fetch activities for this deal/contact (last 90 days)
+        // Fetch activities within configured lookback window
         const activities = await db
           .select({
             type: activitiesTable.type,
@@ -172,7 +210,7 @@ router.post("/generate", requireAuth, async (_req: Request, res: Response) => {
             ),
           )
           .orderBy(desc(activitiesTable.createdAt))
-          .limit(15);
+          .limit(activityLimit);
 
         // Open tasks for this deal
         const tasks = await db
@@ -194,7 +232,7 @@ router.post("/generate", requireAuth, async (_req: Request, res: Response) => {
         const fmt$ = (n: number | null) => n != null ? `$${Math.round(n).toLocaleString()}` : "Unknown";
         const fmtDate = (d: Date | null) => d ? d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Unknown";
 
-        const activityLines = activities.slice(0, 8).map(a => {
+        const activityLines = activities.slice(0, activityCount).map(a => {
           const daysAgo = Math.floor((Date.now() - new Date(a.createdAt).getTime()) / 86_400_000);
           return `- ${a.type} (${daysAgo}d ago): ${a.title}${a.aiSummary ? ` [AI: ${a.aiSummary.slice(0, 80)}…]` : ""}`;
         });
@@ -211,17 +249,20 @@ router.post("/generate", requireAuth, async (_req: Request, res: Response) => {
           `Company: ${deal.companyName ?? "Unknown"}${deal.companyIndustry ? ` (${deal.companyIndustry})` : ""}`,
           `Contact: ${contactName ?? "None"} | Email: ${deal.contactEmail ?? "none"}`,
           `Last contacted: ${daysSinceContact != null ? `${daysSinceContact} days ago (${lastActivity?.type ?? "unknown"})` : "Never"}`,
+          `Activity lookback: last ${cfg.activityLookbackDays} days`,
           "",
-          activityLines.length > 0 ? `Recent activity:\n${activityLines.join("\n")}` : "Recent activity: None",
+          activityLines.length > 0 ? `Recent activity:\n${activityLines.join("\n")}` : "Recent activity: None in lookback window",
           "",
           taskLines.length > 0 ? `Open tasks:\n${taskLines.join("\n")}` : "Open tasks: None",
           deal.notes ? `\nDeal notes: ${deal.notes.slice(0, 200)}` : "",
           `\nMarket context (P&C/benefits):\n${marketContext}`,
         ].filter(Boolean).join("\n");
 
+        const stepCount = cfg.analysisDepth === "compact" ? "2–3" : cfg.analysisDepth === "deep" ? "3–4" : "2–4";
+
         const completion = await openai!.chat.completions.create({
           model: "gpt-4o-mini",
-          max_completion_tokens: 300,
+          max_completion_tokens: maxTokens,
           messages: [
             {
               role: "system",
