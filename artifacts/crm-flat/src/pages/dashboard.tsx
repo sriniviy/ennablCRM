@@ -68,15 +68,6 @@ function lastContactLabel(days: number | null, type: string | null) {
   return { text: `${days}d ago — re-engage!`, cls: "text-destructive font-medium" };
 }
 
-function nextRunLabel(generatedAt: string, frequency: string): string {
-  const gen = new Date(generatedAt).getTime();
-  const daysMap: Record<string, number> = { weekly: 7, biweekly: 14, monthly: 30 };
-  const days = daysMap[frequency] ?? 7;
-  const next = new Date(gen + days * 86_400_000);
-  const diff = Math.ceil((next.getTime() - Date.now()) / 86_400_000);
-  if (diff <= 0) return "Due now";
-  return `Next run in ${diff}d`;
-}
 
 function intelTagClass(tag: string): string {
   const map: Record<string, string> = {
@@ -877,9 +868,7 @@ export function DashboardPage() {
                 <CardTitle className="text-sm font-semibold">Deal Next Steps</CardTitle>
                 {nextStepsData?.results && (
                   <span className="text-[10px] text-muted-foreground">
-                    Generated {relativeTimeDash(nextStepsData.results.generatedAt)}
-                    {" · "}
-                    {nextRunLabel(nextStepsData.results.generatedAt, nextStepsData.results.frequency)}
+                    Last run: {relativeTimeDash(nextStepsData.results.generatedAt)}
                   </span>
                 )}
               </div>
