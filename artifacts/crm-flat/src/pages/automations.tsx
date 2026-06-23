@@ -16,7 +16,7 @@ import {
   Bot, Sparkles, Mail, Merge, FileUp, Clock, CheckCircle2,
   XCircle, Loader2, ChevronDown, ChevronUp, ArrowRight, Play,
   AlertCircle, Building2, Users, Plus, X, Save, Globe,
-  RefreshCw, TrendingUp, Shield, Cpu, BarChart2, Swords, Star,
+  RefreshCw, TrendingUp, Shield, Cpu, BarChart2, Swords, Star, ListTodo,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -45,6 +45,14 @@ type IntelResults = { generatedAt: string; jobId: string; items: IntelItem[] };
 type IntelStatus = {
   results: IntelResults | null; runsToday: number;
   runsRemaining: number; maxRunsPerDay: number;
+};
+type NextStepsConfig = {
+  analysisDepth: "compact" | "standard" | "deep";
+  activityLookbackDays: 30 | 60 | 90 | 180;
+  stagesIncluded: string[];
+  focusTopics: string[];
+  insightTypes: string[];
+  frequency: "weekly" | "biweekly" | "monthly";
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -124,9 +132,47 @@ function tagColor(tag: string) {
   return "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400";
 }
 
+// ── Next Steps config options ──────────────────────────────────────────────────
+const NS_DEPTH_OPTIONS: { value: NextStepsConfig["analysisDepth"]; label: string; desc: string }[] = [
+  { value: "compact", label: "Compact", desc: "2–3 key actions, fewer activities reviewed" },
+  { value: "standard", label: "Standard", desc: "2–4 actions with full activity context" },
+  { value: "deep", label: "Deep", desc: "3–4 detailed actions + extended market intel" },
+];
+const NS_LOOKBACK_OPTIONS: { value: NextStepsConfig["activityLookbackDays"]; label: string }[] = [
+  { value: 30, label: "30 days" },
+  { value: 60, label: "60 days" },
+  { value: 90, label: "90 days" },
+  { value: 180, label: "180 days" },
+];
+const NS_OPEN_STAGES = [
+  "Qualified", "Discovery", "Validation", "Proposal", "Proof of Concept", "Out for Signature",
+];
+const NS_INSIGHT_OPTIONS = [
+  { id: "re_engagement", label: "Re-engagement cues", desc: "Long silence from contact, dropped momentum" },
+  { id: "objection_signals", label: "Objection signals", desc: "Budget, authority, timeline concerns" },
+  { id: "renewal_timeline", label: "Renewal timeline", desc: "Upcoming policy renewal alignment" },
+  { id: "upsell_opportunity", label: "Upsell / cross-sell", desc: "Opportunities to expand the account" },
+  { id: "competitive_threats", label: "Competitive threats", desc: "Mentions of other providers or alternatives" },
+  { id: "budget_constraints", label: "Budget constraints", desc: "Cost objections or approval barriers" },
+  { id: "decision_maker", label: "Decision-maker access", desc: "Who to engage next to move the deal" },
+];
+const NS_FREQ_OPTIONS: { value: NextStepsConfig["frequency"]; label: string }[] = [
+  { value: "weekly", label: "Weekly" },
+  { value: "biweekly", label: "Bi-weekly" },
+  { value: "monthly", label: "Monthly" },
+];
+const NS_DEFAULT_CONFIG: NextStepsConfig = {
+  analysisDepth: "standard",
+  activityLookbackDays: 90,
+  stagesIncluded: [],
+  focusTopics: ["renewal risk", "pricing objections", "competitor mentions"],
+  insightTypes: ["re_engagement", "objection_signals", "renewal_timeline", "upsell_opportunity"],
+  frequency: "weekly",
+};
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 function getInitialCollapsedSections(): Record<string, boolean> {
-  const defaults: Record<string, boolean> = { intel: true, hygiene: true, sequence: true, email: true };
+  const defaults: Record<string, boolean> = { intel: true, hygiene: true, sequence: true, email: true, nextSteps: true };
   try {
     const stored = localStorage.getItem("crm-automation-collapsed-sections");
     if (stored) return JSON.parse(stored) as Record<string, boolean>;
@@ -326,6 +372,45 @@ export function AutomationsPage() {
 
   const lastIntelJob = jobs.find((j) => j.type === "industry_intel_refresh");
   const intelRunning = triggerJob.isPending && lastIntelJob?.status === "running";
+
+  // ── Next Steps config ─────────────────────────────────────────────────────
+  const { data: nsConfig } = useQuery<NextStepsConfig>({
+    queryKey: ["next-steps-config"],
+    queryFn: () => apiFetch("/automations/next-steps-config"),
+  });
+  const [localNsConfig, setLocalNsConfig] = useState<NextStepsConfig | null>(null);
+  const activeNsConfig = localNsConfig ?? nsConfig ?? NS_DEFAULT_CONFIG;
+  const nsConfigDirty = localNsConfig !== null;
+
+  const saveNsConfig = useMutation({
+    mutationFn: (cfg: NextStepsConfig) =>
+      apiFetch("/automations/next-steps-config", { method: "PATCH", body: JSON.stringify(cfg) }),
+    onSuccess: (updated) => {
+      qc.setQueryData(["next-steps-config"], updated);
+      setLocalNsConfig(null);
+      toast({ title: "Next Steps configuration saved" });
+    },
+    onError: (err: Error) => toast({ title: "Failed to save", description: err.message, variant: "destructive" }),
+  });
+
+  function updateNsConfig(patch: Partial<NextStepsConfig>) {
+    setLocalNsConfig(prev => ({ ...(prev ?? nsConfig ?? NS_DEFAULT_CONFIG), ...patch }));
+  }
+  function toggleNsInsight(id: string) {
+    const cur = activeNsConfig.insightTypes ?? [];
+    updateNsConfig({ insightTypes: cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id] });
+  }
+  function toggleNsStage(s: string) {
+    const cur = activeNsConfig.stagesIncluded ?? [];
+    updateNsConfig({ stagesIncluded: cur.includes(s) ? cur.filter(x => x !== s) : [...cur, s] });
+  }
+  const [nsTopicInput, setNsTopicInput] = useState("");
+  function addNsTopic() {
+    const val = nsTopicInput.trim();
+    if (!val || activeNsConfig.focusTopics.includes(val)) { setNsTopicInput(""); return; }
+    updateNsConfig({ focusTopics: [...activeNsConfig.focusTopics, val] });
+    setNsTopicInput("");
+  }
 
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(getInitialCollapsedSections);
   const toggleSection = (id: string) => setCollapsedSections(p => ({ ...p, [id]: !p[id] }));
@@ -673,6 +758,166 @@ export function AutomationsPage() {
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Deal Next Steps Analysis */}
+          <Card className="lg:col-span-2">
+            <CardHeader className="pb-3">
+              <div className="flex items-start gap-3 cursor-pointer select-none" onClick={() => toggleSection('nextSteps')}>
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-50 dark:bg-teal-950/30">
+                  <ListTodo className="text-teal-500" style={{ height: "1.125rem", width: "1.125rem" }} />
+                </div>
+                <div className="flex-1 flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold">Deal Next Steps Analysis</p>
+                    <p className="text-xs text-muted-foreground">Control how the AI analyzes open deals and generates prioritized action items on your Dashboard</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge variant="secondary" className="text-[10px] bg-teal-100 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300">AI-powered</Badge>
+                    <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", !collapsedSections['nextSteps'] && "-rotate-180")} />
+                  </div>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className={cn("space-y-5", collapsedSections['nextSteps'] && "hidden")}>
+              {/* Analysis depth */}
+              <div>
+                <p className="text-xs font-semibold mb-2">Analysis depth</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {NS_DEPTH_OPTIONS.map(opt => (
+                    <button key={opt.value} onClick={() => updateNsConfig({ analysisDepth: opt.value })}
+                      className={cn("flex flex-col items-start gap-0.5 rounded-xl border px-3 py-2.5 text-left transition-all",
+                        activeNsConfig.analysisDepth === opt.value ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "hover:bg-muted/50",
+                      )}>
+                      <span className="text-xs font-semibold">{opt.label}</span>
+                      <span className="text-[10px] text-muted-foreground leading-snug">{opt.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Activity lookback */}
+              <div>
+                <p className="text-xs font-semibold mb-2">Activity lookback period</p>
+                <p className="text-[11px] text-muted-foreground mb-2">How far back the AI looks for deal activity when generating actions.</p>
+                <div className="flex gap-2 flex-wrap">
+                  {NS_LOOKBACK_OPTIONS.map(opt => (
+                    <button key={opt.value} onClick={() => updateNsConfig({ activityLookbackDays: opt.value })}
+                      className={cn("rounded-full border px-3 py-1 text-[11px] font-medium transition-all",
+                        activeNsConfig.activityLookbackDays === opt.value ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted/50 text-muted-foreground",
+                      )}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Deal stages to include */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs font-semibold">Deal stages to analyze</p>
+                  {activeNsConfig.stagesIncluded.length > 0 && (
+                    <button onClick={() => updateNsConfig({ stagesIncluded: [] })} className="text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+                      Clear (use all open)
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11px] text-muted-foreground mb-2">
+                  Select specific stages to analyze. Leave all unselected to analyze all open deals.
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {NS_OPEN_STAGES.map(stage => {
+                    const active = activeNsConfig.stagesIncluded.includes(stage);
+                    return (
+                      <button key={stage} onClick={() => toggleNsStage(stage)}
+                        className={cn("rounded-full border px-3 py-1 text-[11px] font-medium transition-all",
+                          active ? "bg-teal-600 text-white border-teal-600" : "hover:bg-muted/50 text-muted-foreground",
+                        )}>
+                        {stage}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* What to surface */}
+              <div>
+                <p className="text-xs font-semibold mb-2">What to surface</p>
+                <div className="grid sm:grid-cols-2 gap-2">
+                  {NS_INSIGHT_OPTIONS.map(opt => {
+                    const active = activeNsConfig.insightTypes.includes(opt.id);
+                    return (
+                      <button key={opt.id} onClick={() => toggleNsInsight(opt.id)}
+                        className={cn("flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-all",
+                          active ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "hover:bg-muted/50",
+                        )}>
+                        <div className={cn("mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors",
+                          active ? "bg-primary border-primary" : "border-muted-foreground/40",
+                        )}>
+                          {active && <svg width="8" height="6" viewBox="0 0 8 6" fill="none"><path d="M1 3L3 5L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium">{opt.label}</p>
+                          <p className="text-[10px] text-muted-foreground">{opt.desc}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Custom focus topics */}
+              <div>
+                <p className="text-xs font-semibold mb-1.5">Custom focus topics</p>
+                <p className="text-[11px] text-muted-foreground mb-2">Keywords or themes the AI should specifically look for in deal activity.</p>
+                <div className="flex flex-wrap gap-1.5 mb-2.5">
+                  {activeNsConfig.focusTopics.map(t => (
+                    <span key={t} className="inline-flex items-center gap-1 rounded-full bg-teal-100 dark:bg-teal-950/40 px-2.5 py-1 text-[11px] font-medium text-teal-700 dark:text-teal-300">
+                      {t}
+                      <button onClick={() => updateNsConfig({ focusTopics: activeNsConfig.focusTopics.filter(x => x !== t) })}
+                        className="flex h-3.5 w-3.5 items-center justify-center rounded-full hover:bg-teal-200 dark:hover:bg-teal-900/40 transition-colors">
+                        <X className="h-2.5 w-2.5" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <Input value={nsTopicInput} onChange={e => setNsTopicInput(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && addNsTopic()}
+                    placeholder="e.g. renewal risk, budget approval, carrier switch…" className="text-xs h-8 flex-1" />
+                  <Button size="sm" variant="outline" onClick={addNsTopic} disabled={!nsTopicInput.trim()} className="h-8 gap-1 text-xs">
+                    <Plus className="h-3 w-3" />Add
+                  </Button>
+                </div>
+              </div>
+
+              {/* Generation frequency */}
+              <div>
+                <p className="text-xs font-semibold mb-2">Generation frequency</p>
+                <p className="text-[11px] text-muted-foreground mb-2">How often the Dashboard widget refreshes next steps for all deals.</p>
+                <div className="flex gap-2 flex-wrap">
+                  {NS_FREQ_OPTIONS.map(opt => (
+                    <button key={opt.value} onClick={() => updateNsConfig({ frequency: opt.value })}
+                      className={cn("rounded-full border px-3 py-1 text-[11px] font-medium transition-all",
+                        activeNsConfig.frequency === opt.value ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted/50 text-muted-foreground",
+                      )}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Save / Discard */}
+              {nsConfigDirty && (
+                <div className="flex items-center gap-3 pt-1 border-t">
+                  <Button size="sm" onClick={() => saveNsConfig.mutate(activeNsConfig)} disabled={saveNsConfig.isPending} className="gap-2">
+                    {saveNsConfig.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                    Save configuration
+                  </Button>
+                  <button onClick={() => setLocalNsConfig(null)} className="text-xs text-muted-foreground hover:text-foreground transition-colors">Discard</button>
                 </div>
               )}
             </CardContent>

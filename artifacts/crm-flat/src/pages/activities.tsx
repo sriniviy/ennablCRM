@@ -1,5 +1,5 @@
+import { useState, Fragment } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
-import { useState } from "react";
 import { useListActivities, ActivityType, type ActivityWithRelations } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { Input } from "@/components/ui/input";
@@ -9,11 +9,12 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, ChevronDown } from "lucide-react";
+import { Search, ChevronDown, ChevronRight, Mail, StickyNote } from "lucide-react";
 import { useUrlFilters } from "@/hooks/use-url-filters";
 import { useDebounce } from "@/hooks/use-debounce";
 import { ViewToggle, type ViewMode } from "@/components/view-toggle";
 import { RecordCardGrid, type CardField } from "@/components/record-card-grid";
+import { ActivitySummary } from "@/components/ai/activity-summary";
 
 const dash = (v: unknown) => (v === null || v === undefined || v === "" ? "—" : String(v));
 const fmtType = (t: string) => t.replace(/_/g, " ").toLowerCase().replace(/^\w/, c => c.toUpperCase());
@@ -69,6 +70,9 @@ export function ActivitiesPage() {
     pageSize,
   });
 
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [summaryMap, setSummaryMap] = useState<Record<string, string>>({});
+
   const allActivities = data?.data ?? [];
   const total = data?.total ?? 0;
   const hasMore = data?.hasMore ?? false;
@@ -81,6 +85,11 @@ export function ActivitiesPage() {
     : allActivities;
 
   const pageTitle = PAGE_TITLES[typeFilter] ?? "Activities";
+
+  const isEmail = (a: ActivityWithRelations) => a.type === "EMAIL_SENT";
+  const isNote = (a: ActivityWithRelations) => a.type === "NOTE";
+  const isExpandable = (a: ActivityWithRelations) => isEmail(a) || (isNote(a) && !!a.description);
+  const toggle = (id: string) => setSelectedId(prev => (prev === id ? null : id));
 
   return (
     <SidebarLayout>
@@ -145,6 +154,7 @@ export function ActivitiesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-8" />
                   <TableHead>Type</TableHead>
                   <TableHead>Title</TableHead>
                   <TableHead>Contact</TableHead>
@@ -157,33 +167,104 @@ export function ActivitiesPage() {
                 {isLoading ? (
                   [...Array(5)].map((_, i) => (
                     <TableRow key={i}>
-                      {[...Array(6)].map((__, j) => <TableCell key={j}><Skeleton className="h-4 w-24" /></TableCell>)}
+                      {[...Array(7)].map((__, j) => (
+                        <TableCell key={j}><Skeleton className="h-4 w-24" /></TableCell>
+                      ))}
                     </TableRow>
                   ))
                 ) : activities.length > 0 ? (
                   activities.map(activity => (
-                    <TableRow key={activity.id}>
-                      <TableCell>
-                        <Badge variant="outline" className="font-normal">{fmtType(activity.type)}</Badge>
-                      </TableCell>
-                      <TableCell className="font-medium max-w-xs truncate">{activity.title}</TableCell>
-                      <TableCell>
-                        {activity.contact ? (
-                          <Link href={`/contacts/${activity.contact.id}`} className="hover:underline text-primary">
-                            {contactName(activity)}
-                          </Link>
-                        ) : <span className="text-muted-foreground">—</span>}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{activity.deal?.title ?? "—"}</TableCell>
-                      <TableCell className="text-muted-foreground">{activity.user?.name ?? "—"}</TableCell>
-                      <TableCell className="text-muted-foreground whitespace-nowrap">
-                        {activity.createdAt ? new Date(activity.createdAt).toLocaleString() : "—"}
-                      </TableCell>
-                    </TableRow>
+                    <Fragment key={activity.id}>
+                      <TableRow
+                        className={isExpandable(activity) ? "cursor-pointer select-none hover:bg-muted/40" : undefined}
+                        onClick={isExpandable(activity) ? () => toggle(activity.id) : undefined}
+                      >
+                        <TableCell className="w-8 pr-0 text-muted-foreground">
+                          {isExpandable(activity) && (
+                            selectedId === activity.id
+                              ? <ChevronDown className="h-4 w-4" />
+                              : <ChevronRight className="h-4 w-4" />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className={`font-normal gap-1 ${
+                              isEmail(activity)
+                                ? "border-blue-200 bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800"
+                                : isNote(activity)
+                                  ? "border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800"
+                                  : ""
+                            }`}
+                          >
+                            {isEmail(activity) && <Mail className="h-3 w-3" />}
+                            {isNote(activity) && <StickyNote className="h-3 w-3" />}
+                            {fmtType(activity.type)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-medium max-w-xs truncate">{activity.title}</TableCell>
+                        <TableCell>
+                          {activity.contact ? (
+                            <Link
+                              href={`/contacts/${activity.contact.id}`}
+                              className="hover:underline text-primary"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              {contactName(activity)}
+                            </Link>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{activity.deal?.title ?? "—"}</TableCell>
+                        <TableCell className="text-muted-foreground">{activity.user?.name ?? "—"}</TableCell>
+                        <TableCell className="text-muted-foreground whitespace-nowrap">
+                          {activity.createdAt ? new Date(activity.createdAt).toLocaleString() : "—"}
+                        </TableCell>
+                      </TableRow>
+
+                      {selectedId === activity.id && isEmail(activity) && (
+                        <TableRow className="bg-muted/20 hover:bg-muted/20">
+                          <TableCell colSpan={7} className="px-6 py-4">
+                            {activity.emailSubject && (
+                              <p className="mb-2 text-sm">
+                                <span className="font-semibold">Subject: </span>
+                                <span className="text-muted-foreground">{activity.emailSubject}</span>
+                              </p>
+                            )}
+                            <ActivitySummary
+                              activityId={activity.id}
+                              type={activity.type}
+                              summary={summaryMap[activity.id] ?? activity.aiSummary}
+                              onUpdated={s => setSummaryMap(m => ({ ...m, [activity.id]: s }))}
+                            />
+                            {activity.emailBody && (
+                              <div className="mt-3 rounded border bg-card px-4 py-3">
+                                <p className="whitespace-pre-wrap text-sm text-muted-foreground leading-relaxed">
+                                  {activity.emailBody}
+                                </p>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      )}
+
+                      {selectedId === activity.id && isNote(activity) && (
+                        <TableRow className="bg-muted/20 hover:bg-muted/20">
+                          <TableCell colSpan={7} className="px-6 py-4">
+                            <div className="rounded border bg-card px-4 py-3">
+                              <p className="whitespace-pre-wrap text-sm text-muted-foreground leading-relaxed">
+                                {activity.description}
+                              </p>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </Fragment>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                       No activities found.
                     </TableCell>
                   </TableRow>

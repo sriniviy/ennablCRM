@@ -133,6 +133,7 @@ export async function syncUserGmail(userId: string, maxMessages = 100) {
   // Fetch full message metadata in batches of 10
   type ParsedMessage = {
     id: string;
+    threadId: string;
     subject: string;
     from: string;
     to: string;
@@ -187,6 +188,7 @@ export async function syncUserGmail(userId: string, maxMessages = 100) {
 
       parsed.push({
         id: data.id!,
+        threadId: data.threadId!,
         subject: h("Subject"),
         from: h("From"),
         to: h("To"),
@@ -264,6 +266,7 @@ export async function syncUserGmail(userId: string, maxMessages = 100) {
       description: msg.snippet,
       emailSubject: msg.subject || undefined,
       emailBody: msg.snippet || undefined,
+      threadId: msg.threadId || undefined,
       contactId: matchedContact.id,
       companyId: matchedContact.companyId ?? undefined,
       userId,

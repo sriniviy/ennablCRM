@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Share2 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export interface CardField<T> {
   label: string;
@@ -14,6 +15,7 @@ interface RecordCardGridProps<T> {
   getTitle: (item: T) => ReactNode;
   fields: CardField<T>[];
   onItemClick?: (item: T) => void;
+  onShare?: (item: T) => void;
   emptyMessage?: string;
   previewCount?: number;
 }
@@ -23,12 +25,14 @@ function RecordCard<T>({
   getTitle,
   fields,
   onItemClick,
+  onShare,
   previewCount,
 }: {
   item: T;
   getTitle: (item: T) => ReactNode;
   fields: CardField<T>[];
   onItemClick?: (item: T) => void;
+  onShare?: (item: T) => void;
   previewCount: number;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -38,11 +42,33 @@ function RecordCard<T>({
 
   return (
     <Card
-      className={onItemClick ? "cursor-pointer hover:shadow-md transition-shadow" : undefined}
+      className={`group relative ${onItemClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}
       onClick={onItemClick ? () => onItemClick(item) : undefined}
     >
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">{getTitle(item)}</CardTitle>
+        <div className="flex items-start justify-between gap-2">
+          <CardTitle className="text-base min-w-0 flex-1">{getTitle(item)}</CardTitle>
+          {onShare && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onShare(item);
+                    }}
+                    className="shrink-0 p-1 rounded text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                    aria-label="Share"
+                  >
+                    <Share2 className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Share</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-1.5 text-sm pb-0">
         {visible.map((f) => (
@@ -77,6 +103,7 @@ export function RecordCardGrid<T>({
   getTitle,
   fields,
   onItemClick,
+  onShare,
   emptyMessage = "No records found.",
   previewCount = 5,
 }: RecordCardGridProps<T>) {
@@ -97,6 +124,7 @@ export function RecordCardGrid<T>({
           getTitle={getTitle}
           fields={fields}
           onItemClick={onItemClick}
+          onShare={onShare}
           previewCount={previewCount}
         />
       ))}

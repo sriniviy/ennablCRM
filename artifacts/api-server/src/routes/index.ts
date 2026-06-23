@@ -33,6 +33,7 @@ import settingsRouter from "./settings";
 import gmailRouter from "./gmail";
 import emailInboundRouter from "./email-inbound";
 import meetingSummaryRouter from "./meeting-summary";
+import nextStepsRouter from "./next-steps";
 
 const router: IRouter = Router();
 
@@ -70,5 +71,6 @@ router.use("/settings", settingsRouter);
 router.use("/gmail", gmailRouter);
 router.use("/email/inbound", emailInboundRouter);
 router.use("/ai/meeting-summary", meetingSummaryRouter);
+router.use("/next-steps", nextStepsRouter);
 
 export default router;

@@ -30,13 +30,27 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, MoreHorizontal, Pencil, Trash2, LayoutDashboard } from "lucide-react";
+import { Plus, MoreHorizontal, Pencil, Trash2, LayoutDashboard, Download, Share2, Sparkles, RefreshCw, CheckSquare, ChevronDown, ChevronUp } from "lucide-react";
 import { PipelineOverview } from "@/components/dashboards/pipeline-overview";
 import { DashboardView } from "@/components/dashboards/dashboard-view";
 import { BASE, type Dashboard } from "@/components/dashboards/types";
 import { useGetMe } from "@workspace/api-client-react";
+import { ShareDialog } from "@/components/contacts/share-dialog";
 
 const BUILTIN_ID = "__pipeline_overview__";
+
+const ACTION_DELIMITER = "\n\nAction Items:\n";
+function parseSummary(raw: string): { text: string; items: string[] } {
+  const idx = raw.indexOf(ACTION_DELIMITER);
+  if (idx === -1) return { text: raw, items: [] };
+  const text = raw.slice(0, idx);
+  const items = raw
+    .slice(idx + ACTION_DELIMITER.length)
+    .split("\n")
+    .map(l => l.replace(/^[•\-]\s*/, "").trim())
+    .filter(Boolean);
+  return { text, items };
+}
 
 export function ReportsPage() {
   const getToken = useSessionToken();
@@ -50,6 +64,10 @@ export function ReportsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Dashboard | null>(null);
   const [draftName, setDraftName] = useState("");
   const [draftDesc, setDraftDesc] = useState("");
+  const [shareOpen, setShareOpen] = useState(false);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [summaryPending, setSummaryPending] = useState(false);
+  const [summaryCollapsed, setSummaryCollapsed] = useState(false);
 
   const canMutate = (d: Dashboard | null) => {
     if (!d || d.builtin) return false;
@@ -136,13 +154,61 @@ export function ReportsPage() {
   return (
     <SidebarLayout>
       <div className="space-y-6">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
-          <p className="text-muted-foreground">
-            {active.builtin
-              ? "Pipeline health, win rates, and revenue forecast."
-              : active.dashboard?.description || "Custom analytics dashboard."}
-          </p>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
+            <p className="text-muted-foreground">
+              {active.builtin
+                ? "Pipeline health, win rates, and revenue forecast."
+                : active.dashboard?.description || "Custom analytics dashboard."}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 print:hidden">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                setSummaryPending(true);
+                try {
+                  const token = await getToken();
+                  const res = await fetch(`${BASE}/api/reports/ai-summary`, {
+                    method: "POST",
+                    headers: { Authorization: `Bearer ${token}` },
+                  });
+                  if (!res.ok) throw new Error("Failed");
+                  const data = await res.json() as { summary: string };
+                  setAiSummary(data.summary);
+                  toast({ title: aiSummary ? "Summary refreshed" : "AI summary generated" });
+                } catch {
+                  toast({ title: "Could not generate summary", variant: "destructive" });
+                } finally {
+                  setSummaryPending(false);
+                }
+              }}
+              disabled={summaryPending}
+            >
+              {summaryPending
+                ? <RefreshCw className="h-4 w-4 mr-1.5 animate-spin" />
+                : <Sparkles className="h-4 w-4 mr-1.5" />}
+              {summaryPending ? "Generating…" : "AI Summary"}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShareOpen(true)}
+            >
+              <Share2 className="h-4 w-4 mr-1.5" />
+              Share
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.print()}
+            >
+              <Download className="h-4 w-4 mr-1.5" />
+              Download PDF
+            </Button>
+          </div>
         </div>
 
         {/* Dashboard switcher */}
@@ -199,12 +265,93 @@ export function ReportsPage() {
           </Button>
         </div>
 
+        {/* AI Summary card */}
+        {aiSummary && (() => {
+          const { text, items } = parseSummary(aiSummary);
+          return (
+            <div className="rounded-lg border border-primary/20 bg-primary/5 overflow-hidden">
+              <div
+                className="flex items-center justify-between gap-2 px-5 py-4 cursor-pointer select-none"
+                onClick={() => setSummaryCollapsed(c => !c)}
+              >
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-primary">
+                  <Sparkles className="h-4 w-4" />
+                  AI summary
+                </span>
+                <div className="flex items-center gap-1 print:hidden">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground"
+                    title="Regenerate"
+                    disabled={summaryPending}
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      setSummaryPending(true);
+                      try {
+                        const token = await getToken();
+                        const res = await fetch(`${BASE}/api/reports/ai-summary`, {
+                          method: "POST",
+                          headers: { Authorization: `Bearer ${token}` },
+                        });
+                        if (!res.ok) throw new Error("Failed");
+                        const data = await res.json() as { summary: string };
+                        setAiSummary(data.summary);
+                        toast({ title: "Summary refreshed" });
+                      } catch {
+                        toast({ title: "Could not regenerate summary", variant: "destructive" });
+                      } finally {
+                        setSummaryPending(false);
+                      }
+                    }}
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${summaryPending ? "animate-spin" : ""}`} />
+                  </Button>
+                  {summaryCollapsed
+                    ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    : <ChevronUp className="h-4 w-4 text-muted-foreground" />}
+                </div>
+              </div>
+              {!summaryCollapsed && (
+                <div className="px-5 pb-4">
+                  <p className="text-sm leading-relaxed">{text}</p>
+                  {items.length > 0 && (
+                    <div className="mt-3 border-t border-primary/15 pt-3">
+                      <p className="mb-2 flex items-center gap-1 text-xs font-semibold text-primary">
+                        <CheckSquare className="h-3.5 w-3.5" />
+                        Action items
+                      </p>
+                      <ul className="space-y-2">
+                        {items.map((item, i) => (
+                          <li key={i} className="flex items-start gap-2 text-sm leading-snug">
+                            <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border border-primary/30 bg-background text-[10px] font-bold text-primary">
+                              {i + 1}
+                            </span>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* Active dashboard content */}
         {active.builtin
           ? <PipelineOverview />
           : <DashboardView dashboardId={active.id} canEdit={canMutate(active.dashboard)} />
         }
       </div>
+
+      {/* Share dialog */}
+      <ShareDialog
+        record={{ id: activeId, name: active.name, type: "report" }}
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+      />
 
       {/* Create dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>

@@ -328,3 +328,10 @@
   height: 0;
   pointer-events: none;
 }
+
+@media print {
+  .print\:hidden { display: none !important; }
+  body { background: white !important; }
+  main { padding: 0 !important; padding-top: 0 !important; }
+  .mx-auto { max-width: 100% !important; }
+}

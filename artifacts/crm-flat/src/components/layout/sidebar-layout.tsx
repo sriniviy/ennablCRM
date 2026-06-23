@@ -302,7 +302,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
           <Button
             variant="ghost"
             size="icon"
-            className="md:hidden absolute top-4 left-4 z-50"
+            className="md:hidden print:hidden absolute top-4 left-4 z-50"
           >
             <Menu className="h-5 w-5" />
           </Button>
@@ -347,7 +347,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
 
       {/* Desktop Sidebar */}
       <div
-        className={`hidden md:flex flex-col border-r border-sidebar-border bg-sidebar transition-all duration-200 ease-in-out shrink-0 ${
+        className={`hidden md:flex print:hidden flex-col border-r border-sidebar-border bg-sidebar transition-all duration-200 ease-in-out shrink-0 ${
           collapsed ? "w-14" : "w-52"
         }`}
       >
