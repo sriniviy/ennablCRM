@@ -30,7 +30,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, MoreHorizontal, Pencil, Trash2, LayoutDashboard, Download, Share2, Sparkles, RefreshCw, CheckSquare } from "lucide-react";
+import { Plus, MoreHorizontal, Pencil, Trash2, LayoutDashboard, Download, Share2, Sparkles, RefreshCw, CheckSquare, ChevronDown, ChevronUp } from "lucide-react";
 import { PipelineOverview } from "@/components/dashboards/pipeline-overview";
 import { DashboardView } from "@/components/dashboards/dashboard-view";
 import { BASE, type Dashboard } from "@/components/dashboards/types";
@@ -67,6 +67,7 @@ export function ReportsPage() {
   const [shareOpen, setShareOpen] = useState(false);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [summaryPending, setSummaryPending] = useState(false);
+  const [summaryCollapsed, setSummaryCollapsed] = useState(false);
 
   const canMutate = (d: Dashboard | null) => {
     if (!d || d.builtin) return false;
@@ -268,57 +269,70 @@ export function ReportsPage() {
         {aiSummary && (() => {
           const { text, items } = parseSummary(aiSummary);
           return (
-            <div className="rounded-lg border border-primary/20 bg-primary/5 px-5 py-4">
-              <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="rounded-lg border border-primary/20 bg-primary/5 overflow-hidden">
+              <div
+                className="flex items-center justify-between gap-2 px-5 py-4 cursor-pointer select-none"
+                onClick={() => setSummaryCollapsed(c => !c)}
+              >
                 <span className="flex items-center gap-1.5 text-sm font-semibold text-primary">
                   <Sparkles className="h-4 w-4" />
                   AI summary
                 </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-muted-foreground print:hidden"
-                  title="Regenerate"
-                  disabled={summaryPending}
-                  onClick={async () => {
-                    setSummaryPending(true);
-                    try {
-                      const token = await getToken();
-                      const res = await fetch(`${BASE}/api/reports/ai-summary`, {
-                        method: "POST",
-                        headers: { Authorization: `Bearer ${token}` },
-                      });
-                      if (!res.ok) throw new Error("Failed");
-                      const data = await res.json() as { summary: string };
-                      setAiSummary(data.summary);
-                      toast({ title: "Summary refreshed" });
-                    } catch {
-                      toast({ title: "Could not regenerate summary", variant: "destructive" });
-                    } finally {
-                      setSummaryPending(false);
-                    }
-                  }}
-                >
-                  <RefreshCw className={`h-3.5 w-3.5 ${summaryPending ? "animate-spin" : ""}`} />
-                </Button>
+                <div className="flex items-center gap-1 print:hidden">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground"
+                    title="Regenerate"
+                    disabled={summaryPending}
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      setSummaryPending(true);
+                      try {
+                        const token = await getToken();
+                        const res = await fetch(`${BASE}/api/reports/ai-summary`, {
+                          method: "POST",
+                          headers: { Authorization: `Bearer ${token}` },
+                        });
+                        if (!res.ok) throw new Error("Failed");
+                        const data = await res.json() as { summary: string };
+                        setAiSummary(data.summary);
+                        toast({ title: "Summary refreshed" });
+                      } catch {
+                        toast({ title: "Could not regenerate summary", variant: "destructive" });
+                      } finally {
+                        setSummaryPending(false);
+                      }
+                    }}
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${summaryPending ? "animate-spin" : ""}`} />
+                  </Button>
+                  {summaryCollapsed
+                    ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    : <ChevronUp className="h-4 w-4 text-muted-foreground" />}
+                </div>
               </div>
-              <p className="text-sm leading-relaxed">{text}</p>
-              {items.length > 0 && (
-                <div className="mt-3 border-t border-primary/15 pt-3">
-                  <p className="mb-2 flex items-center gap-1 text-xs font-semibold text-primary">
-                    <CheckSquare className="h-3.5 w-3.5" />
-                    Action items
-                  </p>
-                  <ul className="space-y-2">
-                    {items.map((item, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm leading-snug">
-                        <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border border-primary/30 bg-background text-[10px] font-bold text-primary">
-                          {i + 1}
-                        </span>
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
+              {!summaryCollapsed && (
+                <div className="px-5 pb-4">
+                  <p className="text-sm leading-relaxed">{text}</p>
+                  {items.length > 0 && (
+                    <div className="mt-3 border-t border-primary/15 pt-3">
+                      <p className="mb-2 flex items-center gap-1 text-xs font-semibold text-primary">
+                        <CheckSquare className="h-3.5 w-3.5" />
+                        Action items
+                      </p>
+                      <ul className="space-y-2">
+                        {items.map((item, i) => (
+                          <li key={i} className="flex items-start gap-2 text-sm leading-snug">
+                            <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border border-primary/30 bg-background text-[10px] font-bold text-primary">
+                              {i + 1}
+                            </span>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
