@@ -37,6 +37,7 @@ export const contactsTable = pgTable(
     linkedIn: text("linked_in"),
     assigneeId: text("assignee_id").references(() => usersTable.id),
     companyId: text("company_id").references(() => companiesTable.id),
+    lastActivityDate: timestamp("last_activity_date", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

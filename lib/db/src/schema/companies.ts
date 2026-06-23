@@ -64,6 +64,7 @@ export const companiesTable = pgTable(
     accountType: text("account_type"),
     contractType: text("contract_type"),
     bdeVpnInPlace: boolean("bde_vpn_in_place"),
+    lastActivityDate: timestamp("last_activity_date", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
