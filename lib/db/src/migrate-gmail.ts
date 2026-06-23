@@ -15,6 +15,11 @@ export async function migrateGmail() {
     )
   `);
 
+  // Add thread_id column for email thread grouping (idempotent)
+  await db.execute(sql`
+    ALTER TABLE activities ADD COLUMN IF NOT EXISTS thread_id text
+  `);
+
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS oauth_states (
       state text PRIMARY KEY,

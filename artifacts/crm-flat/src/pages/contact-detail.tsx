@@ -396,6 +396,7 @@ export function ContactDetailPage() {
   const [dueTime, setDueTime] = useState("09:00");
 
   const [activityTab, setActivityTab] = useState<"open" | "closed">("open");
+  const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(new Set());
 
   // Edit activity dialog
   const [editingActivity, setEditingActivity] = useState<null | { id: string; type: string; title: string; description: string; endDate: string; isClosed: boolean; closureComment: string }>(null);
@@ -778,56 +779,150 @@ export function ContactDetailPage() {
                         ))}
                       </div>
 
-                      {/* Activity list */}
+                      {/* Activity list — emails grouped by thread */}
                       {displayActs.length > 0 ? (
                         <div className="space-y-3">
-                          {displayActs.map(activity => {
-                            const isClosed = isActClosed(activity);
-                            const closureNote = (activity.metadata as any)?.closureComment as string | undefined;
-                            return (
-                              <div key={activity.id} className={`flex items-start gap-3 p-4 border rounded-lg bg-card ${isClosed ? "opacity-70" : ""}`}>
-                                <button
-                                  className="mt-0.5 shrink-0 text-muted-foreground hover:text-primary transition-colors"
-                                  title={isClosed ? "Reopen activity" : "Close activity"}
-                                  onClick={async () => {
-                                    if (isClosed) {
-                                      setActivityStatusOverrides(prev => ({ ...prev, [activity.id]: "open" }));
-                                      await patchActivity(activity.id, { status: "open" });
-                                      queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) });
-                                    } else { setClosingActivity({ id: activity.id, title: activity.title }); setClosureComment(""); }
-                                  }}
-                                >
-                                  {isClosed ? <CheckCircle2 className="h-5 w-5 text-green-500" /> : <Circle className="h-5 w-5" />}
-                                </button>
-                                <div className="mt-0.5 shrink-0">
-                                  {activity.type === "NOTE" ? <MessageSquare className="h-5 w-5 text-blue-500" /> :
-                                   activity.type === "CALL" ? <Phone className="h-5 w-5 text-green-500" /> :
-                                   activity.type.startsWith("EMAIL") ? <Mail className="h-5 w-5 text-purple-500" /> :
-                                   <CalendarIcon className="h-5 w-5 text-muted-foreground" />}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <p className={`font-medium ${isClosed ? "text-muted-foreground" : ""}`}>{activity.title}</p>
-                                  {activity.emailSubject && <p className="text-sm mt-1"><span className="text-muted-foreground">Subject: </span>{activity.emailSubject}</p>}
-                                  {(activity as any).description && <p className="text-sm mt-1 text-muted-foreground">{(activity as any).description}</p>}
-                                  {activity.emailBody && <p className="text-sm mt-1 text-muted-foreground whitespace-pre-wrap">{activity.emailBody}</p>}
-                                  {closureNote && (
-                                    <p className="text-xs mt-2 text-muted-foreground italic border-l-2 border-muted pl-2">Note: {closureNote}</p>
+                          {(() => {
+                            // Separate threaded emails from standalone activities
+                            type Act = typeof displayActs[0];
+                            const threadMap = new Map<string, Act[]>();
+                            const standalone: Act[] = [];
+
+                            for (const act of displayActs) {
+                              const tid = (act as any).threadId as string | undefined;
+                              if (tid && act.type === "EMAIL_SENT") {
+                                if (!threadMap.has(tid)) threadMap.set(tid, []);
+                                threadMap.get(tid)!.push(act);
+                              } else {
+                                standalone.push(act);
+                              }
+                            }
+
+                            type StandaloneItem = { kind: "standalone"; activity: Act };
+                            type ThreadItem = { kind: "thread"; threadId: string; messages: Act[]; subject: string; latestDate: Date };
+                            type DisplayItem = StandaloneItem | ThreadItem;
+
+                            const items: DisplayItem[] = [
+                              ...standalone.map(a => ({ kind: "standalone" as const, activity: a })),
+                              ...Array.from(threadMap.entries()).map(([tid, msgs]) => {
+                                const sorted = [...msgs].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+                                const latestDate = new Date(Math.max(...msgs.map(m => new Date(m.createdAt).getTime())));
+                                const rawSubject = sorted[0].emailSubject ?? sorted[0].title ?? "(no subject)";
+                                const subject = rawSubject.replace(/^(Re:\s*|Fwd?:\s*)+/i, "").trim() || rawSubject;
+                                return { kind: "thread" as const, threadId: tid, messages: sorted, subject, latestDate };
+                              }),
+                            ].sort((a, b) => {
+                              const da = a.kind === "standalone" ? new Date(a.activity.createdAt) : a.latestDate;
+                              const db_ = b.kind === "standalone" ? new Date(b.activity.createdAt) : b.latestDate;
+                              return db_.getTime() - da.getTime();
+                            });
+
+                            return items.map(item => {
+                              if (item.kind === "standalone") {
+                                const activity = item.activity;
+                                const isClosed = isActClosed(activity);
+                                const closureNote = (activity.metadata as any)?.closureComment as string | undefined;
+                                return (
+                                  <div key={activity.id} className={`flex items-start gap-3 p-4 border rounded-lg bg-card ${isClosed ? "opacity-70" : ""}`}>
+                                    <button
+                                      className="mt-0.5 shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                                      title={isClosed ? "Reopen activity" : "Close activity"}
+                                      onClick={async () => {
+                                        if (isClosed) {
+                                          setActivityStatusOverrides(prev => ({ ...prev, [activity.id]: "open" }));
+                                          await patchActivity(activity.id, { status: "open" });
+                                          queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) });
+                                        } else { setClosingActivity({ id: activity.id, title: activity.title }); setClosureComment(""); }
+                                      }}
+                                    >
+                                      {isClosed ? <CheckCircle2 className="h-5 w-5 text-green-500" /> : <Circle className="h-5 w-5" />}
+                                    </button>
+                                    <div className="mt-0.5 shrink-0">
+                                      {activity.type === "NOTE" ? <MessageSquare className="h-5 w-5 text-blue-500" /> :
+                                       activity.type === "CALL" ? <Phone className="h-5 w-5 text-green-500" /> :
+                                       activity.type.startsWith("EMAIL") ? <Mail className="h-5 w-5 text-purple-500" /> :
+                                       <CalendarIcon className="h-5 w-5 text-muted-foreground" />}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <p className={`font-medium ${isClosed ? "text-muted-foreground" : ""}`}>{activity.title}</p>
+                                      {activity.emailSubject && <p className="text-sm mt-1"><span className="text-muted-foreground">Subject: </span>{activity.emailSubject}</p>}
+                                      {(activity as any).description && <p className="text-sm mt-1 text-muted-foreground">{(activity as any).description}</p>}
+                                      {activity.emailBody && <p className="text-sm mt-1 text-muted-foreground whitespace-pre-wrap">{activity.emailBody}</p>}
+                                      {closureNote && (
+                                        <p className="text-xs mt-2 text-muted-foreground italic border-l-2 border-muted pl-2">Note: {closureNote}</p>
+                                      )}
+                                      <p className="text-xs text-muted-foreground mt-2">
+                                        {new Date(activity.createdAt).toLocaleString()}
+                                        {activity.endDate ? ` · due ${new Date(activity.endDate).toLocaleString()}` : ""}
+                                      </p>
+                                    </div>
+                                    <button
+                                      className="shrink-0 text-muted-foreground hover:text-foreground transition-colors mt-0.5"
+                                      title="Edit activity"
+                                      onClick={() => openEditActivity(activity)}
+                                    >
+                                      <Pencil className="h-4 w-4" />
+                                    </button>
+                                  </div>
+                                );
+                              }
+
+                              // Email thread group
+                              const isExpanded = expandedThreadIds.has(item.threadId);
+                              const toggleThread = () => setExpandedThreadIds(prev => {
+                                const next = new Set(prev);
+                                if (next.has(item.threadId)) next.delete(item.threadId);
+                                else next.add(item.threadId);
+                                return next;
+                              });
+                              return (
+                                <div key={item.threadId} className="border rounded-lg bg-card overflow-hidden">
+                                  <button
+                                    className="w-full flex items-center gap-3 p-4 text-left hover:bg-muted/40 transition-colors"
+                                    onClick={toggleThread}
+                                  >
+                                    <div className="shrink-0">
+                                      <Mail className="h-5 w-5 text-purple-500" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <p className="font-medium truncate">{item.subject}</p>
+                                      <p className="text-xs text-muted-foreground mt-0.5">
+                                        {item.messages.length} message{item.messages.length !== 1 ? "s" : ""} · last {item.latestDate.toLocaleDateString()}
+                                      </p>
+                                    </div>
+                                    <Badge variant="secondary" className="shrink-0 text-xs">{item.messages.length}</Badge>
+                                    {isExpanded
+                                      ? <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                      : <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                                  </button>
+                                  {isExpanded && (
+                                    <div className="border-t divide-y">
+                                      {item.messages.map(msg => {
+                                        const direction = (msg.metadata as any)?.direction as string | undefined;
+                                        const from = (msg.metadata as any)?.from as string | undefined;
+                                        return (
+                                          <div key={msg.id} className="flex items-start gap-3 px-4 py-3 bg-muted/20">
+                                            <div className="mt-0.5 shrink-0">
+                                              {direction === "sent"
+                                                ? <ArrowUpRight className="h-4 w-4 text-blue-500" />
+                                                : <ArrowDownLeft className="h-4 w-4 text-green-600" />}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                              <p className="text-sm font-medium truncate">{from ?? msg.title}</p>
+                                              {msg.description && (
+                                                <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{msg.description}</p>
+                                              )}
+                                              <p className="text-xs text-muted-foreground mt-1">{new Date(msg.createdAt).toLocaleString()}</p>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
                                   )}
-                                  <p className="text-xs text-muted-foreground mt-2">
-                                    {new Date(activity.createdAt).toLocaleString()}
-                                    {activity.endDate ? ` · due ${new Date(activity.endDate).toLocaleString()}` : ""}
-                                  </p>
                                 </div>
-                                <button
-                                  className="shrink-0 text-muted-foreground hover:text-foreground transition-colors mt-0.5"
-                                  title="Edit activity"
-                                  onClick={() => openEditActivity(activity)}
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </button>
-                              </div>
-                            );
-                          })}
+                              );
+                            });
+                          })()}
                         </div>
                       ) : (
                         <p className="text-muted-foreground text-sm">

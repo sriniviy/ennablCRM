@@ -21,6 +21,7 @@ export const activitiesTable = pgTable(
     emailSubject: text("email_subject"),
     emailBody: text("email_body"),
     aiSummary: text("ai_summary"),
+    threadId: text("thread_id"),
     metadata: jsonb("metadata"),
     userId: text("user_id").references(() => usersTable.id),
     contactId: text("contact_id").references(() => contactsTable.id),
