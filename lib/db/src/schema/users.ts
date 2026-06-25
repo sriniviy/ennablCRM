@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -19,6 +19,7 @@ export const usersTable = pgTable("users", {
   insuranceGroups: text("insurance_groups").array().notNull().default(sql`'{}'::text[]`),
   title: text("title"),
   phone: text("phone"),
+  invoicingEnabled: boolean("invoicing_enabled").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

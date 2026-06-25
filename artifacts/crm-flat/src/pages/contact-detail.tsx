@@ -1,6 +1,6 @@
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useParams, Link, useSearch } from "wouter";
-import { useGetContact, useCreateActivity, getGetContactQueryKey, useGetMe, type ActivityType } from "@workspace/api-client-react";
+import { useGetContact, useCreateActivity, getGetContactQueryKey, getListContactsQueryKey, useGetMe, type ActivityType } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -451,6 +451,11 @@ export function ContactDetailPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  const invalidateContact = () => {
+    invalidateContact();
+    queryClient.invalidateQueries({ queryKey: getListContactsQueryKey() });
+  };
+
   const isEmailType = actType.startsWith("EMAIL");
 
   const createActivityMutate = useRef(createActivity.mutateAsync);
@@ -488,7 +493,7 @@ export function ContactDetailPage() {
         });
         if (!res.ok) throw new Error("Summary failed");
         resetActivityForm();
-        queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) });
+        invalidateContact();
         queryClient.invalidateQueries({ queryKey: ["ai-suggestions", "contact", id] });
         toast({ title: "Meeting logged", description: "AI summary generated automatically." });
       } catch {
@@ -517,7 +522,7 @@ export function ContactDetailPage() {
         await saveActivityCf.mutateAsync({ recordId: created.id, values: cfEntries }).catch(() => undefined);
       }
       resetActivityForm();
-      queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) });
+      invalidateContact();
       queryClient.invalidateQueries({ queryKey: ["ai-suggestions", "contact", id] });
       toast({ title: "Activity logged" });
     } catch (e) {
@@ -830,7 +835,7 @@ export function ContactDetailPage() {
                                         if (isClosed) {
                                           setActivityStatusOverrides(prev => ({ ...prev, [activity.id]: "open" }));
                                           await patchActivity(activity.id, { status: "open" });
-                                          queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) });
+                                          invalidateContact();
                                         } else { setClosingActivity({ id: activity.id, title: activity.title }); setClosureComment(""); }
                                       }}
                                     >
@@ -1061,7 +1066,7 @@ export function ContactDetailPage() {
                             setClosingActivity(null); setClosureComment("");
                             await patchActivity(actId, { status: "closed", closureComment: comment });
                             await createNote(`Closed activity "${actTitle}": ${comment}`, "closed");
-                            queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) });
+                            invalidateContact();
                             toast({ title: "Activity closed", description: "Comment saved to Notes." });
                           } catch { toast({ title: "Failed to close", variant: "destructive" }); }
                           finally { setClosingSaving(false); }
@@ -1338,7 +1343,7 @@ export function ContactDetailPage() {
                                     setTaskCompletedOverrides(prev => ({ ...prev, [task.id]: false }));
                                     const token = document.cookie.match(/(?:^|;\s*)better-auth\.session_token=([^;]+)/)?.[1] ?? localStorage.getItem("better-auth.session_token") ?? "";
                                     await fetch(`/api/tasks/${task.id}/complete`, { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, credentials: "include", body: JSON.stringify({ completed: false }) });
-                                    queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) });
+                                    invalidateContact();
                                   } else { setClosingTask({ id: task.id, title: task.title }); setTaskCloseComment(""); }
                                 }}
                               >
@@ -1396,7 +1401,7 @@ export function ContactDetailPage() {
                               credentials: "include",
                               body: JSON.stringify({ completed: true, completionNote: comment }),
                             });
-                            queryClient.invalidateQueries({ queryKey: getGetContactQueryKey(id) });
+                            invalidateContact();
                             toast({ title: "Task completed" });
                           } catch { toast({ title: "Failed to complete task", variant: "destructive" }); }
                           finally { setTaskCloseSaving(false); }

@@ -35,6 +35,7 @@ import { MigratePage } from "./pages/migrate";
 import { SetPasswordPage } from "./pages/set-password";
 import { SettingsIntegrationsPage } from "./pages/settings-integrations";
 import { AutomationsPage } from "./pages/automations";
+import { InvoicingPage } from "./pages/invoicing";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -44,7 +45,7 @@ const queryClient = new QueryClient({
         if (status === 401 || status === 403) return false;
         return failureCount < 2;
       },
-      staleTime: 30_000,
+      staleTime: 0,
     },
   },
 });
@@ -148,6 +149,7 @@ function AppRoutes() {
           <Route path="/settings/import" component={() => <ProtectedRoute component={MigratePage} />} />
           <Route path="/settings/integrations" component={() => <ProtectedRoute component={SettingsIntegrationsPage} />} />
           <Route path="/automations" component={() => <ProtectedRoute component={AutomationsPage} />} />
+          <Route path="/invoicing" component={() => <ProtectedRoute component={InvoicingPage} />} />
           <Route path="/sequences" component={() => <ProtectedRoute component={SequencesPage} />} />
           <Route path="/sequences/:id" component={() => <ProtectedRoute component={SequenceDetailPage} />} />
           <Route path="/segments" component={() => <ProtectedRoute component={SegmentsPage} />} />

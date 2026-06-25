@@ -244,9 +244,9 @@ router.patch("/:userId/profile", requireAuth, async (req: Request, res: Response
   if (!requireAdmin(req, res)) return;
 
   const userId = req.params.userId as string;
-  const { name, title, phone, tags, insuranceGroups } = req.body as {
+  const { name, title, phone, tags, insuranceGroups, invoicingEnabled } = req.body as {
     name?: string; title?: string; phone?: string;
-    tags?: string[]; insuranceGroups?: string[];
+    tags?: string[]; insuranceGroups?: string[]; invoicingEnabled?: boolean;
   };
 
   try {
@@ -258,6 +258,7 @@ router.patch("/:userId/profile", requireAuth, async (req: Request, res: Response
         ...(phone !== undefined && { phone: phone.trim() || null }),
         ...(tags !== undefined && { tags }),
         ...(insuranceGroups !== undefined && { insuranceGroups }),
+        ...(invoicingEnabled !== undefined && { invoicingEnabled }),
         updatedAt: new Date(),
       })
       .where(eq(usersTable.id, userId))

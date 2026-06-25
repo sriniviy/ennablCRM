@@ -8,6 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -24,7 +25,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
-import { useGetMe } from "@workspace/api-client-react";
+import { useGetMe, getGetMeQueryKey } from "@workspace/api-client-react";
 import {
   Users, UserPlus, Search, MoreHorizontal, Pencil, Trash2, Shield,
   ShieldOff, Archive, UserCheck, X, Lock, Copy, CheckCircle2, Link2,
@@ -69,6 +70,7 @@ interface TeamMember {
   insuranceGroups: string[];
   title: string | null;
   phone: string | null;
+  invoicingEnabled: boolean;
   createdAt: string;
 }
 
@@ -85,6 +87,7 @@ interface MemberForm {
   role: "ADMIN" | "MEMBER";
   tags: string[];
   insuranceGroups: string[];
+  invoicingEnabled: boolean;
 }
 
 interface InviteResult {
@@ -95,7 +98,7 @@ interface InviteResult {
 
 const EMPTY_FORM: MemberForm = {
   name: "", email: "", title: "", phone: "",
-  role: "MEMBER", tags: [], insuranceGroups: [],
+  role: "MEMBER", tags: [], insuranceGroups: [], invoicingEnabled: false,
 };
 
 /* ─── ChipInput ─────────────────────────────────────────────── */
@@ -310,12 +313,14 @@ export function SettingsTeamPage() {
           body: JSON.stringify({
             name: f.name, title: f.title, phone: f.phone,
             tags: f.tags, insuranceGroups: f.insuranceGroups,
+            invoicingEnabled: f.invoicingEnabled,
           }),
         }),
         authFetch(`/${id}/role`, { method: "PATCH", body: JSON.stringify({ role: f.role }) }),
       ]),
-    onSuccess: () => {
+    onSuccess: (_, { id }) => {
       qc.invalidateQueries({ queryKey: ["team"] });
+      if (id === me?.id) qc.invalidateQueries({ queryKey: getGetMeQueryKey() });
       setDialogOpen(false);
       setEditTarget(null);
       toast({ title: "Member updated" });
@@ -373,6 +378,7 @@ export function SettingsTeamPage() {
       role: member.role,
       tags: member.tags ?? [],
       insuranceGroups: member.insuranceGroups ?? [],
+      invoicingEnabled: member.invoicingEnabled ?? false,
     });
     setDialogOpen(true);
   };
@@ -786,6 +792,23 @@ export function SettingsTeamPage() {
                 Industry groups: NAHU, NAIFA, MDRT, IUL Alliance, etc.
               </p>
             </div>
+
+            {/* Invoicing access — admin only */}
+            {me?.role === "ADMIN" && (
+              <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+                <div className="space-y-0.5">
+                  <Label className="text-sm font-medium">Invoicing access</Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Allow this member to view and manage invoices.
+                  </p>
+                </div>
+                <Switch
+                  checked={form.invoicingEnabled}
+                  onCheckedChange={(v) => setForm((f) => ({ ...f, invoicingEnabled: v }))}
+                  disabled={isBusy}
+                />
+              </div>
+            )}
 
             <DialogFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={isBusy}>

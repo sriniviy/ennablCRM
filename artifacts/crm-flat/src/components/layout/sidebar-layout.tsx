@@ -29,6 +29,7 @@ import {
   Megaphone,
   MessageSquare,
   CalendarDays,
+  Receipt,
 } from "lucide-react";
 import { GlobalSearch } from "@/components/global-search";
 import { Button } from "@/components/ui/button";
@@ -58,6 +59,7 @@ type NavItem = {
   href: string;
   icon: React.ElementType;
   adminOnly?: boolean;
+  invoicingOnly?: boolean;
   indent?: boolean;
   exact?: boolean;
 };
@@ -74,6 +76,7 @@ const navGroups: NavGroup[] = [
       { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
       { name: "Needs Review", href: "/needs-review", icon: ClipboardCheck },
       { name: "Reports", href: "/reports", icon: BarChart2 },
+      { name: "Invoicing", href: "/invoicing", icon: Receipt, invoicingOnly: true },
     ],
   },
   {
@@ -176,6 +179,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   };
 
   const isAdmin = user?.role === "ADMIN";
+  const hasInvoicing = !!(user as unknown as { invoicingEnabled?: boolean })?.invoicingEnabled;
 
   const getBadge = (href: string) => {
     if (href === "/needs-review" && reviewCount > 0)
@@ -190,7 +194,9 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const NavLinks = ({ onNavigate }: { onNavigate?: () => void }) => (
     <div className="flex-1 overflow-y-auto space-y-3">
       {navGroups.map((group) => {
-        const visible = group.items.filter((i) => !i.adminOnly || isAdmin);
+        const visible = group.items.filter((i) =>
+          (!i.adminOnly || isAdmin) && (!i.invoicingOnly || hasInvoicing)
+        );
         if (!visible.length) return null;
         return (
           <div key={group.label}>
@@ -295,7 +301,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="flex min-h-[100dvh] bg-background">
+    <div className="flex h-[100dvh] overflow-hidden bg-background">
       {/* Mobile Sidebar */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetTrigger asChild>
@@ -347,7 +353,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
 
       {/* Desktop Sidebar */}
       <div
-        className={`hidden md:flex print:hidden flex-col border-r border-sidebar-border bg-sidebar transition-all duration-200 ease-in-out shrink-0 ${
+        className={`hidden md:flex print:hidden flex-col border-r border-sidebar-border bg-sidebar transition-all duration-200 ease-in-out shrink-0 h-[100dvh] sticky top-0 ${
           collapsed ? "w-14" : "w-52"
         }`}
       >

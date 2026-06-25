@@ -2,7 +2,7 @@ import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { useParams, Link } from "wouter";
 import {
   useGetCompany, useGetMe, useCreateActivity, useListActivities,
-  getGetCompanyQueryKey, getListTasksQueryOptions,
+  getGetCompanyQueryKey, getListCompaniesQueryKey, getListTasksQueryOptions,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -219,6 +219,11 @@ export function CompanyDetailPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  const invalidateCompany = () => {
+    invalidateCompany();
+    queryClient.invalidateQueries({ queryKey: getListCompaniesQueryKey() });
+  };
+
   // Activities for this company
   const { data: activitiesData } = useListActivities({ companyId: id, pageSize: 100 });
   const companyActivities = [...(activitiesData?.data ?? [])].sort((a, b) =>
@@ -311,7 +316,7 @@ export function CompanyDetailPage() {
         await saveActivityCf.mutateAsync({ recordId: created.id, values: cfEntries }).catch(() => undefined);
       }
       resetActivityForm();
-      queryClient.invalidateQueries({ queryKey: getGetCompanyQueryKey(id) });
+      invalidateCompany();
       queryClient.invalidateQueries({ queryKey: ["listActivities"] });
       toast({ title: "Activity logged" });
     } catch {
@@ -600,7 +605,7 @@ export function CompanyDetailPage() {
                                     if (isClosed) {
                                       setActivityStatusOverrides(prev => ({ ...prev, [activity.id]: "open" }));
                                       await patchActivity(activity.id, { status: "open" });
-                                      queryClient.invalidateQueries({ queryKey: getGetCompanyQueryKey(id) });
+                                      invalidateCompany();
                                     } else { setClosingActivity({ id: activity.id, title: activity.title }); setClosureComment(""); }
                                   }}
                                 >
@@ -772,7 +777,7 @@ export function CompanyDetailPage() {
                             setClosingActivity(null); setClosureComment("");
                             await patchActivity(actId, { status: "closed", closureComment: comment });
                             await createNote(`Closed activity "${actTitle}": ${comment}`, "closed");
-                            queryClient.invalidateQueries({ queryKey: getGetCompanyQueryKey(id) });
+                            invalidateCompany();
                             toast({ title: "Activity closed", description: "Comment saved to Notes." });
                           } catch { toast({ title: "Failed to close", variant: "destructive" }); }
                           finally { setClosingSaving(false); }
