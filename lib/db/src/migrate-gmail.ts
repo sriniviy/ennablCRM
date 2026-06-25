@@ -43,3 +43,10 @@ export async function migrateMeeting() {
     END $$
   `);
 }
+
+export async function migrateUsers() {
+  // Add invoicing_enabled column for per-user invoicing access (idempotent)
+  await db.execute(sql`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS invoicing_enabled boolean NOT NULL DEFAULT false
+  `);
+}

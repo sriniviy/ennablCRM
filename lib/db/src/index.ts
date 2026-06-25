@@ -15,5 +15,5 @@ export const db = drizzle(pool, { schema });
 
 export * from "./schema";
 export { migrateDealStages } from "./migrate-deal-stages";
-export { migrateGmail, migrateMeeting } from "./migrate-gmail";
+export { migrateGmail, migrateMeeting, migrateUsers } from "./migrate-gmail";
 export { seedDashboards } from "./seed-dashboards";
